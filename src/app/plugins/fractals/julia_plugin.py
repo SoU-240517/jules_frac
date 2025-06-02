@@ -4,11 +4,8 @@ from numba import jit
 try:
     from ..base_plugin import FractalPlugin
 except ImportError:
-    # This fallback assumes 'base_plugin.py' is in a discoverable path if run directly,
-    # e.g. if sys.path is modified or this script is in the same dir as base_plugin.py
     from base_plugin import FractalPlugin
 
-# Numba JIT-compiled helper functions for Julia Set
 @jit(nopython=True, cache=True)
 def _calculate_julia_point_jit(z_real_start, z_imag_start, c_real_const, c_imag_const, max_iters, escape_radius_sq):
     z_real = z_real_start
@@ -16,45 +13,44 @@ def _calculate_julia_point_jit(z_real_start, z_imag_start, c_real_const, c_imag_
     for i in range(max_iters):
         z_real_sq = z_real * z_real
         z_imag_sq = z_imag * z_imag
-        if z_real_sq + z_imag_sq > escape_radius_sq:
-            return i # Escaped
+        mod_sq = z_real_sq + z_imag_sq
+        if mod_sq > escape_radius_sq:
+            return i, mod_sq # Return iterations and |Z|^2
 
-        # Z_new = Z_old^2 + C
         new_z_imag = 2.0 * z_real * z_imag + c_imag_const
         z_real = z_real_sq - z_imag_sq + c_real_const
         z_imag = new_z_imag
-    return max_iters # Did not escape
+    return max_iters, 0.0 # Converged or max_iters reached
 
 @jit(nopython=True, cache=True, parallel=True)
 def _compute_julia_grid_jit(width_px, height_px, min_x, max_x, min_y, max_y,
                             c_real_const, c_imag_const, max_iters, escape_radius_sq):
-    result = np.empty((height_px, width_px), dtype=np.int32)
+    iter_result = np.empty((height_px, width_px), dtype=np.int32)
+    mod_sq_result = np.empty((height_px, width_px), dtype=np.float64)
+
     pixel_width_complex = (max_x - min_x) / width_px
     pixel_height_complex = (max_y - min_y) / height_px
 
-    for y_idx in range(height_px): # Numba may auto-parallelize this loop
-        z_imag_start = min_y + y_idx * pixel_height_complex # Z0's imaginary part
+    for y_idx in range(height_px):
+        z_imag_start = min_y + y_idx * pixel_height_complex
         for x_idx in range(width_px):
-            z_real_start = min_x + x_idx * pixel_width_complex # Z0's real part
-            result[y_idx, x_idx] = _calculate_julia_point_jit(
+            z_real_start = min_x + x_idx * pixel_width_complex
+            iter_val, mod_sq_val = _calculate_julia_point_jit(
                 z_real_start, z_imag_start,
                 c_real_const, c_imag_const,
                 max_iters, escape_radius_sq
             )
-    return result
+            iter_result[y_idx, x_idx] = iter_val
+            mod_sq_result[y_idx, x_idx] = mod_sq_val
+    return iter_result, mod_sq_result
 
 
 class JuliaPlugin(FractalPlugin):
-    """
-    Julia set plugin.
-    """
-
     @property
     def name(self) -> str:
         return "Julia"
 
     def get_parameters_definition(self) -> list:
-        """Returns definitions for Julia set's C constant (c_real, c_imag)."""
         return [
             {
                 'name': 'c_real',
@@ -77,34 +73,27 @@ class JuliaPlugin(FractalPlugin):
         ]
 
     def get_default_view_parameters(self) -> dict:
-        """Returns default view parameters suitable for typical Julia sets."""
         return {
             'center_real': 0.0,
             'center_imag': 0.0,
             'width': 3.0,
-            # max_iterations is a common parameter
         }
 
-    def compute_fractal(self, common_params: dict, plugin_params: dict, image_width_px: int, image_height_px: int) -> np.ndarray:
-        """
-        Computes the Julia set for a given C constant and view parameters.
-        """
+    def compute_fractal(self, common_params: dict, plugin_params: dict, image_width_px: int, image_height_px: int) -> dict:
         center_real = common_params['center_real']
         center_imag = common_params['center_imag']
         width = common_params['width']
-        height = common_params['height'] # Calculated by FractalEngine based on aspect ratio
+        height = common_params['height']
         max_iterations = common_params['max_iterations']
         escape_radius = common_params.get('escape_radius', 2.0)
         escape_radius_sq = escape_radius * escape_radius
 
-        # Get C constant from plugin-specific parameters
-        # Provide default values if not found, though PluginManager should ensure defaults are set.
         c_real_const = plugin_params.get('c_real', self.get_parameters_definition()[0]['default'])
         c_imag_const = plugin_params.get('c_imag', self.get_parameters_definition()[1]['default'])
 
         min_x = center_real - width / 2.0
         max_x = center_real + width / 2.0
-        min_y = center_imag - height / 2.0 # Assuming y-axis of complex plane points upwards
+        min_y = center_imag - height / 2.0
         max_y = center_imag + height / 2.0
 
         print(f"JuliaPlugin: Starting computation - C=({c_real_const:.4f} + {c_imag_const:.4f}i), "
@@ -112,22 +101,21 @@ class JuliaPlugin(FractalPlugin):
               f"Complex Area: Real ({min_x:.4f} to {max_x:.4f}), Imag ({min_y:.4f} to {max_y:.4f}), "
               f"Max Iter: {max_iterations}")
 
-        julia_data = _compute_julia_grid_jit(
+        iter_array, mod_sq_array = _compute_julia_grid_jit(
             image_width_px, image_height_px,
             min_x, max_x, min_y, max_y,
             c_real_const, c_imag_const,
             max_iterations, escape_radius_sq
         )
 
-        print(f"JuliaPlugin: Computation complete. Output data shape: {julia_data.shape}")
-        return julia_data
+        print(f"JuliaPlugin: Computation complete. Iterations shape: {iter_array.shape}, ModSq shape: {mod_sq_array.shape}")
+        return {'iterations': iter_array, 'last_z_modulus_sq': mod_sq_array}
 
     def get_presets(self) -> dict | None:
-        """Provides some well-known C constants for generating Julia sets."""
         return {
             "Classic Beauty": {"c_real": -0.745, "c_imag": 0.113},
             "Feigenbaum Point": {"c_real": -1.401155, "c_imag": 0.0},
-            "Seahorse": {"c_real": -0.75, "c_imag": 0.1}, # Often similar to Mandelbrot seahorse valley
+            "Seahorse": {"c_real": -0.75, "c_imag": 0.1},
             "Dragon Tail": {"c_real": -0.8, "c_imag": 0.156},
             "Electric Eels": {"c_real": -0.162, "c_imag": 1.04},
             "Snowflakes": {"c_real": 0.285, "c_imag": 0.01},
@@ -148,33 +136,36 @@ if __name__ == '__main__':
         'center_real': 0.0,
         'center_imag': 0.0,
         'width': 3.0,
-        'height': 2.25, # Assuming 4:3 aspect for width 3.0
-        'max_iterations': 150, # Increased for better detail
+        'height': 2.25,
+        'max_iterations': 150,
         'escape_radius': 2.0
     }
 
-    # Use the first preset for testing, or defaults if no presets
     test_plugin_params = {}
     if presets:
         first_preset_name = list(presets.keys())[0]
         test_plugin_params = presets[first_preset_name]
         print(f"\nUsing preset '{first_preset_name}' for computation test: {test_plugin_params}")
     else:
-        # Fallback to default values from parameter definitions
         for p_def in param_defs:
             test_plugin_params[p_def['name']] = p_def['default']
         print(f"\nUsing default plugin parameters for computation test: {test_plugin_params}")
 
-    img_width_test, img_height_test = 160, 120 # Small size for quick test
+    img_width_test, img_height_test = 160, 120
 
     print(f"Testing compute_fractal ({img_width_test}x{img_height_test})...")
-    result = plugin.compute_fractal(test_common_params, test_plugin_params, img_width_test, img_height_test)
-    print(f"  Result shape: {result.shape}, dtype: {result.dtype}")
+    fractal_result_data = plugin.compute_fractal(test_common_params, test_plugin_params, img_width_test, img_height_test)
 
-    # Optional: Display using matplotlib if available
+    iter_result_array = fractal_result_data['iterations']
+    mod_sq_result_array = fractal_result_data['last_z_modulus_sq']
+
+    print(f"  Iterations array shape: {iter_result_array.shape}, dtype: {iter_result_array.dtype}")
+    print(f"  |Z|^2 array shape: {mod_sq_result_array.shape}, dtype: {mod_sq_result_array.dtype}")
+
+
     try:
         import matplotlib.pyplot as plt
-        plt.imshow(result, cmap='magma', extent=(
+        plt.imshow(iter_result_array, cmap='magma', extent=(
             test_common_params['center_real'] - test_common_params['width']/2,
             test_common_params['center_real'] + test_common_params['width']/2,
             test_common_params['center_imag'] - test_common_params['height']/2,
@@ -182,7 +173,7 @@ if __name__ == '__main__':
         ))
         plt.colorbar(label="Iterations")
         c_text = f"C=({test_plugin_params.get('c_real',0):.3f} + {test_plugin_params.get('c_imag',0):.3f}i)"
-        plt.title(f"{plugin.name} Test ({img_width_test}x{img_height_test})\n{c_text}")
+        plt.title(f"{plugin.name} Iterations Test ({img_width_test}x{img_height_test})\n{c_text}")
         plt.xlabel("Real")
         plt.ylabel("Imaginary")
         plt.show()

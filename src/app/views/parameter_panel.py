@@ -1,436 +1,397 @@
 from PyQt6.QtWidgets import (
     QScrollArea, QWidget, QVBoxLayout, QGroupBox, QFormLayout,
-    QLabel, QSpinBox, QDoubleSpinBox, QSlider, QComboBox, QPushButton
+    QLabel, QSpinBox, QDoubleSpinBox, QSlider, QComboBox, QPushButton,
+    QListWidget, QListWidgetItem
 )
-from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot
-# from src.app.controllers.fractal_controller import FractalController # For type hinting
-
-class ParameterPanel(QScrollArea):
-    # Signal emitted when parameters are changed by the user in this panel
-    # Arguments: center_real, center_imag, width, max_iterations
-    parameters_changed_in_ui_signal = pyqtSignal(float, float, float, int)
-
+from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize # Added QSize
+from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QLinearGradient, QIcon # Added QtGui imports
 from functools import partial
 
 class ParameterPanel(QScrollArea):
-    # Signal emitted when parameters are changed by the user in this panel
-    # Arguments: center_real, center_imag, width, max_iterations
-    parameters_changed_in_ui_signal = pyqtSignal(float, float, float, int) # Common params
+    parameters_changed_in_ui_signal = pyqtSignal(float, float, float, int)
 
-    # def __init__(self, fractal_controller: FractalController, parent=None):
     def __init__(self, fractal_controller, parent=None):
         super().__init__(parent)
         self.fractal_controller = fractal_controller
-        self.plugin_widgets = {} # Holds dynamically created plugin-specific UI widgets
+        self.plugin_widgets = {}
+        self.coloring_plugin_widgets = {}
 
-        self._init_ui() # This creates self.fractal_combo and plugin_specific_group/layout
-
-        self._populate_fractal_combo() # Populate AFTER _init_ui
+        self._init_ui()
 
         if self.fractal_controller:
-            self.load_initial_parameters() # Load common params for the initially active plugin
-            # Connect signals for UI updates
+            self._populate_fractal_combo()
+            self._populate_coloring_algorithm_combo()
+            self._populate_color_pack_combo()
+
+            active_pack = self.fractal_controller.get_active_color_pack_name_from_engine()
+            if active_pack:
+                 self._populate_color_map_list(active_pack)
+
+            self.load_initial_parameters()
+
             self.fractal_controller.parameters_updated_externally.connect(self.update_ui_from_controller_parameters)
-            self.fractal_controller.active_plugin_ui_needs_update.connect(self._update_plugin_specific_ui)
-            # Initial call to setup plugin UI for the default active plugin
-            active_plugin_name = self.fractal_controller.get_active_plugin_name_from_engine()
-            if active_plugin_name:
-                self._update_plugin_specific_ui(active_plugin_name)
+            self.fractal_controller.active_fractal_plugin_ui_needs_update.connect(self._update_fractal_plugin_specific_ui)
+            self.fractal_controller.active_coloring_plugin_ui_needs_update.connect(self._update_coloring_plugin_specific_ui)
+            self.fractal_controller.active_color_map_changed_externally.connect(self._update_color_selection_from_controller)
         else:
-            print("ParameterPanel: FractalController not provided. UI will use defaults and features will be limited.")
-            self._set_ui_values(-0.5, 0.0, 3.0, 100) # Default common params
-            self.plugin_specific_group.setVisible(False)
+            # Fallback if no controller
+            self._set_ui_values(-0.5, 0.0, 3.0, 100)
+            if hasattr(self, 'plugin_specific_group'): self.plugin_specific_group.setVisible(False)
+            if hasattr(self, 'coloring_group'): self.coloring_group.setEnabled(False)
 
 
     def _init_ui(self):
         self.setWidgetResizable(True)
         self.content_widget = QWidget()
         self.setWidget(self.content_widget)
-        self.main_layout = QVBoxLayout(self.content_widget) # Store as self.main_layout
+        self.main_layout = QVBoxLayout(self.content_widget)
         self.content_widget.setLayout(self.main_layout)
 
-        # Fractal Selection Group
+        # Fractal Selection
         fractal_group = QGroupBox("フラクタル選択")
-        fractal_layout = QVBoxLayout()
-        self.fractal_combo = QComboBox()
-        fractal_layout.addWidget(self.fractal_combo)
-        fractal_group.setLayout(fractal_layout)
+        fractal_layout = QVBoxLayout(); self.fractal_combo = QComboBox()
+        fractal_layout.addWidget(self.fractal_combo); fractal_group.setLayout(fractal_layout)
         self.main_layout.addWidget(fractal_group)
-
         self.fractal_combo.currentTextChanged.connect(self._on_fractal_type_changed)
 
-        # Common Parameters Group (Formerly Mandelbrot Settings)
+        # Common Parameters
         common_params_group = QGroupBox("共通描画設定")
-        self.common_params_layout = QFormLayout() # Store as self.common_params_layout
-
-        self.iter_spinbox = QSpinBox()
-        self.iter_spinbox.setRange(10, 100000)
-        self.iter_slider = QSlider(Qt.Orientation.Horizontal)
-        self.iter_slider.setRange(10, 10000)
+        self.common_params_layout = QFormLayout()
+        self.iter_spinbox = QSpinBox(); self.iter_spinbox.setRange(10,100000)
+        self.iter_slider = QSlider(Qt.Orientation.Horizontal); self.iter_slider.setRange(10,10000)
         self.common_params_layout.addRow(QLabel("最大反復回数:"), self.iter_spinbox)
         self.common_params_layout.addRow(self.iter_slider)
-
-        self.center_real_spinbox = QDoubleSpinBox(); self.center_real_spinbox.setRange(-2.5, 2.5); self.center_real_spinbox.setDecimals(8); self.center_real_spinbox.setSingleStep(0.01)
+        self.center_real_spinbox = QDoubleSpinBox(); self.center_real_spinbox.setRange(-2.5,2.5); self.center_real_spinbox.setDecimals(15); self.center_real_spinbox.setSingleStep(0.01)
         self.common_params_layout.addRow(QLabel("中心 (実部):"), self.center_real_spinbox)
-
-        self.center_imag_spinbox = QDoubleSpinBox(); self.center_imag_spinbox.setRange(-2.0, 2.0); self.center_imag_spinbox.setDecimals(8); self.center_imag_spinbox.setSingleStep(0.01)
+        self.center_imag_spinbox = QDoubleSpinBox(); self.center_imag_spinbox.setRange(-2.0,2.0); self.center_imag_spinbox.setDecimals(15); self.center_imag_spinbox.setSingleStep(0.01)
         self.common_params_layout.addRow(QLabel("中心 (虚部):"), self.center_imag_spinbox)
-
-        self.width_spinbox = QDoubleSpinBox(); self.width_spinbox.setRange(1e-15, 10.0); self.width_spinbox.setDecimals(15); self.width_spinbox.setSingleStep(0.1)
+        self.width_spinbox = QDoubleSpinBox(); self.width_spinbox.setRange(1e-15,10.0); self.width_spinbox.setDecimals(15); self.width_spinbox.setSingleStep(0.1)
         self.common_params_layout.addRow(QLabel("幅:"), self.width_spinbox)
-
         common_params_group.setLayout(self.common_params_layout)
         self.main_layout.addWidget(common_params_group)
 
-        # Plugin-Specific Parameters Group
-        self.plugin_specific_group = QGroupBox("プラグイン固有設定")
+        # Fractal Plugin-Specific Parameters
+        self.plugin_specific_group = QGroupBox("フラクタル固有設定")
         self.plugin_specific_layout = QFormLayout()
         self.plugin_specific_group.setLayout(self.plugin_specific_layout)
         self.main_layout.addWidget(self.plugin_specific_group)
-        self.plugin_specific_group.setVisible(False) # Initially hidden or based on current plugin
+        self.plugin_specific_group.setVisible(False)
 
-        # Coloring Settings Group (Placeholder)
-        coloring_group = QGroupBox("カラーリング設定")
-        coloring_layout = QVBoxLayout() # Using QVBoxLayout for simple label
-        coloring_layout.addWidget(QLabel("（今後実装予定）"))
-        coloring_group.setLayout(coloring_layout)
-        self.main_layout.addWidget(coloring_group)
+        # Coloring Settings Group
+        self.coloring_group = QGroupBox("カラーリング設定")
+        self.true_coloring_layout = QVBoxLayout() # Main layout for this group
+
+        # Coloring Algorithm selection
+        form_algo_select = QFormLayout()
+        self.coloring_algorithm_combo = QComboBox()
+        form_algo_select.addRow(QLabel("アルゴリズム:"), self.coloring_algorithm_combo)
+        self.true_coloring_layout.addLayout(form_algo_select)
+        self.coloring_algorithm_combo.currentTextChanged.connect(self._on_coloring_algorithm_changed)
+
+        # Coloring Algorithm Specific UI
+        self.coloring_plugin_specific_group = QGroupBox("アルゴリズム固有設定")
+        self.coloring_plugin_specific_layout = QFormLayout()
+        self.coloring_plugin_specific_group.setLayout(self.coloring_plugin_specific_layout)
+        self.true_coloring_layout.addWidget(self.coloring_plugin_specific_group)
+        self.coloring_plugin_specific_group.setVisible(False)
+
+        # Color Pack selection
+        form_pack_select = QFormLayout()
+        self.color_pack_combo = QComboBox()
+        form_pack_select.addRow(QLabel("カラーパック:"), self.color_pack_combo)
+        self.true_coloring_layout.addLayout(form_pack_select)
+        self.color_pack_combo.currentTextChanged.connect(self._on_color_pack_changed)
+
+        # Color Map selection
+        form_map_select = QFormLayout()
+        self.color_map_listwidget = QListWidget()
+        self.color_map_listwidget.setIconSize(QSize(96, 18)) # Increased width for better preview
+        self.color_map_listwidget.setSpacing(1)
+        self.color_map_listwidget.setFixedHeight(120)
+        form_map_select.addRow(QLabel("カラーマップ:"), self.color_map_listwidget)
+        self.true_coloring_layout.addLayout(form_map_select)
+        self.color_map_listwidget.currentItemChanged.connect(self._on_color_map_changed)
+
+        self.coloring_group.setLayout(self.true_coloring_layout)
+        self.main_layout.addWidget(self.coloring_group)
 
         # Render Button
         self.render_button = QPushButton("描画実行")
         self.main_layout.addWidget(self.render_button)
-
         self.main_layout.addStretch(1)
 
-        # Connect signals for UI changes
+        # Connect common parameter signals
         self.iter_spinbox.valueChanged.connect(self._on_iter_spinbox_changed)
         self.iter_slider.valueChanged.connect(self._on_iter_slider_changed)
-        # For DoubleSpinBoxes, valueChanged can be very frequent during typing.
-        # editingFinished is usually better for text-based input if updates are costly.
-        # However, for spin boxes with up/down arrows, valueChanged is fine.
         self.center_real_spinbox.valueChanged.connect(self._on_value_changed_by_ui)
         self.center_imag_spinbox.valueChanged.connect(self._on_value_changed_by_ui)
         self.width_spinbox.valueChanged.connect(self._on_value_changed_by_ui)
 
-    def _clear_plugin_specific_ui(self):
-        """Clears all widgets from the plugin-specific UI layout."""
-        self.plugin_widgets.clear()
-        while self.plugin_specific_layout.count():
-            item = self.plugin_specific_layout.takeAt(0)
-            widget = item.widget()
-            if widget:
-                widget.deleteLater()
-            # Also remove row if QFormLayout still holds it (might need to remove rows explicitly)
-            # For QFormLayout, removing widgets is usually enough if rows are auto-adjusted.
-            # Or, remove row by row: self.plugin_specific_layout.removeRow(0)
-        # print("ParameterPanel: Cleared plugin-specific UI.")
+    def _create_colormap_thumbnail(self, colors: list[tuple[int,int,int]], thumb_width: int = 96, thumb_height: int = 18) -> QPixmap:
+        if not colors:
+            img = QImage(thumb_width, thumb_height, QImage.Format.Format_RGB888)
+            img.fill(Qt.GlobalColor.gray)
+            return QPixmap.fromImage(img)
 
+        img = QImage(thumb_width, thumb_height, QImage.Format.Format_RGB888)
+        painter = QPainter(img)
 
-    @pyqtSlot(str)
-    def _update_plugin_specific_ui(self, plugin_name: str):
-        """Dynamically creates UI elements for the given plugin's specific parameters."""
-        self._clear_plugin_specific_ui()
-        if not self.fractal_controller or not plugin_name:
-            self.plugin_specific_group.setVisible(False)
-            return
+        if len(colors) == 1:
+            painter.fillRect(0, 0, thumb_width, thumb_height, QColor(colors[0][0], colors[0][1], colors[0][2]))
+        else:
+            gradient = QLinearGradient(0, 0, thumb_width, 0) # Horizontal gradient
+            num_color_stops = len(colors)
+            for i, color_tuple in enumerate(colors):
+                position = i / (num_color_stops - 1) if num_color_stops > 1 else 0.0
+                qt_color = QColor(color_tuple[0], color_tuple[1], color_tuple[2])
+                gradient.setColorAt(position, qt_color)
+            painter.fillRect(0, 0, thumb_width, thumb_height, gradient)
 
-        param_defs = self.fractal_controller.get_plugin_parameter_definitions(plugin_name)
-        if not param_defs:
-            self.plugin_specific_group.setVisible(False)
-            # print(f"ParameterPanel: Plugin '{plugin_name}' has no specific parameters.")
-            return
+        painter.end()
+        return QPixmap.fromImage(img)
 
-        self.plugin_specific_group.setVisible(True)
-        self.plugin_specific_group.setTitle(f"{plugin_name} 固有設定")
-        current_plugin_param_values = self.fractal_controller.get_current_plugin_parameters()
-
-        # プラグインプリセット用UI (もしあれば)
-        presets = self.fractal_controller.get_plugin_presets(plugin_name)
-        if presets:
-            preset_combo = QComboBox()
-            preset_combo.addItem("カスタム") # Default, indicates manual parameter setting
-            for preset_name in presets.keys():
-                preset_combo.addItem(preset_name)
-
-            # Connect signal for preset selection
-            # Note: We pass a copy of presets dict at the time of connection using partial.
-            # This avoids issues if presets_data were to change later for some reason.
-            preset_combo.currentTextChanged.connect(
-                partial(self._on_preset_selected, plugin_name=plugin_name, presets_data=presets.copy())
-            )
-            self.plugin_specific_layout.addRow(QLabel("プリセット:"), preset_combo)
-            self.plugin_widgets['_preset_combo'] = preset_combo # Store for potential future access
-
-        for p_def in param_defs:
-            label_text = p_def.get('label', p_def['name'])
-            param_name = p_def['name']
-            param_type = p_def.get('type', 'float')
-            default_val = current_plugin_param_values.get(param_name, p_def.get('default')) # Use current value from engine
-            widget = None
-
-            if param_type == 'float':
-                widget = QDoubleSpinBox()
-                widget.setRange(p_def.get('range', (-1e9, 1e9))[0], p_def.get('range', (-1e9, 1e9))[1])
-                widget.setValue(default_val if default_val is not None else 0.0)
-                widget.setSingleStep(p_def.get('step', 0.01))
-                widget.setDecimals(p_def.get('decimals', 6)) # Default to 6 decimals for floats
-                if 'tooltip' in p_def: widget.setToolTip(p_def['tooltip'])
-            elif param_type == 'int':
-                widget = QSpinBox()
-                widget.setRange(p_def.get('range', (-2147483647, 2147483647))[0], p_def.get('range', (-2147483647, 2147483647))[1])
-                widget.setValue(default_val if default_val is not None else 0)
-                widget.setSingleStep(p_def.get('step', 1))
-                if 'tooltip' in p_def: widget.setToolTip(p_def['tooltip'])
-
-            if widget:
-                self.plugin_specific_layout.addRow(QLabel(label_text + ":"), widget)
-                # Connect using partial to pass param_name to the slot
-                widget.valueChanged.connect(partial(self._on_plugin_parameter_changed, param_name=param_name))
-                self.plugin_widgets[param_name] = widget
-        # print(f"ParameterPanel: Updated plugin-specific UI for '{plugin_name}'.")
-
-
+    # --- Fractal Plugin UI Methods (略 - 変更なし) ---
     def _populate_fractal_combo(self):
-        """Populates the fractal selection combobox."""
-        if not self.fractal_controller:
-            print("ParameterPanel: Cannot populate fractal combo, no controller.")
-            return
-
-        plugin_names = self.fractal_controller.get_available_plugin_names_from_engine()
-        current_active_plugin_name = self.fractal_controller.get_active_plugin_name_from_engine()
-
-        self.fractal_combo.blockSignals(True)
-        self.fractal_combo.clear()
+        if not self.fractal_controller: return
+        plugin_names = self.fractal_controller.get_available_fractal_plugin_names_from_engine()
+        active_name = self.fractal_controller.get_active_fractal_plugin_name_from_engine()
+        self.fractal_combo.blockSignals(True); self.fractal_combo.clear()
         if plugin_names:
             self.fractal_combo.addItems(plugin_names)
-            if current_active_plugin_name and current_active_plugin_name in plugin_names:
-                self.fractal_combo.setCurrentText(current_active_plugin_name)
-            elif plugin_names: # Default to first if current not found or not set
-                self.fractal_combo.setCurrentText(plugin_names[0])
-        else:
-            self.fractal_combo.addItem("プラグインなし") # Placeholder if no plugins
-            self.fractal_combo.setEnabled(False)
-
+            if active_name and active_name in plugin_names: self.fractal_combo.setCurrentText(active_name)
+            elif plugin_names: self.fractal_combo.setCurrentText(plugin_names[0])
+        else: self.fractal_combo.addItem("プラグインなし"); self.fractal_combo.setEnabled(False)
         self.fractal_combo.blockSignals(False)
-        print(f"ParameterPanel: Fractal combo populated. Items: {plugin_names}. Current: {self.fractal_combo.currentText()}")
 
     @pyqtSlot(str)
     def _on_fractal_type_changed(self, plugin_name: str):
-        """Handles selection change in the fractal type combobox."""
-        if not self.fractal_controller or not plugin_name or plugin_name == "プラグインなし":
-            return
-
-        # Prevent re-triggering if the change was programmatic (e.g. from parameters_updated_externally)
-        # Check if this plugin is already active in the engine
-        current_engine_plugin = self.fractal_controller.get_active_plugin_name_from_engine()
-        if plugin_name == current_engine_plugin:
-            print(f"ParameterPanel: Fractal type '{plugin_name}' is already active. No change needed.")
-            return
-
-        print(f"ParameterPanel: User selected fractal type '{plugin_name}'. Notifying controller.")
+        if not self.fractal_controller or not plugin_name or plugin_name == "プラグインなし": return
+        current_engine_plugin = self.fractal_controller.get_active_fractal_plugin_name_from_engine()
+        if plugin_name == current_engine_plugin: return
         self.fractal_controller.set_active_fractal_plugin_and_redraw(plugin_name)
-        # After this, controller will emit parameters_updated_externally,
-        # which will call update_ui_from_controller_parameters to refresh common params.
-        # Plugin-specific UI update would also be needed here.
-        # self.update_plugin_specific_ui_for_plugin(plugin_name) # TODO
 
-    def _on_iter_spinbox_changed(self, value):
-        self.iter_slider.setValue(value) # Sync slider
-        self._on_value_changed_by_ui() # Emit signal
+    def _clear_fractal_plugin_specific_ui(self):
+        self.plugin_widgets.clear()
+        while self.plugin_specific_layout.count():
+            item = self.plugin_specific_layout.takeAt(0)
+            if item.widget(): item.widget().deleteLater()
 
-    def _on_iter_slider_changed(self, value):
-        if self.iter_spinbox.value() != value: # Avoid loop if already same
-            self.iter_spinbox.setValue(value) # Sync spinbox (this will call _on_value_changed_by_ui via spinbox's signal)
-        else: # If slider was source and value is already same, ensure signal emits if direct call needed
-             self._on_value_changed_by_ui()
+    @pyqtSlot(str)
+    def _update_fractal_plugin_specific_ui(self, plugin_name: str):
+        self._clear_fractal_plugin_specific_ui()
+        if not self.fractal_controller or not plugin_name: self.plugin_specific_group.setVisible(False); return
+        param_defs = self.fractal_controller.get_fractal_plugin_parameter_definitions_from_engine(plugin_name)
+        if not param_defs: self.plugin_specific_group.setVisible(False); return
+        self.plugin_specific_group.setVisible(True)
+        self.plugin_specific_group.setTitle(f"{plugin_name} 固有設定")
+        current_vals = self.fractal_controller.get_current_fractal_plugin_parameters_from_engine()
+        for p_def in param_defs:
+            lbl = p_def.get('label', p_def['name']); name = p_def['name']; type = p_def.get('type', 'float')
+            val = current_vals.get(name, p_def.get('default')); widget = None
+            if type == 'float':
+                widget = QDoubleSpinBox(); widget.setRange(p_def.get('range',(-1e9,1e9))[0], p_def.get('range',(-1e9,1e9))[1]); widget.setValue(val if val is not None else 0.0); widget.setSingleStep(p_def.get('step',0.01)); widget.setDecimals(p_def.get('decimals',6))
+            elif type == 'int':
+                widget = QSpinBox(); widget.setRange(p_def.get('range',(-2**31,2**31-1))[0], p_def.get('range',(-2**31,2**31-1))[1]); widget.setValue(val if val is not None else 0); widget.setSingleStep(p_def.get('step',1))
+            if widget:
+                if 'tooltip' in p_def: widget.setToolTip(p_def['tooltip'])
+                self.plugin_specific_layout.addRow(QLabel(lbl + ":"), widget)
+                widget.valueChanged.connect(partial(self._on_fractal_plugin_parameter_changed, param_name=name))
+                self.plugin_widgets[name] = widget
 
-
-    def _on_value_changed_by_ui(self):
-        """Gathers current common parameters from UI and emits parameters_changed_in_ui_signal."""
-        cr = self.center_real_spinbox.value()
-        ci = self.center_imag_spinbox.value()
-        w = self.width_spinbox.value()
-        iters = self.iter_spinbox.value()
-        self.parameters_changed_in_ui_signal.emit(cr, ci, w, iters)
-
-    def _on_plugin_parameter_changed(self, value, param_name: str): # Value arg might be unused if sender is source of truth
-        """Handles changes in plugin-specific parameter UI elements."""
+    def _on_fractal_plugin_parameter_changed(self, value, param_name: str):
         if not self.fractal_controller: return
-
-        sender_widget = self.sender()
-        if isinstance(sender_widget, (QDoubleSpinBox, QSpinBox)): # Extend with QCheckBox etc. if needed
-            actual_value = sender_widget.value()
-            print(f"ParameterPanel: Plugin param '{param_name}' changed to '{actual_value}' by UI.")
-            self.fractal_controller.set_plugin_parameter_value(param_name, actual_value)
-            # If a preset was selected, and then a specific param is changed, deselect preset
+        sender = self.sender()
+        if isinstance(sender, (QDoubleSpinBox, QSpinBox)):
+            self.fractal_controller.set_fractal_plugin_parameter_and_update(param_name, sender.value())
             if '_preset_combo' in self.plugin_widgets:
-                self.plugin_widgets['_preset_combo'].blockSignals(True)
-                self.plugin_widgets['_preset_combo'].setCurrentText("カスタム")
-                self.plugin_widgets['_preset_combo'].blockSignals(False)
+                self.plugin_widgets['_preset_combo'].blockSignals(True); self.plugin_widgets['_preset_combo'].setCurrentText("カスタム"); self.plugin_widgets['_preset_combo'].blockSignals(False)
 
+    # --- Coloring UI Methods ---
+    def _populate_coloring_algorithm_combo(self):
+        if not self.fractal_controller: return
+        algo_names = self.fractal_controller.get_available_coloring_plugin_names_from_engine()
+        active_algo = self.fractal_controller.get_active_coloring_plugin_name_from_engine()
+        self.coloring_algorithm_combo.blockSignals(True); self.coloring_algorithm_combo.clear()
+        if algo_names:
+            self.coloring_algorithm_combo.addItems(algo_names)
+            if active_algo and active_algo in algo_names: self.coloring_algorithm_combo.setCurrentText(active_algo)
+            elif algo_names: self.coloring_algorithm_combo.setCurrentText(algo_names[0])
+        else: self.coloring_algorithm_combo.addItem("N/A"); self.coloring_algorithm_combo.setEnabled(False)
+        self.coloring_algorithm_combo.blockSignals(False)
 
-    def _on_preset_selected(self, preset_name: str, plugin_name: str, presets_data: dict):
-        """Handles selection of a preset value for plugin parameters."""
-        if preset_name == "カスタム" or not self.fractal_controller:
-            # "カスタム" means user will set params manually, or they already are custom.
-            return
+    @pyqtSlot(str)
+    def _on_coloring_algorithm_changed(self, algo_name: str):
+        if not self.fractal_controller or not algo_name or algo_name == "N/A": return
+        if algo_name == self.fractal_controller.get_active_coloring_plugin_name_from_engine(): return
+        self.fractal_controller.set_active_coloring_plugin_and_recolor(algo_name)
 
-        selected_preset_values = presets_data.get(preset_name)
-        if selected_preset_values:
-            print(f"ParameterPanel: Preset '{preset_name}' for plugin '{plugin_name}' selected. Values: {selected_preset_values}")
+    def _clear_coloring_plugin_specific_ui(self):
+        self.coloring_plugin_widgets.clear()
+        while self.coloring_plugin_specific_layout.count():
+            item = self.coloring_plugin_specific_layout.takeAt(0)
+            if item.widget(): item.widget().deleteLater()
 
-            # Update UI elements and notify controller for each parameter in the preset
-            for param_name, value in selected_preset_values.items():
-                if param_name in self.plugin_widgets:
-                    widget = self.plugin_widgets[param_name]
-                    widget.blockSignals(True) # Prevent _on_plugin_parameter_changed from firing and setting preset to "カスタム"
-                    if isinstance(widget, (QDoubleSpinBox, QSpinBox)):
-                        widget.setValue(value)
-                    # Add other widget types here if necessary (e.g., QCheckBox.setChecked(value))
-                    widget.blockSignals(False)
-                    # Manually notify controller for this parameter change from preset
-                    self.fractal_controller.set_plugin_parameter_value(param_name, value)
-                else:
-                    # If param_name in preset is not found in UI (should not happen if UI is built from param_defs)
-                    # still try to set it in the engine directly.
-                    print(f"ParameterPanel: Preset param '{param_name}' has no UI widget, setting directly in engine.")
-                    self.fractal_controller.set_plugin_parameter_value(param_name, value)
+    @pyqtSlot(str)
+    def _update_coloring_plugin_specific_ui(self, algo_name: str):
+        self._clear_coloring_plugin_specific_ui()
+        if not self.fractal_controller or not algo_name: self.coloring_plugin_specific_group.setVisible(False); return
+        param_defs = self.fractal_controller.get_coloring_plugin_parameter_definitions_from_engine(algo_name)
+        if not param_defs: self.coloring_plugin_specific_group.setVisible(False); return
 
-            # After applying all preset values, could optionally trigger a re-render or notify user.
-            # For now, parameter changes update the engine. User clicks "Render" button.
-            # If immediate re-render is desired: self.fractal_controller.trigger_render() (after ensuring main_window size is known)
-            print(f"ParameterPanel: All parameters for preset '{preset_name}' applied.")
+        self.coloring_plugin_specific_group.setVisible(True)
+        self.coloring_plugin_specific_group.setTitle(f"{algo_name} 固有設定")
+        current_vals = self.fractal_controller.get_current_coloring_plugin_parameters_from_engine()
 
+        # Add preset combobox for coloring plugins if they have presets
+        presets = self.fractal_controller.get_plugin_presets(algo_name) # Assuming fractal_controller has this for coloring plugins too
+        if presets:
+            preset_combo = QComboBox()
+            preset_combo.addItem("カスタム")
+            for preset_name in presets.keys(): preset_combo.addItem(preset_name)
+            preset_combo.currentTextChanged.connect(
+                partial(self._on_coloring_preset_selected, plugin_name=algo_name, presets_data=presets.copy())
+            )
+            self.coloring_plugin_specific_layout.addRow(QLabel("プリセット:"), preset_combo)
+            self.coloring_plugin_widgets['_coloring_preset_combo'] = preset_combo
 
+        for p_def in param_defs:
+            lbl=p_def.get('label',p_def['name']); name=p_def['name']; type=p_def.get('type','float')
+            val=current_vals.get(name, p_def.get('default')); widget=None
+            if type == 'float':
+                widget=QDoubleSpinBox(); widget.setRange(p_def.get('range',(-1e9,1e9))[0], p_def.get('range',(-1e9,1e9))[1]); widget.setValue(val if val is not None else 0.0); widget.setSingleStep(p_def.get('step',0.01)); widget.setDecimals(p_def.get('decimals',3))
+            elif type == 'int':
+                widget=QSpinBox(); widget.setRange(p_def.get('range',(-2**31,2**31-1))[0], p_def.get('range',(-2**31,2**31-1))[1]); widget.setValue(val if val is not None else 0); widget.setSingleStep(p_def.get('step',1))
+            if widget:
+                if 'tooltip' in p_def: widget.setToolTip(p_def['tooltip'])
+                self.coloring_plugin_specific_layout.addRow(QLabel(lbl + ":"), widget)
+                widget.valueChanged.connect(partial(self._on_coloring_plugin_parameter_changed, param_name=name))
+                self.coloring_plugin_widgets[name] = widget
+
+    def _on_coloring_plugin_parameter_changed(self, value, param_name: str):
+        if not self.fractal_controller: return
+        sender = self.sender()
+        if isinstance(sender, (QDoubleSpinBox, QSpinBox)):
+            self.fractal_controller.set_coloring_plugin_parameter_and_recolor(param_name, sender.value())
+            if '_coloring_preset_combo' in self.coloring_plugin_widgets:
+                self.coloring_plugin_widgets['_coloring_preset_combo'].blockSignals(True)
+                self.coloring_plugin_widgets['_coloring_preset_combo'].setCurrentText("カスタム")
+                self.coloring_plugin_widgets['_coloring_preset_combo'].blockSignals(False)
+
+    def _on_coloring_preset_selected(self, preset_name: str, plugin_name: str, presets_data: dict):
+        if preset_name == "カスタム" or not self.fractal_controller: return
+        selected_vals = presets_data.get(preset_name)
+        if selected_vals:
+            for p_name, val in selected_vals.items():
+                if p_name in self.coloring_plugin_widgets:
+                    widget = self.coloring_plugin_widgets[p_name]
+                    widget.blockSignals(True); widget.setValue(val); widget.blockSignals(False)
+                self.fractal_controller.set_coloring_plugin_parameter_and_recolor(p_name, val) # Notify even if no UI widget
+
+    def _populate_color_pack_combo(self):
+        if not self.fractal_controller: return
+        pack_names = self.fractal_controller.get_available_color_pack_names_from_engine()
+        active_pack = self.fractal_controller.get_active_color_pack_name_from_engine()
+        self.color_pack_combo.blockSignals(True); self.color_pack_combo.clear()
+        if pack_names:
+            self.color_pack_combo.addItems(pack_names)
+            if active_pack and active_pack in pack_names: self.color_pack_combo.setCurrentText(active_pack)
+            elif pack_names: self.color_pack_combo.setCurrentText(pack_names[0])
+        else: self.color_pack_combo.addItem("N/A"); self.color_pack_combo.setEnabled(False)
+        self.color_pack_combo.blockSignals(False)
+        if self.color_pack_combo.isEnabled() and self.color_pack_combo.currentText() != "N/A":
+             self._populate_color_map_list(self.color_pack_combo.currentText())
+
+    @pyqtSlot(str)
+    def _on_color_pack_changed(self, pack_name: str):
+        if not self.fractal_controller or not pack_name or pack_name == "N/A": return
+        self._populate_color_map_list(pack_name)
+        if self.color_map_listwidget.count() > 0:
+            first_map_item = self.color_map_listwidget.item(0)
+            if first_map_item:
+                self.color_map_listwidget.setCurrentItem(first_map_item)
+                # If selection didn't change but we want to force update based on new pack's first map:
+                if self.fractal_controller.get_active_color_map_name_from_engine() != first_map_item.text() or \
+                   self.fractal_controller.get_active_color_pack_name_from_engine() != pack_name:
+                     self.fractal_controller.set_active_color_map_and_recolor(pack_name, first_map_item.text())
+
+    def _populate_color_map_list(self, pack_name: str | None):
+        self.color_map_listwidget.blockSignals(True)
+        self.color_map_listwidget.clear()
+        if not self.fractal_controller or not pack_name:
+            self.color_map_listwidget.setEnabled(False); self.color_map_listwidget.blockSignals(False); return
+
+        map_names = self.fractal_controller.get_color_map_names_in_pack_from_engine(pack_name)
+        active_map_name = self.fractal_controller.get_active_color_map_name_from_engine()
+
+        if map_names:
+            self.color_map_listwidget.setEnabled(True)
+            for name_str in map_names:
+                map_data = self.fractal_controller.get_color_map_data_from_engine(pack_name, name_str)
+                list_item = QListWidgetItem(name_str)
+                if map_data:
+                    thumbnail = self._create_colormap_thumbnail(map_data)
+                    list_item.setIcon(QIcon(thumbnail))
+                self.color_map_listwidget.addItem(list_item)
+                if name_str == active_map_name:
+                    self.color_map_listwidget.setCurrentItem(list_item)
+        else:
+            self.color_map_listwidget.setEnabled(False)
+        self.color_map_listwidget.blockSignals(False)
+
+    @pyqtSlot(QListWidgetItem, QListWidgetItem)
+    def _on_color_map_changed(self, current_item: QListWidgetItem, previous_item: QListWidgetItem):
+        if not self.fractal_controller or not current_item: return
+        map_name = current_item.text()
+        pack_name = self.color_pack_combo.currentText()
+        if not pack_name or pack_name == "N/A": return
+        active_pack_ctrl = self.fractal_controller.get_active_color_pack_name_from_engine()
+        active_map_ctrl = self.fractal_controller.get_active_color_map_name_from_engine()
+        if pack_name == active_pack_ctrl and map_name == active_map_ctrl: return
+        self.fractal_controller.set_active_color_map_and_recolor(pack_name, map_name)
+
+    @pyqtSlot(str, str)
+    def _update_color_selection_from_controller(self, pack_name: str, map_name: str):
+        self.color_pack_combo.blockSignals(True)
+        self.color_map_listwidget.blockSignals(True)
+        if pack_name != self.color_pack_combo.currentText():
+            self.color_pack_combo.setCurrentText(pack_name)
+            self._populate_color_map_list(pack_name)
+        found = False
+        for i in range(self.color_map_listwidget.count()):
+            item = self.color_map_listwidget.item(i)
+            if item.text() == map_name: self.color_map_listwidget.setCurrentItem(item); found = True; break
+        self.color_pack_combo.blockSignals(False); self.color_map_listwidget.blockSignals(False)
+
+    # --- Common UI Parameter Handling (略 - 変更なし) ---
+    def _on_iter_spinbox_changed(self, value):
+        self.iter_slider.setValue(value); self._on_value_changed_by_ui()
+    def _on_iter_slider_changed(self, value):
+        if self.iter_spinbox.value() != value: self.iter_spinbox.setValue(value)
+        else: self._on_value_changed_by_ui()
+    def _on_value_changed_by_ui(self):
+        cr=self.center_real_spinbox.value(); ci=self.center_imag_spinbox.value(); w=self.width_spinbox.value(); iters=self.iter_spinbox.value()
+        self.parameters_changed_in_ui_signal.emit(cr, ci, w, iters)
     def load_initial_parameters(self):
-        """Loads common parameters from the controller for the current active plugin and updates the UI."""
         if self.fractal_controller:
-            # Parameters should reflect the currently active plugin in the engine
-            params = self.fractal_controller.get_current_parameters()
-            if params:
-                 print(f"ParameterPanel: Loading initial common parameters from controller: CR={params.get('center_real')}, W={params.get('width')}, Iters={params.get('max_iterations')}")
-                 self._set_ui_values(params.get('center_real', -0.5),
-                                    params.get('center_imag', 0.0),
-                                    params.get('width', 3.0),
-                                    params.get('max_iterations', 100))
-                 # TODO: Load plugin-specific parameters if any for the current plugin
-                 # self.load_plugin_specific_parameters()
-            else:
-                print("ParameterPanel: Controller returned no initial parameters, using UI defaults.")
-                self._set_ui_values(-0.5, 0.0, 3.0, 100) # Fallback defaults for common params
-
+            params = self.fractal_controller.get_current_common_parameters()
+            if params: self._set_ui_values(params.get('center_real',-0.5), params.get('center_imag',0.0), params.get('width',3.0), params.get('max_iterations',100))
+            active_fp_name = self.fractal_controller.get_active_fractal_plugin_name_from_engine()
+            if active_fp_name: self._update_fractal_plugin_specific_ui(active_fp_name) # Renamed method
+            active_cp_name = self.fractal_controller.get_active_coloring_plugin_name_from_engine()
+            if active_cp_name: self._update_coloring_plugin_specific_ui(active_cp_name)
     @pyqtSlot()
     def update_ui_from_controller_parameters(self):
-        """Updates common parameter UI elements based on current parameters from the FractalController."""
         if self.fractal_controller:
-            params = self.fractal_controller.get_current_parameters()
-            if params:
-                print(f"ParameterPanel: Syncing UI from controller parameters: {params}")
-                self._set_ui_values(params['center_real'], params['center_imag'],
-                                    params['width'], params['max_iterations'])
-        else:
-            print("ParameterPanel: Attempted to update UI from controller, but no controller is set.")
-
+            params = self.fractal_controller.get_current_common_parameters()
+            if params: self._set_ui_values(params['center_real'], params['center_imag'], params['width'], params['max_iterations'])
     def _set_ui_values(self, cr, ci, w, iters):
-        """Helper method to set all UI parameter input widgets, blocking signals."""
-        # Block signals to prevent feedback loops while programmatically setting values
-        self.iter_spinbox.blockSignals(True)
-        self.iter_slider.blockSignals(True)
-        self.center_real_spinbox.blockSignals(True)
-        self.center_imag_spinbox.blockSignals(True)
-        self.width_spinbox.blockSignals(True)
-
-        self.iter_spinbox.setValue(int(iters)) # Ensure iters is int for QSpinBox
-        self.iter_slider.setValue(int(iters))
-        self.center_real_spinbox.setValue(cr)
-        self.center_imag_spinbox.setValue(ci)
-        self.width_spinbox.setValue(w)
-
-        # Unblock signals
-        self.iter_spinbox.blockSignals(False)
-        self.iter_slider.blockSignals(False)
-        self.center_real_spinbox.blockSignals(False)
-        self.center_imag_spinbox.blockSignals(False)
-        self.width_spinbox.blockSignals(False)
-        print(f"ParameterPanel: UI elements set to CR={cr}, CI={ci}, W={w}, Iters={iters}")
-
-    def get_current_ui_parameters(self):
-        """Returns a dictionary of the current parameters from the UI elements."""
-        return {
-            "center_real": self.center_real_spinbox.value(),
-            "center_imag": self.center_imag_spinbox.value(),
-            "width": self.width_spinbox.value(),
-            "max_iterations": self.iter_spinbox.value()
-        }
+        self.iter_spinbox.blockSignals(True); self.iter_slider.blockSignals(True); self.center_real_spinbox.blockSignals(True); self.center_imag_spinbox.blockSignals(True); self.width_spinbox.blockSignals(True)
+        self.iter_spinbox.setValue(int(iters)); self.iter_slider.setValue(int(iters)); self.center_real_spinbox.setValue(cr); self.center_imag_spinbox.setValue(ci); self.width_spinbox.setValue(w)
+        self.iter_spinbox.blockSignals(False); self.iter_slider.blockSignals(False); self.center_real_spinbox.blockSignals(False); self.center_imag_spinbox.blockSignals(False); self.width_spinbox.blockSignals(False)
+    def get_current_ui_parameters(self) -> dict:
+        return {"center_real":self.center_real_spinbox.value(), "center_imag":self.center_imag_spinbox.value(), "width":self.width_spinbox.value(), "max_iterations":self.iter_spinbox.value()}
 
 if __name__ == '__main__':
-    import sys
-    from PyQt6.QtWidgets import QApplication, QMainWindow
-
-    # Minimal mock controller for testing ParameterPanel standalone
-    class MockFractalController(QObject):
-        parameters_updated_externally = pyqtSignal()
-        status_updated = pyqtSignal(str) # ParameterPanel doesn't use this directly but good for completeness
-
-        def __init__(self):
-            super().__init__()
-            self._params = {"center_real": -0.7, "center_imag": 0.1, "width": 0.5, "max_iterations": 150, "height":0.0}
-            self._params["height"] = (self._params["width"] * 600)/800
-
-
-        def get_current_parameters(self):
-            print(f"MockController: get_current_parameters called, returning {self._params}")
-            return self._params
-
-        def update_fractal_parameters(self, cr, ci, w, iters): # Called by MainWindow
-            self._params = {"center_real": cr, "center_imag": ci, "width": w, "max_iterations": iters}
-            self._params["height"] = (self._params["width"] * 600)/800 # Assume some image aspect ratio
-            print(f"MockController: Parameters updated to {self._params}")
-            self.status_updated.emit(f"Mock: Params set to {cr}, {ci}, {w}, {iters}")
-            # If these params were set by something other than this panel, emit:
-            # self.parameters_updated_externally.emit()
-
-
-        def trigger_render(self): # Called by MainWindow after getting params from panel
-            print(f"MockController: Trigger render with current params: {self._params}")
-            self.status_updated.emit(f"Mock: Rendering with {self._params['max_iterations']} iterations.")
-
-
-    app = QApplication(sys.argv)
-    main_win = QMainWindow() # To host the panel
-
-    mock_controller = MockFractalController()
-    param_panel = ParameterPanel(fractal_controller=mock_controller)
-
-    # Test signal from ParameterPanel
-    def handle_panel_param_change(cr, ci, w, iters):
-        print(f"Test Harness: ParameterPanel's parameters_changed_in_ui_signal received.")
-        # In real app, MainWindow would get this and call controller.update_fractal_parameters
-        mock_controller.update_fractal_parameters(cr, ci, w, iters)
-
-    param_panel.parameters_changed_in_ui_signal.connect(handle_panel_param_change)
-
-    # Test updating panel from controller
-    def simulate_external_param_change():
-        print("\nTest Harness: Simulating external parameter change...")
-        mock_controller._params["center_real"] = -1.0
-        mock_controller._params["width"] = 2.5
-        mock_controller._params["max_iterations"] = 250
-        mock_controller.parameters_updated_externally.emit()
-        print(f"Test Harness: Panel's UI should now reflect: {mock_controller._params}")
-        # Check if UI updated (visual check, or add getters to panel for programmatic check)
-        # ui_vals = param_panel.get_current_ui_parameters()
-        # assert ui_vals["center_real"] == -1.0
-
-    main_win.setCentralWidget(param_panel)
-    main_win.resize(350, 600)
-    main_win.setWindowTitle("ParameterPanel Test")
-    main_win.show()
-
-    from PyQt6.QtCore import QTimer
-    QTimer.singleShot(1000, simulate_external_param_change) # Simulate after UI is shown
-
-    # Simulate UI interaction (requires event loop)
-    # param_panel.width_spinbox.setValue(1.23) # This would trigger signals if done in test
-
-    sys.exit(app.exec())
+    # ... (Standalone test code remains complex and is best done via main application) ...
+    print("ParameterPanel standalone test requires a comprehensive mock controller and setup.")
+    print("Please test through the main application or a dedicated test suite.")

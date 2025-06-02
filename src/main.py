@@ -3,12 +3,11 @@ from PyQt6.QtWidgets import QApplication
 from src.app.views.main_window import MainWindow
 from src.app.models.fractal_engine import FractalEngine
 from src.app.controllers.fractal_controller import FractalController
+from src.app.utils.settings_manager import SettingsManager # Import SettingsManager
 from PyQt6.QtCore import Qt
+from pathlib import Path # For path manipulation if needed for settings
 
 if __name__ == '__main__':
-    # 高DPI対応 (Qt5以降では多くの場合自動ですが、明示的に設定)
-    # PyQt6ではAA_EnableHighDpiScalingはデフォルトで有効な場合が多い
-    # AA_UseHighDpiPixmapsは高解像度のアイコンなどに影響
     if hasattr(Qt.ApplicationAttribute, 'AA_EnableHighDpiScaling'):
         QApplication.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling)
     if hasattr(Qt.ApplicationAttribute, 'AA_UseHighDpiPixmaps'):
@@ -16,12 +15,21 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
 
-    # モデルとコントローラーの作成
+    # 設定マネージャーの初期化 (ファイル名は任意)
+    # アプリケーション名や組織名を使って標準的な場所に保存することも検討 (QStandardPaths)
+    settings_file_name = "fractal_explorer_settings.json"
+    # settings_manager = SettingsManager(settings_filename=settings_file_name)
+    # For testing, ensure it's in a writable location, e.g., user's home or app data dir
+    # The SettingsManager itself now tries to save in user's home/.fractalapp/
+    settings_manager = SettingsManager(settings_filename=settings_file_name)
+
+
+    # モデル、コントローラーの作成
+    # FractalEngineのコンストラクタで各プラグインフォルダのデフォルトパスが使われる
     fractal_engine = FractalEngine()
     fractal_controller = FractalController(fractal_engine)
 
-    # ダークテーマのスタイルシートを設定
-    # (スタイルシートのコードは変更なしのため省略)
+    # ダークテーマのスタイルシート (変更なし)
     app.setStyleSheet("""
         QWidget {
             background-color: #2e2e2e;
@@ -68,44 +76,28 @@ if __name__ == '__main__':
         QScrollArea {
             border: 1px solid #3c3c3c;
         }
-        /* QLabel specific styles should be carefully managed. */
-        /* For instance, ParameterPanel's labels will inherit QWidget's color. */
-        /* RenderArea has its own style, so it won't be affected by a global QLabel style here. */
-
-        /* Style for QSplitter handle */
+        QLabel {
+            color: #e0e0e0;
+        }
         QSplitter::handle {
             background-color: #3c3c3c;
             border: 1px solid #505050;
         }
-        QSplitter::handle:horizontal {
-            width: 2px;
-        }
-        QSplitter::handle:vertical {
-            height: 2px;
-        }
-        QSplitter::handle:hover {
-            background-color: #505050;
-        }
-
-        /* Ensure specific labels like those in ParameterPanel get the theme's text color */
-        QLabel {
-            color: #e0e0e0;
-            /* background-color: transparent; /* This might be too broad if not careful */
-        }
+        QSplitter::handle:horizontal { width: 2px; }
+        QSplitter::handle:vertical { height: 2px; }
+        QSplitter::handle:hover { background-color: #505050; }
     """)
 
-    main_window = MainWindow(fractal_controller) # MainWindowにコントローラを渡す
-    fractal_controller.set_main_window(main_window) # ControllerにMainWindowをセット
+    # MainWindowに SettingsManager のインスタンスを渡す
+    main_window = MainWindow(fractal_controller, settings_manager)
+    fractal_controller.set_main_window(main_window)
 
-    # MainWindowのステータスバー更新シグナルを接続
-    fractal_controller.status_updated.connect(main_window.update_status_bar)
+    if hasattr(main_window, 'status_bar') and main_window.status_bar is not None: # Ensure status_bar exists
+        fractal_controller.status_updated.connect(main_window.update_status_bar)
+    else:
+        print("Warning: MainWindow.status_bar not found or not initialized, cannot connect status_updated signal.")
+
 
     main_window.show()
-
-    # 初期描画をトリガー (オプション)
-    # ウィンドウが表示されてRenderAreaのサイズが確定した後に呼び出すのが理想
-    # main_window.request_initial_render()
-    # または、表示直後に一度コントローラーからトリガーする (サイズはRenderAreaから取得を試みる)
-    # QtCore.QTimer.singleShot(0, lambda: fractal_controller.trigger_render()) # 次のイベントサイクルで実行
 
     sys.exit(app.exec())

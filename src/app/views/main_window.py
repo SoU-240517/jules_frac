@@ -2,108 +2,318 @@ from PyQt6.QtWidgets import (
     QMainWindow, QMenuBar, QStatusBar, QSplitter, QLabel, QWidget, QApplication, QVBoxLayout
 )
 from PyQt6.QtGui import QAction
+from PyQt6.QtGui import QAction
+from PyQt6.QtWidgets import QProgressDialog, QMessageBox, QMainWindow, QMenuBar, QStatusBar, QSplitter, QVBoxLayout, QApplication # Added imports
 from .render_area import RenderArea
 from .parameter_panel import ParameterPanel
-from PyQt6.QtCore import Qt, pyqtSlot, QTimer # Added pyqtSlot and QTimer
-# from src.app.controllers.fractal_controller import FractalController # For type hinting
+from .high_res_dialog import HighResOutputDialog
+from PyQt6.QtCore import Qt, pyqtSlot, QTimer
+# Import SettingsManager for type hinting if not already (though not strictly necessary for constructor arg)
+# from src.app.utils.settings_manager import SettingsManager
 
 
 class MainWindow(QMainWindow):
-    # def __init__(self, fractal_controller: FractalController): # fractal_controller を引数に追加
-    def __init__(self, fractal_controller): # fractal_controller を引数に追加
+    def __init__(self, fractal_controller, settings_manager): # Added settings_manager
         super().__init__()
         self.fractal_controller = fractal_controller
+        self.settings_manager = settings_manager # Store settings_manager
 
         self.setWindowTitle("高機能フラクタル描画アプリケーション")
         self.resize(1400, 800)
 
-        self._create_menu_bar()
-        # self._create_status_bar() # QMainWindow creates one by default, just get it
-        self.status_bar = self.statusBar()
+        self.progress_dialog: QProgressDialog | None = None
+        # Load last export settings from SettingsManager, or use empty dict
+        self.last_export_settings: dict = self.settings_manager.get_setting(
+            HighResOutputDialog.SETTINGS_SECTION_NAME, {}
+        )
+
+
+        # UI Initialization
+        self._create_actions()
+        self._create_menu_bar() # Then create menus and add actions
+        self.status_bar = self.statusBar() # Get status bar
         self.status_bar.showMessage("準備完了")
 
-        # _setup_central_widget must be called AFTER fractal_controller is set,
-        # because ParameterPanel needs it.
-        self._setup_central_widget()
+        self._setup_central_widget() # Setup RenderArea and ParameterPanel
 
-        # Connect signals
-        self.status_bar = self.statusBar()
-        self.status_bar.showMessage("準備完了")
-
-        self._setup_central_widget()
-
-        # Signal connections
-        if self.fractal_controller:
-            if hasattr(self.render_area, 'update_image'):
-                self.fractal_controller.image_rendered.connect(self.render_area.update_image)
-            if hasattr(self.parameter_panel, 'parameters_changed_in_ui_signal'):
-                self.parameter_panel.parameters_changed_in_ui_signal.connect(self.on_ui_parameters_changed)
-            if hasattr(self.parameter_panel, 'render_button'):
-                self.parameter_panel.render_button.clicked.connect(self.trigger_render_from_panel)
-            # Connect controller's external param update to panel's UI update slot
-            if hasattr(self.fractal_controller, 'parameters_updated_externally') and \
-               hasattr(self.parameter_panel, 'update_ui_from_controller_parameters'):
-                self.fractal_controller.parameters_updated_externally.connect(
-                    self.parameter_panel.update_ui_from_controller_parameters
-                )
-        else:
-            print("MainWindow: FractalController not available for signal connections.")
+        self._connect_controller_signals() # Connect signals from FractalController
 
         self._initial_render_done = False
         self._initial_render_attempts = 0
 
+    def _create_actions(self):
+        self.export_action = QAction("高解像度出力...", self)
+        self.export_action.setShortcut("Ctrl+E")
+        # self.export_action.triggered.connect(self._open_high_res_dialog) # Connection moved to _connect_controller_signals or direct in menu
 
-    def _create_menu_bar(self):
+        # Example Exit Action (can be expanded)
+        self.exit_action = QAction("終了", self)
+        self.exit_action.setShortcut("Ctrl+Q")
+        self.exit_action.triggered.connect(self.close)
+
+
+    def _create_menu_bar(self): # Renamed from _create_menus for consistency
         menu_bar = self.menuBar()
-        self.setMenuBar(menu_bar)
+        # File Menu
+        file_menu = menu_bar.addMenu("&ファイル")
+        file_menu.addAction(self.export_action)
+        file_menu.addSeparator()
+        file_menu.addAction(self.exit_action)
 
-        file_menu = menu_bar.addMenu("ファイル")
-        # Add actions to file_menu later
-        # e.g., file_menu.addAction("開く...")
+        # Help Menu (Placeholder)
+        help_menu = menu_bar.addMenu("&ヘルプ")
+        about_action = QAction("バージョン情報", self)
+        # about_action.triggered.connect(self._show_about_dialog) # Placeholder for about dialog
+        help_menu.addAction(about_action)
 
-        help_menu = menu_bar.addMenu("ヘルプ")
-        # Add actions to help_menu later
-        # e.g., help_menu.addAction("バージョン情報")
 
-    # def _create_status_bar(self): # Not needed as QMainWindow provides one
-    #     status_bar = QStatusBar(self)
-    #     self.setStatusBar(status_bar)
-    #     status_bar.showMessage("準備完了")
+    def _connect_controller_signals(self):
+        if self.fractal_controller:
+            # Fractal rendering and parameter updates
+            if hasattr(self.render_area, 'update_image'):
+                self.fractal_controller.image_rendered.connect(self.render_area.update_image)
+            if hasattr(self.parameter_panel, 'parameters_changed_in_ui_signal'):
+                self.parameter_panel.parameters_changed_in_ui_signal.connect(self.on_ui_parameters_changed)
+            if hasattr(self.parameter_panel, 'render_button'): # Assuming render button is on ParameterPanel
+                self.parameter_panel.render_button.clicked.connect(self.trigger_render_from_panel)
 
-    def update_status_bar(self, message: str):
-        """Slot to update the status bar message."""
-        if self.status_bar:
-            self.status_bar.showMessage(message)
+            if hasattr(self.fractal_controller, 'parameters_updated_externally') and \
+               hasattr(self.parameter_panel, 'update_ui_from_controller_parameters'):
+                self.fractal_controller.parameters_updated_externally.connect(
+                    self.parameter_panel.update_ui_from_controller_parameters)
+
+            if hasattr(self.fractal_controller, 'active_fractal_plugin_ui_needs_update') and \
+               hasattr(self.parameter_panel, '_update_fractal_plugin_specific_ui'): # Assuming method name
+                self.fractal_controller.active_fractal_plugin_ui_needs_update.connect(
+                    self.parameter_panel._update_fractal_plugin_specific_ui) # Connect to the correct slot
+
+            if hasattr(self.fractal_controller, 'active_coloring_plugin_ui_needs_update') and \
+               hasattr(self.parameter_panel, '_update_coloring_plugin_specific_ui'):
+                self.fractal_controller.active_coloring_plugin_ui_needs_update.connect(
+                    self.parameter_panel._update_coloring_plugin_specific_ui)
+
+            if hasattr(self.fractal_controller, 'active_color_map_changed_externally') and \
+               hasattr(self.parameter_panel, '_update_color_selection_from_controller'):
+                self.fractal_controller.active_color_map_changed_externally.connect(
+                    self.parameter_panel._update_color_selection_from_controller)
+
+            # High-resolution export signals
+            self.fractal_controller.export_started.connect(self._on_export_started)
+            self.fractal_controller.export_progress_updated.connect(self._on_export_progress_updated)
+            self.fractal_controller.export_process_finished.connect(self._on_export_process_finished)
+
+            # Connect export action trigger
+            if hasattr(self, 'export_action'):
+                 self.export_action.triggered.connect(self._open_high_res_dialog)
+            # Ensure status bar connection is robust
+            if hasattr(self, 'status_bar') and self.status_bar is not None:
+                 self.fractal_controller.status_updated.connect(self.update_status_bar)
+            else:
+                 print("MainWindow Warning: StatusBar not initialized before connecting signals.")
+        else:
+            print("MainWindow: FractalController not available for signal connections.")
+
+
+    def update_status_bar(self, message: str): # No change
+        if self.status_bar: self.status_bar.showMessage(message)
 
     def _setup_central_widget(self):
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
-
-        # Left side: Render Area - Pass fractal_controller to its constructor
         self.render_area = RenderArea(self, fractal_controller=self.fractal_controller)
         splitter.addWidget(self.render_area)
-
-        # Right side: Parameter Panel
         self.parameter_panel = ParameterPanel(self.fractal_controller, self)
         splitter.addWidget(self.parameter_panel)
-
         self.setCentralWidget(splitter)
-
-        # Set initial sizes (70% for render area, 30% for parameter panel)
-        # Calculate based on current window width if possible, or use fixed sizes
-        # For simplicity, let's use the initial window width to calculate.
         initial_width = self.width()
         splitter.setSizes([int(initial_width * 0.7), int(initial_width * 0.3)])
 
-    # Optional: Method to request initial render, could be connected to a signal e.g. window shown
-    def on_ui_parameters_changed(self, center_real, center_imag, width, max_iterations):
-        """Slot to handle parameter changes from the ParameterPanel's UI."""
+    def on_ui_parameters_changed(self, center_real, center_imag, width, max_iterations): # No change
         if self.fractal_controller:
-            print(f"MainWindow: UI parameters changed to CR={center_real}, CI={center_imag}, W={width}, Iters={max_iterations}. Updating controller.")
-            # Source "ui_direct_no_render" indicates the parameters are from direct UI manipulation
-            # and should not by themselves trigger a re-render or a full UI sync from controller.
-            self.fractal_controller.update_fractal_parameters(center_real, center_imag, width, max_iterations) # Removed source argument for now
+            self.fractal_controller.update_common_fractal_parameters(center_real, center_imag, width, max_iterations)
         else:
             print("MainWindow: FractalController not available to update parameters.")
+
+    @pyqtSlot()
+    def _open_high_res_dialog(self):
+        if not self.fractal_controller:
+            QMessageBox.warning(self, "エラー", "コントローラーが利用できません。")
+            return
+
+        common_params = self.fractal_controller.get_current_common_parameters()
+        fractal_plugin_name = self.fractal_controller.get_active_fractal_plugin_name_from_engine()
+        fractal_plugin_params = self.fractal_controller.get_current_fractal_plugin_parameters_from_engine()
+        coloring_algo_name = self.fractal_controller.get_active_coloring_plugin_name_from_engine()
+        coloring_algo_params = self.fractal_controller.get_current_coloring_plugin_parameters_from_engine()
+
+        # Corrected way to get pack and map names
+        current_pack_name_ctrl = self.fractal_controller.get_active_color_pack_name_from_engine()
+        current_color_map_ctrl = self.fractal_controller.get_active_color_map_name_from_engine()
+
+
+        view_params_for_dialog = {
+            'image_width_px': self.render_area.width(),
+            'image_height_px': self.render_area.height(),
+            'max_iterations': common_params.get('max_iterations', 100)
+        }
+
+        dialog_defaults = self.last_export_settings.copy()
+        dialog_defaults['iterations'] = common_params.get('max_iterations', 100) * 2
+        # If last_export_settings is empty, dialog_defaults will use HighResOutputDialog's internal defaults for width/height
+        # or we can explicitly set them from current view if last_export_settings is empty.
+        if not self.last_export_settings.get('width'): # if no width in saved settings
+             dialog_defaults['width'] = self.render_area.width()
+             dialog_defaults['height'] = self.render_area.height()
+
+
+        dialog = HighResOutputDialog(
+            settings_manager=self.settings_manager,
+            current_dialog_defaults=dialog_defaults,
+            current_view_params=view_params_for_dialog,
+            parent=self
+        )
+
+        if dialog.exec():
+            export_settings = dialog.get_export_settings() # This gets settings from UI & saves them via dialog.accept()
+            if export_settings and export_settings.get('filepath'):
+                print(f"MainWindow: Export dialog accepted. Settings from dialog: {export_settings}")
+
+                # Pass current engine state for parts not directly set in dialog but needed by engine's generate method
+                export_settings['fractal_plugin_name'] = fractal_plugin_name
+                export_settings['fractal_plugin_params'] = fractal_plugin_params
+                export_settings['coloring_algorithm_name'] = coloring_algo_name
+                export_settings['coloring_algorithm_params'] = coloring_algo_params
+                export_settings['color_pack_name'] = current_pack_name_ctrl
+                export_settings['color_map_name'] = current_color_map_ctrl
+                # Common params like center/width for the fractal itself are taken from current engine state by default
+                # in generate_image_for_output, unless overridden by common_params_override.
+                # The dialog mainly overrides iterations, resolution, AA, file details.
+                # We must ensure that the common_params_override in generate_image_for_output correctly uses
+                # the iterations from export_settings['iterations'].
+                # The current engine's center_real, center_imag, width will be used by default by generate_image_for_output
+                # which is typically what is desired for exporting the "current view" at high-res.
+                # If the dialog were to allow changing center/width for export, those would go into common_params_override.
+
+                self.fractal_controller.start_high_res_export(export_settings)
+                self.last_export_settings = export_settings # Update last used settings for next dialog open
+            else:
+                QMessageBox.warning(self, "出力エラー", "ファイルパスが指定されていません。")
+        else:
+            print("MainWindow: Export dialog cancelled.")
+
+    @pyqtSlot()
+    def _on_export_started(self):
+        if self.progress_dialog: self.progress_dialog.cancel()
+        self.progress_dialog = QProgressDialog("高解像度画像を生成中...", "キャンセル", 0, 100, self)
+        self.progress_dialog.setWindowTitle("エクスポート処理中")
+        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progress_dialog.setAutoClose(False)
+        self.progress_dialog.setAutoReset(False)
+        if self.fractal_controller: self.progress_dialog.canceled.connect(self.fractal_controller.cancel_current_export)
+        self.progress_dialog.setValue(0)
+        if hasattr(self, 'export_action'): self.export_action.setEnabled(False) # Disable while exporting
+        print("MainWindow: Export started. Progress dialog shown.")
+
+    @pyqtSlot(int)
+    def _on_export_progress_updated(self, value: int):
+        if self.progress_dialog: self.progress_dialog.setValue(value)
+
+    @pyqtSlot(bool, str)
+    def _on_export_process_finished(self, success: bool, message: str):
+        print(f"MainWindow: Export process finished. Success: {success}, Message: {message}")
+        if self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog = None
+
+        if success: QMessageBox.information(self, "エクスポート完了", f"画像を保存しました:\n{message}")
+        else: QMessageBox.warning(self, "エクスポート失敗", f"エラーが発生しました:\n{message}")
+
+        if hasattr(self, 'export_action'): self.export_action.setEnabled(True) # Re-enable
+        self.update_status_bar(f"エクスポート完了: {message}" if success else f"エクスポート失敗: {message}")
+
+
+    @pyqtSlot()
+    def _open_high_res_dialog(self):
+        if not self.fractal_controller:
+            QMessageBox.warning(self, "エラー", "コントローラーが利用できません。")
+            return
+
+        # Gather current parameters for the dialog
+        common_params = self.fractal_controller.get_current_common_parameters()
+        fractal_plugin_name = self.fractal_controller.get_active_fractal_plugin_name_from_engine()
+        fractal_plugin_params = self.fractal_controller.get_current_fractal_plugin_parameters_from_engine()
+        coloring_algo_name = self.fractal_controller.get_active_coloring_plugin_name_from_engine()
+        coloring_algo_params = self.fractal_controller.get_current_coloring_plugin_parameters_from_engine()
+        color_pack_name, color_map_name = self.fractal_controller.get_active_color_map_name_from_engine() # This needs correction in controller
+
+        view_params_for_dialog = {
+            'image_width_px': self.render_area.width(),
+            'image_height_px': self.render_area.height(),
+            'max_iterations': common_params.get('max_iterations', 100)
+        }
+
+        # Use last export settings as a base, then override with current view/engine state where appropriate
+        dialog_initials = self.last_export_settings.copy()
+        dialog_initials['iterations'] = common_params.get('max_iterations', 100) * 2 # Suggest higher for export
+        dialog_initials['width'] = self.render_area.width() # Default export to current view width
+        dialog_initials['height'] = self.render_area.height() # Default export to current view height
+        # Ensure current fractal and coloring state is passed if dialog needs it for defaults
+        # (though dialog primarily sets overrides, engine uses its current state if not overridden)
+
+        dialog = HighResOutputDialog(
+            current_export_settings=dialog_initials,
+            current_view_params=view_params_for_dialog,
+            parent=self
+        )
+
+        if dialog.exec():
+            export_settings = dialog.get_export_settings()
+            if export_settings and export_settings.get('filepath'):
+                print(f"MainWindow: Export dialog accepted. Settings: {export_settings}")
+                # Pass current fractal/coloring state from engine to be used if not overridden by dialog
+                export_settings['fractal_plugin_name'] = fractal_plugin_name
+                export_settings['fractal_plugin_params'] = fractal_plugin_params
+                export_settings['coloring_algorithm_name'] = coloring_algo_name
+                export_settings['coloring_algorithm_params'] = coloring_algo_params
+                export_settings['color_pack_name'] = color_pack_name
+                export_settings['color_map_name'] = color_map_name
+
+                self.fractal_controller.start_high_res_export(export_settings)
+                self.last_export_settings = export_settings # Save successful settings for next time
+            else:
+                QMessageBox.warning(self, "出力エラー", "ファイルパスが指定されていません。")
+        else:
+            print("MainWindow: Export dialog cancelled.")
+
+    @pyqtSlot()
+    def _on_export_started(self):
+        if self.progress_dialog: self.progress_dialog.cancel()
+        self.progress_dialog = QProgressDialog("高解像度画像を生成中...", "キャンセル", 0, 100, self)
+        self.progress_dialog.setWindowTitle("エクスポート処理中")
+        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progress_dialog.setAutoClose(False) # Explicitly close on finish/cancel
+        self.progress_dialog.setAutoReset(False) # Reset manually if needed
+        if self.fractal_controller: self.progress_dialog.canceled.connect(self.fractal_controller.cancel_current_export)
+        self.progress_dialog.setValue(0)
+        self.export_action.setEnabled(False)
+        print("MainWindow: Export started. Progress dialog shown.")
+
+    @pyqtSlot(int)
+    def _on_export_progress_updated(self, value: int):
+        if self.progress_dialog: self.progress_dialog.setValue(value)
+
+    @pyqtSlot(bool, str)
+    def _on_export_process_finished(self, success: bool, message: str):
+        print(f"MainWindow: Export process finished. Success: {success}, Message: {message}")
+        if self.progress_dialog:
+            self.progress_dialog.close() # Close it
+            self.progress_dialog = None # Discard
+
+        if success: QMessageBox.information(self, "エクスポート完了", f"画像を保存しました:\n{message}")
+        else: QMessageBox.warning(self, "エクスポート失敗", f"エラーが発生しました:\n{message}")
+
+        self.export_action.setEnabled(True)
+        self.update_status_bar(f"エクスポート完了: {message}" if success else f"エクスポート失敗: {message}")
+
 
     @pyqtSlot()
     def trigger_render_from_panel(self):
