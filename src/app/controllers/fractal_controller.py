@@ -14,7 +14,8 @@ import time # For measuring execution time
 class FractalController(QObject):
     image_rendered = pyqtSignal(object)  # For the colored RGBA data (NumPy array)
     status_updated = pyqtSignal(str) # For status bar display
-    parameters_updated_externally = pyqtSignal() # To notify UI if params change non-interactively
+    parameters_updated_externally = pyqtSignal() # To notify UI common params if params change non-interactively
+    active_plugin_ui_needs_update = pyqtSignal(str) # To tell ParameterPanel to rebuild plugin-specific UI
 
     def __init__(self, fractal_engine): # fractal_engine: FractalEngine
         super().__init__()
@@ -116,26 +117,49 @@ class FractalController(QObject):
 
 
     def update_status_display(self):
-        """Updates the status bar text with current fractal parameters and performance metrics."""
-        if self.fractal_engine:
-            current_width = self.fractal_engine.width
-            zoom_level = self.initial_width / current_width if current_width > 0 else float('inf')
-
-            status_text = (
-                f"中心: ({self.fractal_engine.center_real:.5f}, {self.fractal_engine.center_imag:.5f}) | "
-                f"幅: {current_width:.3e} (ズーム: {zoom_level:.2f}x) | "
-                f"Iter: {self.fractal_engine.max_iterations} | "
-                f"解像度: {self.fractal_engine.image_width_px}x{self.fractal_engine.image_height_px} | "
-                f"計算: {self.last_compute_time_ms:.2f} ms | "
-                f"着色: {self.last_coloring_time_ms:.2f} ms"
-            )
-            self.status_updated.emit(status_text)
-        else:
+        """Updates the status bar text with current fractal parameters, plugin info, and performance metrics."""
+        if not self.fractal_engine:
             self.status_updated.emit("フラクタルエンジンが準備できていません.")
+            return
+
+        active_plugin = self.fractal_engine.get_active_plugin()
+        if not active_plugin:
+            self.status_updated.emit("アクティブなフラクタルプラグインがありません。")
+            return
+
+        common_params = self.fractal_engine.get_common_parameters()
+        plugin_params = self.fractal_engine.get_plugin_parameters()
+
+        current_width = common_params.get('width', self.initial_width) # Use initial_width as fallback if width not in common_params
+        zoom_level = self.initial_width / current_width if current_width > 0 else float('inf')
+
+        status_parts = [
+            f"プラグイン: {active_plugin.name}",
+            f"中心: ({common_params.get('center_real', 0):.5f}, {common_params.get('center_imag', 0):.5f})",
+            f"幅: {current_width:.3e} (ズーム: {zoom_level:.2f}x)",
+            f"Iter: {common_params.get('max_iterations', 0)}"
+        ]
+
+        if plugin_params:
+            param_str_parts = []
+            for k, v in plugin_params.items():
+                if isinstance(v, float):
+                    param_str_parts.append(f"{k}: {v:.4f}")
+                else:
+                    param_str_parts.append(f"{k}: {v}")
+            status_parts.append(f"プラグインP: [{', '.join(param_str_parts)}]")
+
+        status_parts.extend([
+            f"解像度: {self.fractal_engine.image_width_px}x{self.fractal_engine.image_height_px}",
+            f"計算: {self.last_compute_time_ms:.2f} ms",
+            f"着色: {self.last_coloring_time_ms:.2f} ms"
+        ])
+
+        self.status_updated.emit(" | ".join(status_parts))
 
 
     def get_current_parameters(self): # Keep this as it might be used by ParameterPanel directly
-        """Returns a dictionary of the current fractal parameters from the engine, including view and complex plane height."""
+        """Returns a dictionary of all current parameters relevant for UI (common and engine's image size)."""
         if self.fractal_engine:
             return {
                 "center_real": self.fractal_engine.center_real,
@@ -162,6 +186,81 @@ class FractalController(QObject):
                 # image_width_px and image_height_px might also be useful here if RenderArea needs them
             }
         return {}
+
+    def get_plugin_presets(self, plugin_name: str) -> dict | None:
+        """Gets presets for a specific plugin by its name, if available."""
+        if self.fractal_engine:
+            plugin = self.fractal_engine.plugin_manager.get_plugin(plugin_name)
+            if plugin: # Plugin instance itself, not its name
+                return plugin.get_presets() # Assumes get_presets() is defined in base or implemented
+        return None
+
+
+    def get_available_plugin_names_from_engine(self) -> list[str]:
+        """Retrieves the list of available plugin names from the fractal engine."""
+        if self.fractal_engine:
+            return self.fractal_engine.get_available_plugin_names()
+        return []
+
+    def get_active_plugin_name_from_engine(self) -> str | None:
+        """Retrieves the name of the currently active plugin from the fractal engine."""
+        if self.fractal_engine and self.fractal_engine.get_active_plugin():
+            return self.fractal_engine.get_active_plugin().name
+        return None
+
+    def get_plugin_parameter_definitions(self, plugin_name: str) -> list:
+        """Gets parameter definitions for a specific plugin by its name."""
+        if self.fractal_engine:
+            plugin = self.fractal_engine.plugin_manager.get_plugin(plugin_name)
+            if plugin:
+                return plugin.get_parameters_definition()
+        return []
+
+    def get_current_plugin_parameters(self) -> dict:
+        """Gets current parameter values for the active plugin from the engine."""
+        if self.fractal_engine:
+            return self.fractal_engine.get_plugin_parameters()
+        return {}
+
+    def set_plugin_parameter_value(self, param_name: str, value: any):
+        """Sets a specific parameter value for the active plugin in the engine."""
+        if self.fractal_engine:
+            self.fractal_engine.set_plugin_parameter(param_name, value)
+            # Parameter change might affect status or require UI update, but not a full redraw usually
+            self.update_status_display()
+
+
+    def set_active_fractal_plugin_and_redraw(self, plugin_name: str):
+        """
+        Sets the active fractal plugin, updates UI (common and specific), and triggers re-render.
+        """
+        if not self.fractal_engine:
+            print("Controller Error: Fractal engine not available.")
+            return
+
+        success = self.fractal_engine.set_active_plugin(plugin_name)
+        if success:
+            print(f"Controller: Active plugin set to '{plugin_name}'. Initiating UI updates and re-render.")
+
+            # 1. Notify ParameterPanel to update its common parameter fields (center, width, iterations)
+            self.parameters_updated_externally.emit()
+
+            # 2. Notify ParameterPanel to update plugin-specific UI section
+            self.active_plugin_ui_needs_update.emit(plugin_name)
+
+            # 3. Trigger re-render with the new plugin's (potentially new) default view
+            if self.main_window and hasattr(self.main_window, 'render_area'):
+                render_width = self.main_window.render_area.width()
+                render_height = self.main_window.render_area.height()
+                if render_width > 0 and render_height > 0:
+                    self.trigger_render(render_width, render_height)
+                else:
+                    # Fallback if render area size is not yet determined
+                    self.trigger_render()
+            else:
+                self.trigger_render() # Fallback if main_window or render_area not available
+        else:
+            print(f"Controller: Failed to set active plugin to '{plugin_name}'.")
 
 
     def pan_fractal(self, delta_real, delta_imag):
@@ -380,10 +479,11 @@ if __name__ == '__main__':
     assert params_externally_updated_fired_count == 2
 
     print("\nTesting zoom_fractal_to_point...")
-    # Assume current params are from previous pan: cr approx -0.6, ci approx 0.15, width 1.0
-    # Let's zoom in on (-0.6, 0.15) which is the current center.
-    # Mouse at center of RenderArea (0.5, 0.5 relative)
-    # Zoom in by factor of 2 (new_width = current_width / 2)
+    # Ensure mock engine has image dimensions for aspect ratio calculations in controller's zoom
+    mock_engine.image_width_px = 800
+    mock_engine.image_height_px = 600
+    if hasattr(mock_engine, 'update_aspect_ratio'): mock_engine.update_aspect_ratio()
+
     current_params_before_zoom = controller.get_current_engine_parameters()
     zoom_center_r, zoom_center_i = current_params_before_zoom['center_real'], current_params_before_zoom['center_imag']
     mouse_rel_x, mouse_rel_y = 0.5, 0.5
@@ -392,11 +492,61 @@ if __name__ == '__main__':
     controller.zoom_fractal_to_point(zoom_center_r, zoom_center_i, mouse_rel_x, mouse_rel_y, new_zoom_width)
 
     zoomed_params = controller.get_current_engine_parameters()
-    # Center should remain the same if zooming at the center
-    assert abs(zoomed_params['center_real'] - zoom_center_r) < 1e-9
-    assert abs(zoomed_params['center_imag'] - zoom_center_i) < 1e-9
-    assert abs(zoomed_params['width'] - new_zoom_width) < 1e-9
-    assert params_externally_updated_fired_count == 3 # Signal for zoom
+    assert abs(zoomed_params['center_real'] - zoom_center_r) < 1e-9, "Center real coord changed after zooming at center."
+    assert abs(zoomed_params['center_imag'] - zoom_center_i) < 1e-9, "Center imag coord changed after zooming at center."
+    assert abs(zoomed_params['width'] - new_zoom_width) < 1e-9, "Width did not update correctly after zoom."
+    assert params_externally_updated_fired_count == 3, "parameters_updated_externally signal count incorrect after zoom."
+
+    print("\nTesting plugin switching...")
+    active_plugin_ui_updated_for = ""
+    def handle_active_plugin_ui_needs_update(plugin_name_for_ui):
+        nonlocal active_plugin_ui_updated_for
+        active_plugin_ui_updated_for = plugin_name_for_ui
+        print(f"Test: active_plugin_ui_needs_update signal received for '{plugin_name_for_ui}'.")
+    controller.active_plugin_ui_needs_update.connect(handle_active_plugin_ui_needs_update)
+
+    # Mock methods for PluginManager and Plugin interaction in FractalEngine
+    class MockPlugin:
+        def __init__(self, name, params_def=None, default_view=None):
+            self._name = name
+            self._params_def = params_def if params_def else []
+            self._default_view = default_view if default_view else {}
+        @property
+        def name(self): return self._name
+        def get_parameters_definition(self): return self._params_def
+        def get_default_view_parameters(self): return self._default_view
+
+    mock_mandelbrot_plugin = MockPlugin("Mandelbrot", default_view={'center_real':-0.5, 'width':3.0})
+    mock_julia_plugin = MockPlugin("Julia",
+                                   params_def=[{'name':'cx','default':0.1}],
+                                   default_view={'center_real':0.0, 'width':2.5})
+
+    mock_engine.plugin_manager.get_plugin = lambda name: mock_mandelbrot_plugin if name=="Mandelbrot" else (mock_julia_plugin if name=="Julia" else None)
+    mock_engine.get_available_plugin_names = lambda: ["Mandelbrot", "Julia"]
+    # Simulate engine's set_active_plugin behavior closely
+    def mock_engine_set_active_plugin(plugin_name):
+        plugin = mock_engine.plugin_manager.get_plugin(plugin_name)
+        if plugin:
+            mock_engine.current_plugin = plugin # Engine would store the instance
+            # Engine would update its common params from plugin's default view
+            dv = plugin.get_default_view_parameters()
+            mock_engine.center_real = dv.get('center_real', mock_engine.center_real)
+            mock_engine.width = dv.get('width', mock_engine.width)
+            # Engine would reset its current_plugin_parameters
+            mock_engine.current_plugin_parameters = {p['name']:p['default'] for p in plugin.get_parameters_definition()}
+            print(f"MockEngine: Active plugin set to {plugin_name}. Common params updated. Plugin params reset to {mock_engine.current_plugin_parameters}")
+            return True
+        return False
+    mock_engine.set_active_plugin = mock_engine_set_active_plugin
+    # Ensure get_active_plugin returns what set_active_plugin sets
+    mock_engine.get_active_plugin = lambda: mock_engine.current_plugin if hasattr(mock_engine, 'current_plugin') else None
+
+
+    controller.set_active_fractal_plugin_and_redraw("Julia")
+    assert controller.get_active_plugin_name_from_engine() == "Julia"
+    assert abs(mock_engine.center_real - 0.0) < 1e-9 # Check if engine common params were updated from Julia's default view
+    assert params_externally_updated_fired_count == 4
+    assert active_plugin_ui_updated_for == "Julia"
 
     print("\nTesting render trigger with specific size...")
     # For this test, using a small specific size to check colored output format
