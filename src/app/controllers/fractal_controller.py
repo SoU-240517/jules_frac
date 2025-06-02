@@ -250,8 +250,14 @@ if __name__ == '__main__':
         def set_active_fractal_plugin(self,name):fp=self.plugin_manager.get_fractal_plugin(name);self.current_fractal_plugin=fp if fp else self.current_fractal_plugin;self.last_fractal_data_cache=None;return True
         def set_active_coloring_plugin(self,name):cp=self.plugin_manager.get_coloring_plugin(name);self.current_coloring_plugin=cp if cp else self.current_coloring_plugin;return True
         def set_active_color_map(self,p,m):self.current_color_pack_name=p;self.current_color_map_name=m;return True
-        def get_available_fractal_plugin_names(self):return["TestFP"]; def get_available_coloring_plugin_names(self):return["TestCP"]
-        def get_available_color_pack_names(self):return["P1"]; def get_available_color_map_names_in_pack(self,p):return["M1"]
+        def get_available_fractal_plugin_names(self):
+            return ["TestFP"]
+        def get_available_coloring_plugin_names(self):
+            return ["TestCP"]
+        def get_available_color_pack_names(self):
+            return ["P1"]
+        def get_available_color_map_names_in_pack(self, p):
+            return ["M1"]
         def set_fractal_plugin_parameter(self,n,v): self.current_fractal_plugin_parameters[n]=v; self.last_fractal_data_cache=None
         def set_coloring_plugin_parameter(self,n,v): self.current_coloring_plugin_parameters[n]=v
         def generate_image_for_output(self, **kwargs): import numpy as np; return np.zeros((kwargs['output_height'],kwargs['output_width'],4),dtype=np.uint8)

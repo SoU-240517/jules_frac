@@ -2,6 +2,7 @@ from PyQt6.QtCore import QObject, QRunnable, pyqtSignal, QThreadPool
 import time
 import numpy as np
 from PIL import Image # Import Pillow
+from pathlib import Path
 
 # For type hinting the fractal_engine_ref
 # from src.app.models.fractal_engine import FractalEngine

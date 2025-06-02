@@ -1,11 +1,19 @@
 import sys
+from pathlib import Path # For path manipulation if needed for settings
+
+# Add the project root directory (parent of 'src') to sys.path
+# This allows 'from src.app...' imports when running main.py directly
+# from within the src/ directory.
+_project_root = Path(__file__).resolve().parent.parent
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
+
 from PyQt6.QtWidgets import QApplication
 from src.app.views.main_window import MainWindow
 from src.app.models.fractal_engine import FractalEngine
 from src.app.controllers.fractal_controller import FractalController
 from src.app.utils.settings_manager import SettingsManager # Import SettingsManager
 from PyQt6.QtCore import Qt
-from pathlib import Path # For path manipulation if needed for settings
 
 if __name__ == '__main__':
     if hasattr(Qt.ApplicationAttribute, 'AA_EnableHighDpiScaling'):
@@ -17,12 +25,11 @@ if __name__ == '__main__':
 
     # 設定マネージャーの初期化 (ファイル名は任意)
     # アプリケーション名や組織名を使って標準的な場所に保存することも検討 (QStandardPaths)
-    settings_file_name = "fractal_explorer_settings.json"
-    # settings_manager = SettingsManager(settings_filename=settings_file_name)
+    settings_file_name = "base_settings.json"
     # For testing, ensure it's in a writable location, e.g., user's home or app data dir
     # The SettingsManager itself now tries to save in user's home/.fractalapp/
-    settings_manager = SettingsManager(settings_filename=settings_file_name)
-
+    settings_file_path = _project_root / settings_file_name
+    settings_manager = SettingsManager(settings_filename=str(settings_file_path))
 
     # モデル、コントローラーの作成
     # FractalEngineのコンストラクタで各プラグインフォルダのデフォルトパスが使われる

@@ -232,90 +232,6 @@ class MainWindow(QMainWindow):
 
 
     @pyqtSlot()
-    def _open_high_res_dialog(self):
-        if not self.fractal_controller:
-            QMessageBox.warning(self, "エラー", "コントローラーが利用できません。")
-            return
-
-        # Gather current parameters for the dialog
-        common_params = self.fractal_controller.get_current_common_parameters()
-        fractal_plugin_name = self.fractal_controller.get_active_fractal_plugin_name_from_engine()
-        fractal_plugin_params = self.fractal_controller.get_current_fractal_plugin_parameters_from_engine()
-        coloring_algo_name = self.fractal_controller.get_active_coloring_plugin_name_from_engine()
-        coloring_algo_params = self.fractal_controller.get_current_coloring_plugin_parameters_from_engine()
-        color_pack_name, color_map_name = self.fractal_controller.get_active_color_map_name_from_engine() # This needs correction in controller
-
-        view_params_for_dialog = {
-            'image_width_px': self.render_area.width(),
-            'image_height_px': self.render_area.height(),
-            'max_iterations': common_params.get('max_iterations', 100)
-        }
-
-        # Use last export settings as a base, then override with current view/engine state where appropriate
-        dialog_initials = self.last_export_settings.copy()
-        dialog_initials['iterations'] = common_params.get('max_iterations', 100) * 2 # Suggest higher for export
-        dialog_initials['width'] = self.render_area.width() # Default export to current view width
-        dialog_initials['height'] = self.render_area.height() # Default export to current view height
-        # Ensure current fractal and coloring state is passed if dialog needs it for defaults
-        # (though dialog primarily sets overrides, engine uses its current state if not overridden)
-
-        dialog = HighResOutputDialog(
-            current_export_settings=dialog_initials,
-            current_view_params=view_params_for_dialog,
-            parent=self
-        )
-
-        if dialog.exec():
-            export_settings = dialog.get_export_settings()
-            if export_settings and export_settings.get('filepath'):
-                print(f"MainWindow: Export dialog accepted. Settings: {export_settings}")
-                # Pass current fractal/coloring state from engine to be used if not overridden by dialog
-                export_settings['fractal_plugin_name'] = fractal_plugin_name
-                export_settings['fractal_plugin_params'] = fractal_plugin_params
-                export_settings['coloring_algorithm_name'] = coloring_algo_name
-                export_settings['coloring_algorithm_params'] = coloring_algo_params
-                export_settings['color_pack_name'] = color_pack_name
-                export_settings['color_map_name'] = color_map_name
-
-                self.fractal_controller.start_high_res_export(export_settings)
-                self.last_export_settings = export_settings # Save successful settings for next time
-            else:
-                QMessageBox.warning(self, "出力エラー", "ファイルパスが指定されていません。")
-        else:
-            print("MainWindow: Export dialog cancelled.")
-
-    @pyqtSlot()
-    def _on_export_started(self):
-        if self.progress_dialog: self.progress_dialog.cancel()
-        self.progress_dialog = QProgressDialog("高解像度画像を生成中...", "キャンセル", 0, 100, self)
-        self.progress_dialog.setWindowTitle("エクスポート処理中")
-        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progress_dialog.setAutoClose(False) # Explicitly close on finish/cancel
-        self.progress_dialog.setAutoReset(False) # Reset manually if needed
-        if self.fractal_controller: self.progress_dialog.canceled.connect(self.fractal_controller.cancel_current_export)
-        self.progress_dialog.setValue(0)
-        self.export_action.setEnabled(False)
-        print("MainWindow: Export started. Progress dialog shown.")
-
-    @pyqtSlot(int)
-    def _on_export_progress_updated(self, value: int):
-        if self.progress_dialog: self.progress_dialog.setValue(value)
-
-    @pyqtSlot(bool, str)
-    def _on_export_process_finished(self, success: bool, message: str):
-        print(f"MainWindow: Export process finished. Success: {success}, Message: {message}")
-        if self.progress_dialog:
-            self.progress_dialog.close() # Close it
-            self.progress_dialog = None # Discard
-
-        if success: QMessageBox.information(self, "エクスポート完了", f"画像を保存しました:\n{message}")
-        else: QMessageBox.warning(self, "エクスポート失敗", f"エラーが発生しました:\n{message}")
-
-        self.export_action.setEnabled(True)
-        self.update_status_bar(f"エクスポート完了: {message}" if success else f"エクスポート失敗: {message}")
-
-
-    @pyqtSlot()
     def trigger_render_from_panel(self):
         """Triggers rendering using current parameters from ParameterPanel and RenderArea size."""
         if not self.fractal_controller:
@@ -329,7 +245,7 @@ class MainWindow(QMainWindow):
 
         params = self.parameter_panel.get_current_ui_parameters()
         # Update engine parameters based on current UI state before triggering render
-        self.fractal_controller.update_fractal_parameters(
+        self.fractal_controller.update_common_fractal_parameters(
             params['center_real'],
             params['center_imag'],
             params['width'],
@@ -387,7 +303,7 @@ class MainWindow(QMainWindow):
 
         # Load initial parameters from the panel (which should have loaded from controller or defaults)
         initial_params = self.parameter_panel.get_current_ui_parameters()
-        self.fractal_controller.update_fractal_parameters(
+        self.fractal_controller.update_common_fractal_parameters(
             initial_params['center_real'],
             initial_params['center_imag'],
             initial_params['width'],
@@ -406,8 +322,10 @@ class MainWindow(QMainWindow):
 
 if __name__ == '__main__':
     import sys
-    from PyQt6.QtCore import QTimer # For timed emission in test
+    from PyQt6.QtCore import QTimer, QObject, pyqtSignal # For timed emission in test and QObject/pyqtSignal
     import numpy # For creating dummy data in test
+
+    import numpy as np  # Ensure numpy is imported as np
 
     class MockFractalController(QObject):
         status_updated = pyqtSignal(str)

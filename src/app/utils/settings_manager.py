@@ -3,7 +3,7 @@ from pathlib import Path
 import os
 
 class SettingsManager:
-    def __init__(self, settings_filename: str = "fractal_app_settings.json"):
+    def __init__(self, settings_filename: str = "base_settings.json"):
         # Consider using a standard application data directory
         # For simplicity, using current working directory or a specified path
         # If settings_filename is just a name, it's created in CWD.
