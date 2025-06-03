@@ -51,12 +51,12 @@ class SettingsManager:
             try:
                 with open(self.filepath, 'r', encoding='utf-8') as f:
                     self.settings = json.load(f)
-                self._get_logger().log(f"設定を {self.filepath} から読み込みました", level="INFO")
+                self._get_logger().log("設定読込: base_settings.json", level="INFO")
             except (json.JSONDecodeError, IOError, Exception) as e: # より一般的な例外もキャッチします
-                self._get_logger().log(f"設定ファイル '{self.filepath}' の読み込みに失敗しました: {e}。デフォルト設定を使用します。", level="ERROR")
+                self._get_logger().log(f"設定ファイルの読込失敗: {e}。デフォルト設定を使用します。", level="ERROR")
                 self.settings = {}
         else:
-            self._get_logger().log(f"設定ファイル ('{self.filepath}') が見つかりません。デフォルト設定を使用します。", level="INFO")
+            self._get_logger().log("設定ファイルが見つかりません。デフォルト設定を使用します。", level="INFO")
             self.settings = {}
 
     def save_settings(self):

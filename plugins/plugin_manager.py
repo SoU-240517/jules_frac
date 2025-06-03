@@ -34,7 +34,7 @@ class PluginManager:
 
     def load_all_plugins(self):
         """すべての種類のプラグインを読み込みます。"""
-        logger.log("すべてのプラグインを読み込み中...", level="INFO")
+        logger.log("全プラグイン読込中...", level="INFO")
         self._load_plugins_from_folder(
             self.fractal_plugin_folder,
             self.fractal_plugins,
@@ -54,7 +54,7 @@ class PluginManager:
         """
         target_dict.clear()
 
-        logger.log(f"'{folder_path}' から {plugin_type_name} プラグインを読み込み中...", level="INFO")
+        logger.log(f"{plugin_type_name} プラグインを読込中...", level="INFO")
 
         if not folder_path.is_dir():
             logger.log(f"{plugin_type_name} プラグインフォルダが見つかりません: {folder_path}", level="ERROR")
@@ -96,11 +96,11 @@ class PluginManager:
                                           f"{file_path.name} を無視し、既存のものを使用します。", level="WARNING")
                                 else:
                                     target_dict[plugin_instance.name] = plugin_instance
-                                    logger.log(f"{file_path.name} から {plugin_type_name} プラグイン '{plugin_instance.name}' を読み込みました。", level="INFO")
+                                    logger.log(f"'{plugin_instance.name}' を読込完了", level="INFO")
                             except Exception as e:
-                                logger.log(f"{file_path.name} から {plugin_type_name} プラグイン '{member_name}' のインスタンス化に失敗しました: {e}", level="ERROR")
+                                logger.log(f"{file_path.name} から {plugin_type_name} プラグイン '{member_name}' のインスタンス化に失敗: {e}", level="ERROR")
                 except Exception as e:
-                    logger.log(f"{plugin_type_name} プラグインファイル '{file_path.name}' の読み込みに失敗しました: {e}", level="ERROR")
+                    logger.log(f"{plugin_type_name} プラグインファイル '{file_path.name}' の読込失敗: {e}", level="ERROR")
 
         if not target_dict:
             logger.log(f"'{folder_path}' に有効な {plugin_type_name} プラグインが見つかりませんでした。", level="WARNING")

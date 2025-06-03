@@ -319,7 +319,7 @@ class MainWindow(QMainWindow):
         logger.log(f"RenderAreaサイズ ({render_width}x{render_height}) で初回描画を実行します.", level="DEBUG")
         self.fractal_controller.trigger_render(render_width, render_height)
         self._initial_render_done = True
-        logger.log("初回描画が完了しました.", level="INFO")
+        logger.log("初回描画完了", level="INFO")
 
 
 if __name__ == '__main__':

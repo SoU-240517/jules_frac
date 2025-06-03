@@ -1,5 +1,6 @@
 import time
 import inspect
+from pathlib import Path
 # SettingsManagerのインポートは _initialize_singleton_attrs メソッド内で行い、循環インポートを避けます。
 
 class CustomLogger:
@@ -19,6 +20,15 @@ class CustomLogger:
         "ERROR": 40,
         "CRITICAL": 50
     }
+    LOG_COLORS = {
+        "DEBUG": "\033[94m",  # 青
+        "INFO": "\033[92m",  # 緑
+        "WARNING": "\033[93m",  # 黄
+        "ERROR": "\033[91m",  # 赤
+        "CRITICAL": "\033[91m\033[1m",  # 太字赤 (例)
+        "DIM_GRAY": "\033[90m", # 暗いグレー (明るい黒)
+    }
+    RESET_COLOR = "\033[0m"
     _current_level_int: int
     _is_enabled: bool
 
@@ -134,8 +144,20 @@ class CustomLogger:
         start_time = CustomLogger._start_time if CustomLogger._start_time is not None else current_time
         elapsed_time_ms = int((current_time - start_time) * 1000)
 
+        # 経過時間を右寄せ5桁でフォーマット
+        formatted_elapsed_time_ms = f"{elapsed_time_ms:>5}"
+        # ログレベル文字列の最大長を考慮してフォーマット (例: CRITICAL は 8 文字)
+        # 左寄せで8文字の幅を確保
+        formatted_level_str = f"{message_level_str:<8}"
         clickable_path = f"{filepath}:{lineno}"
-        log_message = f"[{elapsed_time_ms}ms] [{clickable_path}] [{log_context}] [{message_level_str}] {message}"
+
+        level_color_code = CustomLogger.LOG_COLORS.get(message_level_str, "") # ログレベルの色
+        dim_color_code = CustomLogger.LOG_COLORS.get("DIM_GRAY", "")      # 暗い色のコード
+
+        log_message = (f"{dim_color_code}{formatted_elapsed_time_ms}ms:{CustomLogger.RESET_COLOR} "
+                       f"{level_color_code}{formatted_level_str}{CustomLogger.RESET_COLOR} "
+                       f"{message} "
+                       f"{dim_color_code}[{clickable_path}:{log_context}]{CustomLogger.RESET_COLOR}")
         print(log_message, flush=True) # flush=True を追加して、出力が即座に行われるようにします
 
 if __name__ == '__main__':

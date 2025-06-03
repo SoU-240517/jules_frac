@@ -1,3 +1,14 @@
+import sys
+import os
+
+# スクリプトが直接実行された場合にsys.pathを調整し、
+# プロジェクトルート (jules_frac) からの絶対インポートを可能にします。
+if __name__ == "__main__" and (__package__ is None or __package__ == ""):
+    SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))  # .../jules_frac/views
+    PARENT_DIR = os.path.dirname(SCRIPT_DIR)  # .../jules_frac
+    if PARENT_DIR not in sys.path:
+        sys.path.insert(0, PARENT_DIR)
+
 from PyQt6.QtWidgets import QLabel, QSizePolicy
 from PyQt6.QtGui import QImage, QPixmap, QCursor
 from PyQt6.QtCore import Qt, QPointF
