@@ -1,7 +1,7 @@
 import time
-from src.app.export.image_exporter import ImageExporter # ExporterSignals is used by ImageExporter internally
-# Assuming FractalEngine is correctly typed if imported, but not strictly necessary for this file if only passed.
-# from src.app.models.fractal_engine import FractalEngine
+from src.app.export.image_exporter import ImageExporter # ExporterSignals は ImageExporter 内部で使用されます
+# FractalEngine がインポートされている場合、型が正しく指定されていると仮定しますが、このファイルでは渡されるだけなので必須ではありません。
+# from src.app.models.fractal_engine import FractalEngine # FractalEngineモデルのインポート（型ヒント用）
 from PyQt6.QtCore import QObject, pyqtSignal, QThreadPool, pyqtSlot
 
 class FractalController(QObject):
@@ -12,10 +12,10 @@ class FractalController(QObject):
     active_coloring_plugin_ui_needs_update = pyqtSignal(str)
     active_color_map_changed_externally = pyqtSignal(str, str)
 
-    # Signals for high-resolution export process
+    # 高解像度エクスポート処理用のシグナル
     export_started = pyqtSignal()
     export_progress_updated = pyqtSignal(int)
-    export_process_finished = pyqtSignal(bool, str) # bool: success, str: message (filepath or error)
+    export_process_finished = pyqtSignal(bool, str) # bool: 成功フラグ, str: メッセージ (ファイルパスまたはエラー)
 
     def __init__(self, fractal_engine):
         super().__init__()
@@ -27,13 +27,13 @@ class FractalController(QObject):
 
         self.current_exporter: ImageExporter | None = None
         self.thread_pool = QThreadPool.globalInstance()
-        # Optional: Limit concurrent exports if desired, e.g., self.thread_pool.setMaxThreadCount(1)
+        # オプション: 必要に応じて同時エクスポート数を制限します。例: self.thread_pool.setMaxThreadCount(1)
 
     def set_main_window(self, main_window):
         self.main_window = main_window
         self.update_status_display()
 
-    # --- Common Fractal Parameter Handling ---
+    # --- フラクタル共通パラメータ処理 ---
     def update_common_fractal_parameters(self, center_real, center_imag, width, max_iterations, escape_radius=None):
         if self.fractal_engine:
             self.fractal_engine.set_common_parameters(center_real, center_imag, width, max_iterations, escape_radius)
@@ -46,7 +46,7 @@ class FractalController(QObject):
     def get_current_engine_parameters(self):
         return self.fractal_engine.get_common_parameters() if self.fractal_engine else {}
 
-    # --- Fractal Plugin Management ---
+    # --- フラクタルプラグイン管理 ---
     def get_available_fractal_plugin_names_from_engine(self) -> list[str]:
         return self.fractal_engine.get_available_fractal_plugin_names() if self.fractal_engine else []
 
@@ -157,7 +157,7 @@ class FractalController(QObject):
         success = self.fractal_engine.set_active_color_map(pack_name, map_name)
         if success: self.active_color_map_changed_externally.emit(pack_name, map_name); self.trigger_recolor()
 
-    # --- Rendering ---
+    # --- レンダリング処理 ---
     def trigger_render(self, image_width_px=None, image_height_px=None, full_recompute:bool = True):
         if not self.fractal_engine: self.status_updated.emit("エラー: フラクタルエンジン未設定"); return
 
@@ -184,7 +184,7 @@ class FractalController(QObject):
         else:
             fractal_data = self.fractal_engine.last_fractal_data_cache
             if fractal_data is None: self.status_updated.emit("エラー: キャッシュデータなし"); self.trigger_render(full_recompute=True); return # No cache, do full render
-            self.last_compute_time_ms = 0.0
+            self.last_compute_time_ms = 0.0 # キャッシュなし、フルレンダリングを実行
         start_t = time.perf_counter()
         colored_image = self.fractal_engine.apply_coloring(fractal_data_override=fractal_data)
         self.last_coloring_time_ms = (time.perf_counter() - start_t) * 1000
@@ -227,7 +227,7 @@ class FractalController(QObject):
         self.update_common_fractal_parameters(nc_r, nc_i, new_w, self.fractal_engine.max_iterations)
         self.parameters_updated_externally.emit(); self.trigger_render(full_recompute=True)
 
-    # --- High-Resolution Export ---
+    # --- 高解像度エクスポート ---
     def start_high_res_export(self, export_settings: dict):
         if self.current_exporter is not None:
             self.export_process_finished.emit(False, "既にエクスポート処理が実行中です。")
@@ -251,10 +251,10 @@ class FractalController(QObject):
         print(f"FractalController: エクスポート処理完了。成功: {success}, メッセージ: {message}")
         self.export_process_finished.emit(success, message)
         if self.current_exporter:
-            try: # Attempt to disconnect, ignore if already disconnected (e.g. by exporter itself)
+            try: # 切断を試み、既に切断されている場合（例：エクスポータ自体による切断）は無視します
                 self.current_exporter.signals.progress_updated.disconnect(self.export_progress_updated)
                 self.current_exporter.signals.export_finished.disconnect(self._on_export_actually_finished)
-            except TypeError: pass # Raised if a signal is not connected, or connected multiple times and one disconnect fails
+            except TypeError: pass # シグナルが接続されていない場合、または複数回接続されていていずれかの切断に失敗した場合に発生します
             self.current_exporter = None
         print("FractalController: エクスポータ参照クリア。")
 
@@ -279,7 +279,7 @@ class FractalController(QObject):
 
 if __name__ == '__main__':
     # ... (Mock classes and test code - 変更なし) ...
-    class MockFractalEngine: # Simplified further for brevity
+    class MockFractalEngine: # 簡潔にするためにさらに簡略化
         def __init__(self): self.width=3.0;self.center_real=-0.5;self.center_imag=0.0;self.max_iterations=50;self.escape_radius=2.0;self.image_width_px=100;self.image_height_px=75;self.height=2.625;self.last_fractal_data_cache=None;self.plugin_manager=type('MPM',(),{'get_fractal_plugin':lambda n:type('MFP',(),{'name':n,'get_parameters_definition':lambda:[],'get_default_view_parameters':lambda:{}})(), 'get_coloring_plugin':lambda n:type('MCP',(),{'name':n,'get_parameters_definition':lambda:[]})()})();self.current_fractal_plugin=self.plugin_manager.get_fractal_plugin("TestFP");self.current_coloring_plugin=self.plugin_manager.get_coloring_plugin("TestCP");self.current_fractal_plugin_parameters={};self.current_coloring_plugin_parameters={};self.current_color_pack_name="P1";self.current_color_map_name="M1";self.color_manager=type('MCM',(),{'get_color_map_data':lambda pn,mn:[(0,0,0)]})()
         def get_common_parameters(self): return {'width':self.width,'center_real':self.center_real,'center_imag':self.center_imag,'max_iterations':self.max_iterations,'height':self.height,'escape_radius':self.escape_radius}
         def set_common_parameters(self,cr,ci,w,mi,er=None): self.center_real=cr;self.center_imag=ci;self.width=w;self.max_iterations=mi;self.last_fractal_data_cache=None; self.update_aspect_ratio()
@@ -308,8 +308,8 @@ if __name__ == '__main__':
         def generate_image_for_output(self, **kwargs): import numpy as np; return np.zeros((kwargs['output_height'],kwargs['output_width'],4),dtype=np.uint8)
     class MockMainWindow: render_area = type('MRA',(),{'width':lambda:100, 'height':lambda:100})()
     mock_engine = MockFractalEngine(); controller = FractalController(mock_engine); controller.set_main_window(MockMainWindow())
-    print("\nController test with full mock engine..."); controller.update_common_fractal_parameters(-0.7,0.3,2.0,150)
+    print("\nコントローラーテスト（フルモックエンジン使用）..."); controller.update_common_fractal_parameters(-0.7,0.3,2.0,150)
     controller.trigger_render(); controller.trigger_recolor()
-    # print(f"Status: {controller.last_status}") # Accessing last_status for print might be tricky if not stored on controller
-    controller.start_high_res_export({'width':200,'height':150,'iterations':300,'antialiasing_factor':2, 'antialiasing': '2x2 SSAA'}) # Added antialiasing string for generate_image_for_output
-    print("Controller test finished.")
+    # print(f"ステータス: {controller.last_status}") # controllerにlast_statusが保存されていない場合、printでのアクセスは難しいかもしれません
+    controller.start_high_res_export({'width':200,'height':150,'iterations':300,'antialiasing_factor':2, 'antialiasing': '2x2 SSAA'}) # generate_image_for_output 用にアンチエイリアス文字列を追加
+    print("コントローラーテスト終了。")
