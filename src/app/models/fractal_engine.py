@@ -14,7 +14,7 @@ class FractalEngine:
     def __init__(self, project_root_path: Path, image_width_px=800, image_height_px=600,
                  fractal_plugin_folder="src/app/plugins/fractals",
                  coloring_plugin_folder="src/app/plugins/coloring",
-                 color_pack_folder="assets/colorpacks"):
+                 color_pack_folder="src/app/plugins/colorpacks"):
 
         self.max_iterations = 100
         self.center_real = -0.5
