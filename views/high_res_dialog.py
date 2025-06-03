@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSlot, QSize
 from PyQt6.QtWidgets import QMessageBox # accept時のエラー表示用
 
-from src.app.utils.settings_manager import SettingsManager # SettingsManager をインポート
+from utils.settings_manager import SettingsManager # SettingsManager をインポート
 
 class HighResOutputDialog(QDialog):
     SETTINGS_SECTION_NAME = "high_res_export_defaults" # 設定セクションキー

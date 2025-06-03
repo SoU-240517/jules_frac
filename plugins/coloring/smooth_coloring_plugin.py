@@ -6,7 +6,7 @@ try:
     from ..base_coloring_plugin import ColoringAlgorithmPlugin
 except ImportError:
     # テストまたは直接スクリプト実行のためのフォールバック
-    from src.app.plugins.base_coloring_plugin import ColoringAlgorithmPlugin
+    from plugins.base_coloring_plugin import ColoringAlgorithmPlugin
 
 @jit(nopython=True, cache=False, fastmath=True) # ModuleNotFoundErrorに対処するため一時的にキャッシュを無効化
 def _apply_smooth_coloring_jit(

@@ -7,8 +7,8 @@ from pathlib import Path
 # アプリケーションの構造に基づいた絶対インポートを使用します。
 # main.py で _project_root (jules_frac ディレクトリ) が sys.path に追加されるため、
 # src.app.plugins.base_fractal_plugin のように参照可能です。
-from app.plugins.base_fractal_plugin import FractalPlugin
-from src.app.plugins.base_coloring_plugin import ColoringAlgorithmPlugin
+from plugins.base_fractal_plugin import FractalPlugin
+from plugins.base_coloring_plugin import ColoringAlgorithmPlugin
 
 class PluginManager:
     """
@@ -16,8 +16,8 @@ class PluginManager:
     """
     def __init__(self,
                  project_root_path: Path,
-                 fractal_plugin_folder_path: str = "src/app/plugins/fractals",
-                 coloring_plugin_folder_path: str = "src/app/plugins/coloring"):
+                 fractal_plugin_folder_path: str = "plugins/fractals", # project_root_path からの相対パス
+                 coloring_plugin_folder_path: str = "plugins/coloring"): # project_root_path からの相対パス
         """
         PluginManager を初期化します。
         `fractal_plugin_folder_path` および `coloring_plugin_folder_path` は `project_root_path` からの相対パスです。
@@ -61,7 +61,7 @@ class PluginManager:
         for file_path in folder_path.glob("*.py"):
                 module_name = file_path.stem
 
-                if module_name.startswith("__") or module_name in ["base_plugin", "base_coloring_plugin"]:
+                if module_name.startswith("__") or module_name in ["base_fractal_plugin", "base_coloring_plugin"]:
                     continue
                 try:
                     spec = importlib.util.spec_from_file_location(module_name, str(file_path.resolve()))

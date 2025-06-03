@@ -2,16 +2,16 @@ import sys
 from pathlib import Path # 設定用にパス操作を行うためのモジュール
 
 # プロジェクトのルートディレクトリ（'src'の親）をsys.pathに追加
-# これにより、src/ディレクトリ内からmain.pyを直接実行する際に 'from src.app...' のインポートが可能になる
-_project_root = Path(__file__).resolve().parent.parent
+# これにより、'src' ディレクトリからの相対インポートや、'src.app...' のような絶対インポートが可能になる
+_project_root = Path(__file__).resolve().parent # 'jules_frac' ディレクトリをプロジェクトルートとする
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 from PyQt6.QtWidgets import QApplication
-from src.app.views.main_window import MainWindow
-from src.app.models.fractal_engine import FractalEngine
-from src.app.controllers.fractal_controller import FractalController
-from src.app.utils.settings_manager import SettingsManager # SettingsManagerのインポート
+from views.main_window import MainWindow
+from models.fractal_engine import FractalEngine
+from controllers.fractal_controller import FractalController
+from utils.settings_manager import SettingsManager # SettingsManagerのインポート
 from PyQt6.QtCore import Qt
 
 if __name__ == '__main__':
@@ -24,7 +24,7 @@ if __name__ == '__main__':
 
     # 設定マネージャーの初期化（ファイル名は任意）
     # アプリケーション名や組織名を使って標準的な場所に保存することも検討（QStandardPaths推奨）
-    settings_file_name = "base_settings.json"
+    settings_file_name = "base_settings.json" # プロジェクトルートからの相対パス
     # テスト用に書き込み可能な場所（例：ユーザーのホームやアプリデータディレクトリ）に配置することを推奨
     # SettingsManager自体はユーザーのホーム/.fractalapp/に保存しようとする
     settings_file_path = _project_root / settings_file_name

@@ -4,7 +4,7 @@ import numpy as np
 
 class ColorManager:
     """カラーパックとカラーマップを管理するクラス。"""
-    def __init__(self, color_packs_dir: str = "src/app/plugins/colorpacks"):
+    def __init__(self, color_packs_dir: str = "plugins/colorpacks"):
         # color_packs_dir はプロジェクトルートからの相対パスを想定
         self.color_packs_dir = Path(color_packs_dir)
         self.color_packs = {}  # {パック名: {マップ名: RGBタプルのリスト, ...}}

@@ -1,5 +1,5 @@
 import time
-from src.app.export.image_exporter import ImageExporter # ExporterSignals は ImageExporter 内部で使用されます
+from export.image_exporter import ImageExporter # ExporterSignals は ImageExporter 内部で使用されます
 # FractalEngine がインポートされている場合、型が正しく指定されていると仮定しますが、このファイルでは渡されるだけなので必須ではありません。
 # from src.app.models.fractal_engine import FractalEngine # FractalEngineモデルのインポート（型ヒント用）
 from PyQt6.QtCore import QObject, pyqtSignal, QThreadPool, pyqtSlot

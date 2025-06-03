@@ -3,18 +3,18 @@ import time
 import traceback # トレースバック情報を取得するためにインポート
 from pathlib import Path
 
-from src.app.plugins.plugin_manager import PluginManager
-from app.plugins.base_fractal_plugin import FractalPlugin
-from src.app.plugins.base_coloring_plugin import ColoringAlgorithmPlugin
-from src.app.coloring.color_manager import ColorManager
+from plugins.plugin_manager import PluginManager
+from plugins.base_fractal_plugin import FractalPlugin
+from plugins.base_coloring_plugin import ColoringAlgorithmPlugin
+from coloring.color_manager import ColorManager
 # from PIL import Image # Pillowをリサイズに使用する場合 (このバージョンでは未使用)
 
 
 class FractalEngine:
     def __init__(self, project_root_path: Path, image_width_px=800, image_height_px=600,
-                 fractal_plugin_folder="src/app/plugins/fractals",
-                 coloring_plugin_folder="src/app/plugins/coloring",
-                 color_pack_folder="src/app/plugins/colorpacks"):
+                 fractal_plugin_folder="plugins/fractals",  # project_root_pathからの相対パス
+                 coloring_plugin_folder="plugins/coloring", # project_root_pathからの相対パス
+                 color_pack_folder="plugins/colorpacks"):   # project_root_pathからの相対パス
 
         self.max_iterations = 100
         self.center_real = -0.5

@@ -7,7 +7,7 @@ except ImportError:
     # テストまたは直接スクリプト実行のためのフォールバック
     # これは 'base_coloring_plugin.py' が探索可能なパスにあることを前提としています。
     # 堅牢なプロジェクト構造のためには、PYTHONPATH が正しく設定されていることを確認するか、絶対インポートを使用してください。
-    from src.app.plugins.base_coloring_plugin import ColoringAlgorithmPlugin
+    from plugins.base_coloring_plugin import ColoringAlgorithmPlugin
 
 
 # Numba JITコンパイル済みヘルパー関数 (以前はFractalEngineなどにありました)

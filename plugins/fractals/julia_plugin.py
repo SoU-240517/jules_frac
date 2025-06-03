@@ -1,7 +1,7 @@
 import numpy as np
 from numba import jit
 
-from app.plugins.base_fractal_plugin import FractalPlugin
+from plugins.base_fractal_plugin import FractalPlugin
 @jit(nopython=True) # cache=True を削除しました
 def _calculate_julia_point_jit(z_real_start, z_imag_start, c_real_const, c_imag_const, max_iters, escape_radius_sq):
     z_real = z_real_start
