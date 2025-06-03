@@ -2,6 +2,9 @@ import numpy as np
 from numba import jit
 
 from plugins.base_fractal_plugin import FractalPlugin
+from logger.custom_logger import CustomLogger # logger がプロジェクトルート/loggerにあると仮定
+
+logger = CustomLogger()
 @jit(nopython=True) # cache=True を削除しました
 def _calculate_julia_point_jit(z_real_start, z_imag_start, c_real_const, c_imag_const, max_iters, escape_radius_sq):
     z_real = z_real_start
@@ -93,10 +96,10 @@ class JuliaPlugin(FractalPlugin):
         min_y = center_imag - height / 2.0
         max_y = center_imag + height / 2.0
 
-        print(f"JuliaPlugin: 計算開始 - C=({c_real_const:.4f} + {c_imag_const:.4f}i), "
+        logger.log(f"計算開始 - C=({c_real_const:.4f} + {c_imag_const:.4f}i), "
               f"画像: {image_width_px}x{image_height_px}px, "
               f"複素領域: 実数部 ({min_x:.4f} から {max_x:.4f}), 虚数部 ({min_y:.4f} から {max_y:.4f}), "
-              f"最大反復回数: {max_iterations}")
+              f"最大反復回数: {max_iterations}", level="DEBUG")
 
         iter_array, mod_sq_array = _compute_julia_grid_jit(
             image_width_px, image_height_px,
@@ -104,7 +107,7 @@ class JuliaPlugin(FractalPlugin):
             c_real_const, c_imag_const,
             max_iterations, escape_radius_sq
         )
-        print(f"JuliaPlugin: 計算完了。反復回数配列形状: {iter_array.shape}, ModSq形状: {mod_sq_array.shape}")
+        logger.log(f"計算完了。反復回数配列形状: {iter_array.shape}, ModSq形状: {mod_sq_array.shape}", level="DEBUG")
         return {'iterations': iter_array, 'last_z_modulus_sq': mod_sq_array}
 
     def get_presets(self) -> dict | None:
@@ -120,13 +123,13 @@ class JuliaPlugin(FractalPlugin):
 
 if __name__ == '__main__':
     plugin = JuliaPlugin()
-    print(f"Plugin Name: {plugin.name}")
+    logger.log(f"Plugin Name: {plugin.name}", level="INFO")
     param_defs = plugin.get_parameters_definition()
-    print(f"Parameter Definitions: {param_defs}")
-    print(f"Default View Parameters: {plugin.get_default_view_parameters()}")
+    logger.log(f"Parameter Definitions: {param_defs}", level="INFO")
+    logger.log(f"Default View Parameters: {plugin.get_default_view_parameters()}", level="INFO")
 
     presets = plugin.get_presets()
-    print(f"利用可能なプリセット: {list(presets.keys()) if presets else 'なし'}")
+    logger.log(f"利用可能なプリセット: {list(presets.keys()) if presets else 'なし'}", level="INFO")
 
     test_common_params = {
         'center_real': 0.0,
@@ -141,21 +144,21 @@ if __name__ == '__main__':
     if presets:
         first_preset_name = list(presets.keys())[0]
         test_plugin_params = presets[first_preset_name]
-        print(f"\n計算テストにプリセット '{first_preset_name}' を使用: {test_plugin_params}")
+        logger.log(f"\n計算テストにプリセット '{first_preset_name}' を使用: {test_plugin_params}", level="INFO")
     else:
         for p_def in param_defs:
             test_plugin_params[p_def['name']] = p_def['default']
-        print(f"\n計算テストにデフォルトのプラグインパラメータを使用: {test_plugin_params}")
+        logger.log(f"\n計算テストにデフォルトのプラグインパラメータを使用: {test_plugin_params}", level="INFO")
 
     img_width_test, img_height_test = 160, 120
 
-    print(f"compute_fractal ({img_width_test}x{img_height_test}) をテスト中...")
+    logger.log(f"compute_fractal ({img_width_test}x{img_height_test}) をテスト中...", level="INFO")
     fractal_result_data = plugin.compute_fractal(test_common_params, test_plugin_params, img_width_test, img_height_test)
 
     iter_result_array = fractal_result_data['iterations']
     mod_sq_result_array = fractal_result_data['last_z_modulus_sq']
-    print(f"  反復回数配列形状: {iter_result_array.shape}, dtype: {iter_result_array.dtype}")
-    print(f"  |Z|^2 配列形状: {mod_sq_result_array.shape}, dtype: {mod_sq_result_array.dtype}")
+    logger.log(f"  反復回数配列形状: {iter_result_array.shape}, dtype: {iter_result_array.dtype}", level="DEBUG")
+    logger.log(f"  |Z|^2 配列形状: {mod_sq_result_array.shape}, dtype: {mod_sq_result_array.dtype}", level="DEBUG")
 
 
     try:
@@ -173,6 +176,6 @@ if __name__ == '__main__':
         plt.ylabel("Imaginary")
         plt.show()
     except ImportError:
-        print("  matplotlibが見つかりません。画像表示テストをスキップします。")
+        logger.log("matplotlibが見つかりません。画像表示テストをスキップします。", level="INFO")
 
-    print("\nJuliaPlugin のテストが完了しました。")
+    logger.log("\nJuliaPlugin のテストが完了しました。", level="INFO")

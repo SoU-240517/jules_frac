@@ -8,7 +8,9 @@ from plugins.base_fractal_plugin import FractalPlugin
 from plugins.base_coloring_plugin import ColoringAlgorithmPlugin
 from coloring.color_manager import ColorManager
 # from PIL import Image # Pillowをリサイズに使用する場合 (このバージョンでは未使用)
+from logger.custom_logger import CustomLogger
 
+logger = CustomLogger()
 
 class FractalEngine:
     def __init__(self, project_root_path: Path, image_width_px=800, image_height_px=600,
@@ -50,7 +52,7 @@ class FractalEngine:
             default_fractal = "Mandelbrot"
             if default_fractal in available_fractal_plugins: self.set_active_fractal_plugin(default_fractal)
             else: self.set_active_fractal_plugin(available_fractal_plugins[0])
-        else: print("FractalEngine 警告: フラクタルプラグインが見つかりません。")
+        else: logger.log("フラクタルプラグインが見つかりません。", level="WARNING")
 
         available_coloring_plugins = self.get_available_coloring_plugin_names()
         if available_coloring_plugins:
@@ -58,7 +60,7 @@ class FractalEngine:
             if default_coloring in available_coloring_plugins: self.set_active_coloring_plugin(default_coloring)
             elif "スムーズカラー" in available_coloring_plugins: self.set_active_coloring_plugin("スムーズカラー")
             elif available_coloring_plugins: self.set_active_coloring_plugin(available_coloring_plugins[0])
-        else: print("FractalEngine 警告: カラーリングプラグインが見つかりません。")
+        else: logger.log("カラーリングプラグインが見つかりません。", level="WARNING")
 
         available_color_packs = self.get_available_color_pack_names()
         if available_color_packs:
@@ -66,7 +68,7 @@ class FractalEngine:
             if pack_to_try not in available_color_packs: pack_to_try = available_color_packs[0]
             maps_in_pack = self.get_available_color_map_names_in_pack(pack_to_try)
             if maps_in_pack: self.set_active_color_map(pack_to_try, maps_in_pack[0])
-        else: print("FractalEngine 警告: カラーパックが見つかりません。")
+        else: logger.log("カラーパックが見つかりません。", level="WARNING")
 
     def update_image_size(self, image_width_px, image_height_px):
         self.image_width_px = image_width_px if image_width_px > 0 else self.image_width_px
@@ -154,7 +156,7 @@ class FractalEngine:
             )
             return self.last_fractal_data_cache
         except Exception as e:
-            print(f"FractalEngine 計算中のエラー: {e}")
+            logger.log(f"計算中のエラー: {e}", level="ERROR")
             self.last_fractal_data_cache = None
             return None
 
@@ -174,8 +176,8 @@ class FractalEngine:
                 data_to_color, common_fp, self.current_coloring_plugin_parameters, color_map_list
             )
         except Exception as e:
-            print(f"FractalEngine カラーリング中のエラー: {e}")
-            print("Traceback (most recent call last):")
+            logger.log(f"カラーリング中のエラー: {e}", level="ERROR")
+            logger.log("トレースバック (直近の呼び出し):", level="ERROR") # トレースバックが出力されている事実をログに記録
             traceback.print_exc() # トレースバック情報を標準エラー出力に出力
             h = common_fp['image_height_px']; w = common_fp['image_width_px']
             err_img = np.full((h if h>0 else 1, w if w>0 else 1, 4), [255,0,0,255], dtype=np.uint8)
@@ -189,7 +191,7 @@ class FractalEngine:
 
     def generate_image_for_output(self, output_width: int, output_height: int,
                                   common_params_override: dict,
-                                  fractal_plugin_name_override: str | None = None, # Changed to name
+                                  fractal_plugin_name_override: str | None = None, # 名前に変更
                                   fractal_plugin_params_override: dict | None = None,
                                   coloring_algo_name_override: str | None = None,
                                   coloring_algo_params_override: dict | None = None,
@@ -198,7 +200,7 @@ class FractalEngine:
                                   antialiasing_level: str = "なし"
                                   ) -> np.ndarray | None:
 
-        print(f"FractalEngine: 高解像度出力開始 - ターゲット: {output_width}x{output_height}, AA: {antialiasing_level}")
+        logger.log(f"高解像度出力開始 - ターゲット: {output_width}x{output_height}, AA: {antialiasing_level}", level="INFO")
 
         # 1. パラメータ準備
         final_common_params = self.get_common_parameters()
@@ -206,7 +208,7 @@ class FractalEngine:
 
         # フラクタルプラグインとそのパラメータを決定
         active_fractal_plugin = self.plugin_manager.get_fractal_plugin(fractal_plugin_name_override) if fractal_plugin_name_override else self.current_fractal_plugin
-        if not active_fractal_plugin: print("エラー: 出力失敗、フラクタルプラグインが解決できませんでした。"); return None
+        if not active_fractal_plugin: logger.log("出力失敗、フラクタルプラグインが解決できませんでした。", level="ERROR"); return None
 
         final_fractal_plugin_params = {} # 空またはプラグインのデフォルトで開始
         base_plugin_param_defs = active_fractal_plugin.get_parameters_definition()
@@ -217,7 +219,7 @@ class FractalEngine:
 
         # カラーリングプラグインとそのパラメータを決定
         active_coloring_plugin = self.plugin_manager.get_coloring_plugin(coloring_algo_name_override) if coloring_algo_name_override else self.current_coloring_plugin
-        if not active_coloring_plugin: print("エラー: 出力失敗、カラーリングプラグインが解決できませんでした。"); return None
+        if not active_coloring_plugin: logger.log("出力失敗、カラーリングプラグインが解決できませんでした。", level="ERROR"); return None
 
         final_coloring_algo_params = {}
         base_coloring_param_defs = active_coloring_plugin.get_parameters_definition()
@@ -243,17 +245,17 @@ class FractalEngine:
         original_engine_complex_height = final_common_params['height'] # エンジン状態が直接変更された場合に後で復元するため
         final_common_params['height'] = (final_common_params['width'] * ss_height) / ss_width if ss_width > 0 else final_common_params['width']
 
-        print(f"  - スーパーサンプリング解像度: {ss_width}x{ss_height} (AA係数: {aa_factor})")
-        print(f"  - フラクタルプラグイン: {active_fractal_plugin.name}, パラメータ: {final_fractal_plugin_params}")
-        print(f"  - カラーリングプラグイン: {active_coloring_plugin.name}, パラメータ: {final_coloring_algo_params}")
-        print(f"  - カラーマップ: {pack_name}/{map_name}")
-        print(f"  - 計算用共通パラメータ: 中心=({final_common_params['center_real']:.4f},{final_common_params['center_imag']:.4f}), 幅={final_common_params['width']:.3e}, 高さ(複素)={final_common_params['height']:.3e]}, 反復={final_common_params['max_iterations']}")
+        logger.log(f"  - スーパーサンプリング解像度: {ss_width}x{ss_height} (AA係数: {aa_factor})", level="INFO")
+        logger.log(f"  - フラクタルプラグイン: {active_fractal_plugin.name}, パラメータ: {final_fractal_plugin_params}", level="INFO")
+        logger.log(f"  - カラーリングプラグイン: {active_coloring_plugin.name}, パラメータ: {final_coloring_algo_params}", level="INFO")
+        logger.log(f"  - カラーマップ: {pack_name}/{map_name}", level="INFO")
+        logger.log(f"  - 計算用共通パラメータ: 中心=({final_common_params['center_real']:.4f},{final_common_params['center_imag']:.4f}), 幅={final_common_params['width']:.3e}, 高さ(複素)={final_common_params['height']:.3e]}, 反復={final_common_params['max_iterations']}", level="INFO")
 
         # 4. フラクタル計算 (スーパーサンプリング解像度で)
         fractal_data_ss = active_fractal_plugin.compute_fractal(
             final_common_params, final_fractal_plugin_params, ss_width, ss_height
         )
-        if fractal_data_ss is None: print("エラー: スーパーサンプリングされたフラクタル計算に失敗しました。"); return None
+        if fractal_data_ss is None: logger.log("スーパーサンプリングされたフラクタル計算に失敗しました。", level="ERROR"); return None
 
         # カラーリングプラグインが必要とする可能性があるため、画像寸法を common_params に追加
         final_common_params_for_coloring = final_common_params.copy()
@@ -263,43 +265,43 @@ class FractalEngine:
         colored_image_ss_rgba = active_coloring_plugin.apply_coloring(
             fractal_data_ss, final_common_params_for_coloring, final_coloring_algo_params, final_color_map_data
         )
-        if colored_image_ss_rgba is None: print("エラー: スーパーサンプリングされたカラーリングに失敗しました。"); return None
+        if colored_image_ss_rgba is None: logger.log("スーパーサンプリングされたカラーリングに失敗しました。", level="ERROR"); return None
 
         # 6. ダウンサンプリング (AAが有効な場合)
         if aa_factor > 1:
-            print(f"  - {ss_width}x{ss_height} から {output_width}x{output_height} へダウンサンプリング中...")
+            logger.log(f"  - {ss_width}x{ss_height} から {output_width}x{output_height} へダウンサンプリング中...", level="INFO")
             try:
                 # リシェイプのためにRGBA (4チャンネル) を確認
                 if colored_image_ss_rgba.shape[2] != 4: # カラーリングプラグインからは常に4チャンネルのはず
-                    print(f"エラー: カラーリングから4チャンネルを期待しましたが、{colored_image_ss_rgba.shape[2]} を取得しました"); return None
+                    logger.log(f"カラーリングから4チャンネルを期待しましたが、{colored_image_ss_rgba.shape[2]} を取得しました", level="ERROR"); return None
 
                 reshaped = colored_image_ss_rgba.reshape(output_height, aa_factor, output_width, aa_factor, 4)
                 downsampled_image_rgba = reshaped.mean(axis=(1, 3)).astype(np.uint8)
             except ValueError as e:
-                print(f"ダウンサンプリングリシェイプ中のエラー: {e}。入力: {colored_image_ss_rgba.shape}, ターゲット: {output_height}x{output_width}, AA: {aa_factor}"); return None
+                logger.log(f"ダウンサンプリングリシェイプ中のエラー: {e}。入力: {colored_image_ss_rgba.shape}, ターゲット: {output_height}x{output_width}, AA: {aa_factor}", level="ERROR"); return None
         else:
             downsampled_image_rgba = colored_image_ss_rgba
 
-        print(f"FractalEngine: 高解像度画像が正常に生成されました ({output_width}x{output_height})。")
+        logger.log(f"高解像度画像が正常に生成されました ({output_width}x{output_height})。", level="INFO")
         return downsampled_image_rgba
 
 
 if __name__ == '__main__':
     # テストには、CWDからの相対的なデフォルトの場所にプラグインとカラーパックが必要です
     # 例: CWD = プロジェクトルートの場合、"src/app/plugins/fractals" のようなパスが有効です。
-    print("FractalEngine (generate_image_for_output を含む) スタンドアロンテスト")
+    logger.log("FractalEngine (generate_image_for_output を含む) スタンドアロンテスト", level="INFO")
     # スタンドアロンテストの場合、CWDがプロジェクトルートであると仮定します
     test_project_root = Path.cwd()
-    print(f"  テスト用のプロジェクトルート: {test_project_root}")
+    logger.log(f"  テスト用のプロジェクトルート: {test_project_root}", level="INFO")
     engine = FractalEngine(project_root_path=test_project_root, image_width_px=80, image_height_px=60) # 画面表示用の小さなデフォルト値
 
     if not engine.get_active_fractal_plugin() or not engine.get_active_coloring_plugin():
-        print("デフォルトプラグインが読み込まれていません。パスまたはプラグインの可用性を確認してください。テストを完全に続行できません。")
+        logger.log("デフォルトプラグインが読み込まれていません。パスまたはプラグインの可用性を確認してください。テストを完全に続行できません。", level="WARNING")
     else:
-        print(f"アクティブなフラクタルプラグイン: {engine.get_active_fractal_plugin().name}")
-        print(f"アクティブなカラーリングプラグイン: {engine.get_active_coloring_plugin().name}")
+        logger.log(f"アクティブなフラクタルプラグイン: {engine.get_active_fractal_plugin().name}", level="INFO")
+        logger.log(f"アクティブなカラーリングプラグイン: {engine.get_active_coloring_plugin().name}", level="INFO")
         cp, cm = engine.get_current_color_map_selection()
-        print(f"アクティブなカラーマップ: {cp} - {cm}")
+        logger.log(f"アクティブなカラーマップ: {cp} - {cm}", level="INFO")
 
         output_params = {
             'max_iterations': 200, # 出力用の反復回数を上書き
@@ -307,7 +309,7 @@ if __name__ == '__main__':
         }
 
         # 高解像度出力のテスト (例: Mandelbrot と Grayscale)
-        print("\n160x120 画像を 2x2 SSAA で生成中...")
+        logger.log("\n160x120 画像を 2x2 SSAA で生成中...", level="INFO")
         output_image = engine.generate_image_for_output(
             output_width=160, output_height=120,
             common_params_override=output_params,
@@ -315,11 +317,11 @@ if __name__ == '__main__':
             antialiasing_level="2x2 SSAA"
         )
         if output_image is not None:
-            print(f"  出力画像が生成されました。形状: {output_image.shape}, Dtype: {output_image.dtype}")
+            logger.log(f"  出力画像が生成されました。形状: {output_image.shape}, Dtype: {output_image.dtype}", level="INFO")
             assert output_image.shape == (120, 160, 4)
             # import matplotlib.pyplot as plt # 必要に応じて視覚的な確認用
             # plt.imshow(output_image); plt.show()
         else:
-            print("  高解像度画像の生成に失敗しました。")
+            logger.log("  高解像度画像の生成に失敗しました。", level="ERROR")
 
-    print("\nFractalEngine テストが完了しました。")
+    logger.log("\nFractalEngine テストが完了しました。", level="INFO")

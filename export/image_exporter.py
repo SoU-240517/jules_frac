@@ -6,6 +6,9 @@ from pathlib import Path
 # Pillowをインポート
 # fractal_engine_refの型ヒント用
 # from src.app.models.fractal_engine import FractalEngine
+from logger.custom_logger import CustomLogger
+
+logger = CustomLogger()
 
 class ExporterSignals(QObject):
     progress_updated = pyqtSignal(int)
@@ -20,7 +23,7 @@ class ImageExporter(QRunnable):
         self._is_cancelled = False
 
     def run(self):
-        filepath = self.export_settings.get('filepath', 'fractal_export.png') # Initialize for use in except block
+        filepath = self.export_settings.get('filepath', 'fractal_export.png') # exceptブロックで使用するために初期化
         try: # exceptブロックで使用するために初期化
             self.signals.progress_updated.emit(0)
             if self._is_cancelled:
@@ -44,7 +47,7 @@ class ImageExporter(QRunnable):
             aa_factor = self.export_settings.get('antialiasing_factor', 1)
             antialiasing_level_str = f"{aa_factor}x{aa_factor} SSAA" if aa_factor > 1 else "なし"
 
-            print(f"ImageExporter: エクスポート処理開始: {filepath} ({output_width}x{output_height}), AA: {antialiasing_level_str}")
+            logger.log(f"エクスポート処理開始: {filepath} ({output_width}x{output_height}), AA: {antialiasing_level_str}", level="INFO")
             self.signals.progress_updated.emit(5)
 
             if self._is_cancelled:
@@ -75,7 +78,7 @@ class ImageExporter(QRunnable):
                 return
 
             # --- Pillowを使用したファイル保存 ---
-            print(f"ImageExporter: 画像データ生成完了 ({image_data_np.shape})。ファイル保存開始: {filepath}")
+            logger.log(f"画像データ生成完了 ({image_data_np.shape})。ファイル保存開始: {filepath}", level="INFO")
 
             pil_image = Image.fromarray(image_data_np, 'RGBA')
             format_str = self.export_settings.get('format', 'PNG').upper()
@@ -132,37 +135,37 @@ class ImageExporter(QRunnable):
                 self.signals.export_finished.emit(False, "エクスポートがキャンセルされました (保存直前)。")
                 return
 
-            print(f"ImageExporter: '{filepath}' に '{format_str}' として保存中 (オプション: {save_options})...")
+            logger.log(f"'{filepath}' に '{format_str}' として保存中 (オプション: {save_options})...", level="INFO")
             image_to_save.save(filepath, format=format_str, **save_options)
 
             self.signals.progress_updated.emit(100)
             self.signals.export_finished.emit(True, filepath)
-            print(f"ImageExporter: 保存完了。")
+            logger.log("保存完了。", level="INFO")
 
         except FileNotFoundError:
             error_msg = f"指定されたパスのディレクトリが見つかりません: {Path(filepath).parent}"
-            print(f"ImageExporter: エラー - {error_msg}")
+            logger.log(f"エラー - {error_msg}", level="ERROR")
             self.signals.export_finished.emit(False, error_msg)
         except IOError as e:
             error_msg = f"ファイルの書き込みに失敗しました ({filepath}): {e}"
-            print(f"ImageExporter: エラー - {error_msg}")
+            logger.log(f"エラー - {error_msg}", level="ERROR")
             self.signals.export_finished.emit(False, error_msg)
         except Exception as e:
             import traceback
             error_msg = f"予期せぬエクスポートエラー: {e}"
-            print(f"ImageExporter: エクスポート中に予期せぬエラーが発生: {e}\n{traceback.format_exc()}")
+            logger.log(f"エクスポート中に予期せぬエラーが発生: {e}\n{traceback.format_exc()}", level="ERROR")
             self.signals.export_finished.emit(False, error_msg)
 
     def cancel(self):
-        print("ImageExporter: キャンセル要求を受け付けました。")
+        logger.log("キャンセル要求を受け付けました。", level="INFO")
         self._is_cancelled = True
 
 if __name__ == '__main__':
-    print("ImageExporter スタンドアロンテスト (シミュレート実行)")
+    logger.log("ImageExporter スタンドアロンテスト (シミュレート実行)", level="INFO")
     # ... (前のステップからのMockFractalEngineとテストセットアップ、簡略化されている可能性あり)
     class MockFractalEngine:
         def generate_image_for_output(self, output_width, output_height, **kwargs):
-            print(f"  モックエンジン: generate_image_for_output ({output_width}x{output_height}), AA: {kwargs.get('antialiasing_level')}")
+            logger.log(f"  モックエンジン: generate_image_for_output ({output_width}x{output_height}), AA: {kwargs.get('antialiasing_level')}", level="DEBUG")
             time.sleep(0.1) # 生成時間をシミュレート
             if exporter_for_test._is_cancelled: return None # テスト用に直接参照を使用
             return np.random.randint(0, 256, size=(output_height, output_width, 4), dtype=np.uint8)
@@ -181,12 +184,12 @@ if __name__ == '__main__':
 
     exporter_for_test = None # モックエンジンアクセス用に割り当てられる
 
-    def handle_progress(p): print(f"  テスト進捗: {p}%")
+    def handle_progress(p): logger.log(f"  テスト進捗: {p}%", level="INFO")
     def handle_finished(success, msg_or_path):
         status = "成功" if success else "失敗"
-        print(f"  テスト終了 {status}: {msg_or_path}")
+        logger.log(f"  テスト終了 {status}: {msg_or_path}", level="INFO")
 
-    print("\n--- テスト1: PNGエクスポート ---")
+    logger.log("\n--- テスト1: PNGエクスポート ---", level="INFO")
     exporter_png = ImageExporter(mock_engine_instance, test_settings_png)
     exporter_for_test = exporter_png # モックエンジンがキャンセルフラグを確認するため
     exporter_png.signals.progress_updated.connect(handle_progress)
@@ -194,7 +197,7 @@ if __name__ == '__main__':
     exporter_png.run()
     if Path(test_settings_png['filepath']).exists(): Path(test_settings_png['filepath']).unlink() # クリーンアップ
 
-    print("\n--- テスト2: JPEGエクスポート ---")
+    logger.log("\n--- テスト2: JPEGエクスポート ---", level="INFO")
     exporter_jpg = ImageExporter(mock_engine_instance, test_settings_jpg)
     exporter_for_test = exporter_jpg
     exporter_jpg.signals.progress_updated.connect(handle_progress)
@@ -202,7 +205,7 @@ if __name__ == '__main__':
     exporter_jpg.run()
     if Path(test_settings_jpg['filepath']).exists(): Path(test_settings_jpg['filepath']).unlink() # クリーンアップ
 
-    print("\n--- テスト3: 生成中のキャンセル (シミュレート) ---")
+    logger.log("\n--- テスト3: 生成中のキャンセル (シミュレート) ---", level="INFO")
     exporter_cancel = ImageExporter(mock_engine_instance, test_settings_png)
     exporter_for_test = exporter_cancel # モックエンジンはこのインスタンスのフラグにアクセスする必要がある
     exporter_cancel.signals.progress_updated.connect(handle_progress)
@@ -210,4 +213,4 @@ if __name__ == '__main__':
     exporter_cancel.cancel() # 実行前にキャンセルを要求、generate_image_for_outputがそれを検知するはず
     exporter_cancel.run()
 
-    print("\nImageExporter スタンドアロンテスト終了。")
+    logger.log("\nImageExporter スタンドアロンテスト終了。", level="INFO")

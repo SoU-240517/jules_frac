@@ -1,8 +1,11 @@
 import time
 from export.image_exporter import ImageExporter # ExporterSignals は ImageExporter 内部で使用されます
 # FractalEngine がインポートされている場合、型が正しく指定されていると仮定しますが、このファイルでは渡されるだけなので必須ではありません。
-# from src.app.models.fractal_engine import FractalEngine # FractalEngineモデルのインポート（型ヒント用）
+# from src.app.models.fractal_engine import FractalEngine # FractalEngineモデルのインポート (型ヒント用)
 from PyQt6.QtCore import QObject, pyqtSignal, QThreadPool, pyqtSlot
+from logger.custom_logger import CustomLogger
+
+logger = CustomLogger()
 
 class FractalController(QObject):
     image_rendered = pyqtSignal(object)
@@ -124,7 +127,7 @@ class FractalController(QObject):
                 try:
                     return plugin.get_presets()
                 except Exception as e:
-                    print(f"警告: プラグイン '{plugin_name}' のプリセット取得中にエラー: {e}")
+                    logger.log(f"プラグイン '{plugin_name}' のプリセット取得中にエラー: {e}", level="WARNING")
                     return []
         return []
 
@@ -236,7 +239,7 @@ class FractalController(QObject):
             self.export_process_finished.emit(False, "FractalEngineが初期化されていません。")
             return
 
-        print(f"FractalController: 高解像度エクスポートを開始します。設定: {export_settings}")
+        logger.log(f"高解像度エクスポートを開始します。設定: {export_settings}", level="INFO")
         exporter = ImageExporter(self.fractal_engine, export_settings)
         self.current_exporter = exporter
 
@@ -248,7 +251,7 @@ class FractalController(QObject):
 
     @pyqtSlot(bool, str)
     def _on_export_actually_finished(self, success: bool, message: str):
-        print(f"FractalController: エクスポート処理完了。成功: {success}, メッセージ: {message}")
+        logger.log(f"エクスポート処理完了。成功: {success}, メッセージ: {message}", level="INFO")
         self.export_process_finished.emit(success, message)
         if self.current_exporter:
             try: # 切断を試み、既に切断されている場合（例：エクスポータ自体による切断）は無視します
@@ -256,14 +259,14 @@ class FractalController(QObject):
                 self.current_exporter.signals.export_finished.disconnect(self._on_export_actually_finished)
             except TypeError: pass # シグナルが接続されていない場合、または複数回接続されていていずれかの切断に失敗した場合に発生します
             self.current_exporter = None
-        print("FractalController: エクスポータ参照クリア。")
+        logger.log("エクスポータ参照クリア。", level="INFO")
 
     def cancel_current_export(self):
         if self.current_exporter:
-            print("FractalController: 現在のエクスポート処理のキャンセルを要求。")
+            logger.log("現在のエクスポート処理のキャンセルを要求。", level="INFO")
             self.current_exporter.cancel()
         else:
-            print("FractalController: キャンセル対象のエクスポート処理なし。")
+            logger.log("キャンセル対象のエクスポート処理なし。", level="INFO")
 
     # Programmatic parameter changes (略 - 変更なし)
     def handle_programmatic_parameter_change(self, cr, ci, w, iters=None, plugin_params=None):
@@ -308,8 +311,8 @@ if __name__ == '__main__':
         def generate_image_for_output(self, **kwargs): import numpy as np; return np.zeros((kwargs['output_height'],kwargs['output_width'],4),dtype=np.uint8)
     class MockMainWindow: render_area = type('MRA',(),{'width':lambda:100, 'height':lambda:100})()
     mock_engine = MockFractalEngine(); controller = FractalController(mock_engine); controller.set_main_window(MockMainWindow())
-    print("\nコントローラーテスト（フルモックエンジン使用）..."); controller.update_common_fractal_parameters(-0.7,0.3,2.0,150)
+    logger.log("\nコントローラーテスト（フルモックエンジン使用）...", level="INFO"); controller.update_common_fractal_parameters(-0.7,0.3,2.0,150)
     controller.trigger_render(); controller.trigger_recolor()
-    # print(f"ステータス: {controller.last_status}") # controllerにlast_statusが保存されていない場合、printでのアクセスは難しいかもしれません
+    # logger.log(f"ステータス: {controller.last_status}") # controllerにlast_statusが保存されていない場合、printでのアクセスは難しいかもしれません
     controller.start_high_res_export({'width':200,'height':150,'iterations':300,'antialiasing_factor':2, 'antialiasing': '2x2 SSAA'}) # generate_image_for_output 用にアンチエイリアス文字列を追加
-    print("コントローラーテスト終了。")
+    logger.log("コントローラーテスト終了。", level="INFO")

@@ -2,6 +2,9 @@ import numpy as np
 from numba import jit
 
 from plugins.base_fractal_plugin import FractalPlugin
+from logger.custom_logger import CustomLogger # logger がプロジェクトルート/loggerにあると仮定
+
+logger = CustomLogger()
 
     # @jit(nopython=True, cache=True) # Numba JITを一時的に無効化
 def _calculate_mandelbrot_point_jit(c_real, c_imag, max_iters, escape_radius_sq):
@@ -67,9 +70,9 @@ class MandelbrotPlugin(FractalPlugin):
         min_y = center_imag - height / 2.0
         max_y = center_imag + height / 2.0
 
-        print(f"MandelbrotPlugin: 計算開始 - 画像: {image_width_px}x{image_height_px}px, "
+        logger.log(f"計算開始 - 画像: {image_width_px}x{image_height_px}px, "
               f"複素領域: 実数部 ({min_x:.4f} から {max_x:.4f}), 虚数部 ({min_y:.4f} から {max_y:.4f}), "
-              f"最大反復回数: {max_iterations}")
+              f"最大反復回数: {max_iterations}", level="DEBUG")
 
         iter_array, mod_sq_array = _compute_mandelbrot_grid_jit(
             image_width_px, image_height_px,
@@ -77,14 +80,14 @@ class MandelbrotPlugin(FractalPlugin):
             max_iterations, escape_radius_sq
         )
 
-        print(f"MandelbrotPlugin: 計算完了。反復回数配列形状: {iter_array.shape}, ModSq形状: {mod_sq_array.shape}")
+        logger.log(f"計算完了。反復回数配列形状: {iter_array.shape}, ModSq形状: {mod_sq_array.shape}", level="DEBUG")
         return {'iterations': iter_array, 'last_z_modulus_sq': mod_sq_array}
 
 if __name__ == '__main__':
     plugin = MandelbrotPlugin()
-    print(f"プラグイン名: {plugin.name}")
-    print(f"パラメータ定義: {plugin.get_parameters_definition()}")
-    print(f"デフォルトビューパラメータ: {plugin.get_default_view_parameters()}")
+    logger.log(f"プラグイン名: {plugin.name}", level="INFO")
+    logger.log(f"パラメータ定義: {plugin.get_parameters_definition()}", level="INFO")
+    logger.log(f"デフォルトビューパラメータ: {plugin.get_default_view_parameters()}", level="INFO")
 
     test_common_params = {
         'center_real': -0.5,
@@ -98,21 +101,21 @@ if __name__ == '__main__':
 
     img_width_test, img_height_test = 160, 120
 
-    print(f"\ncompute_fractal ({img_width_test}x{img_height_test}) をテスト中...")
+    logger.log(f"\ncompute_fractal ({img_width_test}x{img_height_test}) をテスト中...", level="INFO")
     fractal_result_data = plugin.compute_fractal(test_common_params, test_plugin_params, img_width_test, img_height_test)
 
     iter_result_array = fractal_result_data['iterations']
     mod_sq_result_array = fractal_result_data['last_z_modulus_sq']
 
-    print(f"  反復回数配列形状: {iter_result_array.shape}, dtype: {iter_result_array.dtype}")
-    print(f"  |Z|^2 配列形状: {mod_sq_result_array.shape}, dtype: {mod_sq_result_array.dtype}")
+    logger.log(f"  反復回数配列形状: {iter_result_array.shape}, dtype: {iter_result_array.dtype}", level="DEBUG")
+    logger.log(f"  |Z|^2 配列形状: {mod_sq_result_array.shape}, dtype: {mod_sq_result_array.dtype}", level="DEBUG")
 
     center_y, center_x = img_height_test // 2, img_width_test // 2
     if iter_result_array[center_y, center_x] == test_common_params['max_iterations']:
-        print(f"  中心点の反復回数チェック: 成功 (値: {iter_result_array[center_y, center_x]})")
-        print(f"  中心点の|Z|^2値: {mod_sq_result_array[center_y, center_x]}")
+        logger.log(f"  中心点の反復回数チェック: 成功 (値: {iter_result_array[center_y, center_x]})", level="INFO")
+        logger.log(f"  中心点の|Z|^2値: {mod_sq_result_array[center_y, center_x]}", level="DEBUG")
     else:
-        print(f"  中心点の反復回数チェック: 失敗または最大反復回数ではない (値: {iter_result_array[center_y, center_x]})")
+        logger.log(f"  中心点の反復回数チェック: 失敗または最大反復回数ではない (値: {iter_result_array[center_y, center_x]})", level="WARNING")
 
     try:
         import matplotlib.pyplot as plt
@@ -128,6 +131,6 @@ if __name__ == '__main__':
         plt.ylabel("Imaginary")
         plt.show()
     except ImportError:
-        print("  matplotlibが見つかりません。画像表示テストをスキップします。")
+        logger.log("matplotlibが見つかりません。画像表示テストをスキップします。", level="INFO")
 
-    print("\nMandelbrotPlugin のテストが完了しました。")
+    logger.log("\nMandelbrotPlugin のテストが完了しました。", level="INFO")

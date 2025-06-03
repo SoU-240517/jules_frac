@@ -53,7 +53,7 @@ class ParameterPanel(QScrollArea):
         fractal_layout.addWidget(self.fractal_combo); fractal_group.setLayout(fractal_layout)
         self.main_layout.addWidget(fractal_group)
         self.fractal_combo.currentTextChanged.connect(self._on_fractal_type_changed)
-        # Common Parameters
+        # 共通パラメータ
         common_params_group = QGroupBox("共通描画設定")
         self.common_params_layout = QFormLayout()
         self.iter_spinbox = QSpinBox(); self.iter_spinbox.setRange(10,100000)
@@ -104,7 +104,7 @@ class ParameterPanel(QScrollArea):
         # カラーマップ選択
         form_map_select = QFormLayout()
         self.color_map_listwidget = QListWidget()
-        self.color_map_listwidget.setIconSize(QSize(96, 18)) # Increased width for better preview
+        self.color_map_listwidget.setIconSize(QSize(96, 18)) # より良いプレビューのために幅を増やしました
         self.color_map_listwidget.setSpacing(1)
         self.color_map_listwidget.setFixedHeight(120)
         form_map_select.addRow(QLabel("カラーマップ:"), self.color_map_listwidget)
@@ -241,7 +241,7 @@ class ParameterPanel(QScrollArea):
         current_vals = self.fractal_controller.get_current_coloring_plugin_parameters_from_engine()
 
         # カラーリングプラグインにプリセットがある場合、プリセットコンボボックスを追加
-        presets = self.fractal_controller.get_plugin_presets(algo_name) # Assuming fractal_controller has this for coloring plugins too
+        presets = self.fractal_controller.get_plugin_presets(algo_name) # fractal_controller もカラーリングプラグイン用にこれを持っていると仮定
         if presets:
             preset_combo = QComboBox()
             preset_combo.addItem("カスタム")
@@ -374,7 +374,7 @@ class ParameterPanel(QScrollArea):
             params = self.fractal_controller.get_current_common_parameters()
             if params: self._set_ui_values(params.get('center_real',-0.5), params.get('center_imag',0.0), params.get('width',3.0), params.get('max_iterations',100))
             active_fp_name = self.fractal_controller.get_active_fractal_plugin_name_from_engine() # メソッド名を変更
-            if active_fp_name: self._update_fractal_plugin_specific_ui(active_fp_name) # Renamed method
+            if active_fp_name: self._update_fractal_plugin_specific_ui(active_fp_name)
             active_cp_name = self.fractal_controller.get_active_coloring_plugin_name_from_engine()
             if active_cp_name: self._update_coloring_plugin_specific_ui(active_cp_name)
     @pyqtSlot()
@@ -390,6 +390,8 @@ class ParameterPanel(QScrollArea):
         return {"center_real":self.center_real_spinbox.value(), "center_imag":self.center_imag_spinbox.value(), "width":self.width_spinbox.value(), "max_iterations":self.iter_spinbox.value()}
 
 if __name__ == '__main__':
+    from logger.custom_logger import CustomLogger
+    logger = CustomLogger()
     # ... (スタンドアロンテストコードは複雑なため、メインアプリケーションでのテストを推奨) ...
-    print("ParameterPanelのスタンドアロンテストには包括的なモックコントローラとセットアップが必要です。")
-    print("メインアプリケーションまたは専用のテストスイートでテストしてください。")
+    logger.log("ParameterPanelのスタンドアロンテストには包括的なモックコントローラとセットアップが必要です。", level="INFO")
+    logger.log("メインアプリケーションまたは専用のテストスイートでテストしてください。", level="INFO")

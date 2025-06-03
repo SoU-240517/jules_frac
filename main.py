@@ -13,6 +13,9 @@ from models.fractal_engine import FractalEngine
 from controllers.fractal_controller import FractalController
 from utils.settings_manager import SettingsManager # SettingsManagerのインポート
 from PyQt6.QtCore import Qt
+from logger.custom_logger import CustomLogger
+
+logger = CustomLogger()
 
 if __name__ == '__main__':
     if hasattr(Qt.ApplicationAttribute, 'AA_EnableHighDpiScaling'):
@@ -101,7 +104,7 @@ if __name__ == '__main__':
     if hasattr(main_window, 'status_bar') and main_window.status_bar is not None: # status_barが存在するか確認
         fractal_controller.status_updated.connect(main_window.update_status_bar)
     else:
-        print("警告: MainWindow.status_barが見つからない、または初期化されていないため、status_updatedシグナルを接続できません。")
+        logger.log("警告: MainWindow.status_barが見つからない、または初期化されていないため、status_updatedシグナルを接続できません。", level="WARNING")
 
     main_window.show()
 

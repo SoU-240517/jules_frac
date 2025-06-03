@@ -1,6 +1,9 @@
 import json
 from pathlib import Path
 import os
+from logger.custom_logger import CustomLogger # logger がプロジェクトルート/loggerにあると仮定
+
+logger = CustomLogger()
 
 class SettingsManager:
     def __init__(self, settings_filename: str = "base_settings.json"):
@@ -20,7 +23,7 @@ class SettingsManager:
                 app_data_dir.mkdir(parents=True, exist_ok=True)
                 self.filepath = app_data_dir / settings_filename
             except Exception as e:
-                print(f"SettingsManager 警告: ホームに設定ディレクトリを作成できませんでした。CWD を使用します。エラー: {e}")
+                logger.log(f"ホームに設定ディレクトリを作成できませんでした。CWD を使用します。エラー: {e}", level="WARNING")
                 self.filepath = Path.cwd() / settings_filename
 
 
@@ -32,12 +35,12 @@ class SettingsManager:
             try:
                 with open(self.filepath, 'r', encoding='utf-8') as f:
                     self.settings = json.load(f)
-                print(f"SettingsManager: 設定を {self.filepath} から読み込みました")
+                logger.log(f"設定を {self.filepath} から読み込みました", level="INFO")
             except (json.JSONDecodeError, IOError, Exception) as e: # より一般的な例外もキャッチします
-                print(f"SettingsManager エラー: 設定ファイル '{self.filepath}' の読み込みに失敗しました: {e}。デフォルト設定を使用します。")
+                logger.log(f"設定ファイル '{self.filepath}' の読み込みに失敗しました: {e}。デフォルト設定を使用します。", level="ERROR")
                 self.settings = {}
         else:
-            print(f"SettingsManager: 設定ファイル ('{self.filepath}') が見つかりません。デフォルト設定を使用します。")
+            logger.log(f"設定ファイル ('{self.filepath}') が見つかりません。デフォルト設定を使用します。", level="INFO")
             self.settings = {}
 
     def save_settings(self):
@@ -46,9 +49,9 @@ class SettingsManager:
             self.filepath.parent.mkdir(parents=True, exist_ok=True)
             with open(self.filepath, 'w', encoding='utf-8') as f:
                 json.dump(self.settings, f, indent=4, ensure_ascii=False)
-            print(f"SettingsManager: 設定を {self.filepath} に保存しました")
+            logger.log(f"設定を {self.filepath} に保存しました", level="INFO")
         except (IOError, Exception) as e: # より一般的な例外もキャッチします
-            print(f"SettingsManager エラー: 設定ファイル '{self.filepath}' の保存に失敗しました: {e}")
+            logger.log(f"設定ファイル '{self.filepath}' の保存に失敗しました: {e}", level="ERROR")
 
     def get_setting(self, key_path: str, default_value: any = None) -> any:
         keys = key_path.split('.')
@@ -61,7 +64,7 @@ class SettingsManager:
             return value_ptr
         except KeyError:
             return default_value
-        except TypeError: # Handle cases where value_ptr becomes None or non-dict unexpectedly
+        except TypeError: # value_ptrが予期せずNoneまたは非辞書になった場合のケースを処理
              return default_value
 
 
@@ -69,7 +72,7 @@ class SettingsManager:
         keys = key_path.split('.')
         current_level = self.settings
 
-        for i, key in enumerate(keys[:-1]): # Iterate to the second to last key
+        for i, key in enumerate(keys[:-1]): # 最後から2番目のキーまで反復
             if key not in current_level or not isinstance(current_level[key], dict):
                 current_level[key] = {} # 存在しない場合は中間辞書を作成します
             current_level = current_level[key]
@@ -88,48 +91,48 @@ class SettingsManager:
             self.save_settings()
 
 if __name__ == '__main__':
-    print("SettingsManager のテスト中...")
+    logger.log("SettingsManager のテスト中...", level="INFO")
     # 実際の設定を上書きしないように、テスト用に一時的なファイル名を使用します
     test_settings_file = "test_app_settings.json"
     manager = SettingsManager(settings_filename=test_settings_file)
 
     # テスト 1: 存在しないキーのデフォルト値
-    print(f"初期 'test.value1': {manager.get_setting('test.value1', 'default_val')}")
+    logger.log(f"初期 'test.value1': {manager.get_setting('test.value1', 'default_val')}", level="DEBUG")
     assert manager.get_setting('test.value1', 'default_val') == 'default_val'
 
     # テスト 2: 値の設定と取得
     manager.set_setting('test.value1', 123)
-    print(f"'test.value1' を 123 に設定。取得値: {manager.get_setting('test.value1')}")
+    logger.log(f"'test.value1' を 123 に設定。取得値: {manager.get_setting('test.value1')}", level="DEBUG")
     assert manager.get_setting('test.value1') == 123
 
     # テスト 3: ネストされた値の設定と取得
     manager.set_setting('test.subsection.value2', "hello")
-    print(f"'test.subsection.value2' を 'hello' に設定。取得値: {manager.get_setting('test.subsection.value2')}")
+    logger.log(f"'test.subsection.value2' を 'hello' に設定。取得値: {manager.get_setting('test.subsection.value2')}", level="DEBUG")
     assert manager.get_setting('test.subsection.value2') == "hello"
 
     # テスト 4: 既存の値の上書き
     manager.set_setting('test.value1', 456)
-    print(f"'test.value1' を 456 に上書き。取得値: {manager.get_setting('test.value1')}")
+    logger.log(f"'test.value1' を 456 に上書き。取得値: {manager.get_setting('test.value1')}", level="DEBUG")
     assert manager.get_setting('test.value1') == 456
 
     # テスト 5: ファイルから設定を読み込み (最初に設定を保存する必要があります)
-    print("アプリの再起動をシミュレート: 同じファイルに対して新しい SettingsManager インスタンスを作成中...")
+    logger.log("アプリの再起動をシミュレート: 同じファイルに対して新しい SettingsManager インスタンスを作成中...", level="INFO")
     manager_reloaded = SettingsManager(settings_filename=test_settings_file)
-    print(f"再読み込みされた 'test.value1': {manager_reloaded.get_setting('test.value1')}")
+    logger.log(f"再読み込みされた 'test.value1': {manager_reloaded.get_setting('test.value1')}", level="DEBUG")
     assert manager_reloaded.get_setting('test.value1') == 456
-    print(f"再読み込みされた 'test.subsection.value2': {manager_reloaded.get_setting('test.subsection.value2')}")
+    logger.log(f"再読み込みされた 'test.subsection.value2': {manager_reloaded.get_setting('test.subsection.value2')}", level="DEBUG")
     assert manager_reloaded.get_setting('test.subsection.value2') == "hello"
 
     # テスト 6: セクション操作 (オプションですが、あると便利です)
     manager.set_section("section1", {"a":1, "b":2})
-    print(f"セクション 'section1' のデータ: {manager.get_section('section1')}")
+    logger.log(f"セクション 'section1' のデータ: {manager.get_section('section1')}", level="DEBUG")
     assert manager.get_section("section1") == {"a":1, "b":2}
 
     manager_reloaded_2 = SettingsManager(settings_filename=test_settings_file)
     assert manager_reloaded_2.get_section("section1") == {"a":1, "b":2}
 
 
-    # Clean up the test settings file
+    # テスト設定ファイルをクリーンアップ
     # テスト設定ファイルをクリーンアップします
     try:
         if Path(test_settings_file).exists(): Path(test_settings_file).unlink()
@@ -144,8 +147,8 @@ if __name__ == '__main__':
         # if app_data_dir_for_test.exists() and not any(app_data_dir_for_test.iterdir()):
         #     app_data_dir_for_test.rmdir()
 
-        print(f"テスト設定ファイル '{test_settings_file}' (および潜在的な app_data コピー) をクリーンアップしました。")
+        logger.log(f"テスト設定ファイル '{test_settings_file}' (および潜在的な app_data コピー) をクリーンアップしました。", level="INFO")
     except Exception as e:
-        print(f"テスト設定ファイルのクリーンアップ中にエラーが発生しました: {e}")
+        logger.log(f"テスト設定ファイルのクリーンアップ中にエラーが発生しました: {e}", level="ERROR")
 
-    print("SettingsManager のテストが完了しました。")
+    logger.log("SettingsManager のテストが完了しました。", level="INFO")

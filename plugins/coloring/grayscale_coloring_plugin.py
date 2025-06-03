@@ -9,6 +9,26 @@ except ImportError:
     # 堅牢なプロジェクト構造のためには、PYTHONPATH が正しく設定されていることを確認するか、絶対インポートを使用してください。
     from plugins.base_coloring_plugin import ColoringAlgorithmPlugin
 
+# CustomLoggerをインポート - プロジェクトルートのloggerディレクトリにあると仮定
+import sys
+from pathlib import Path
+# このスクリプトが自身のフォルダから直接実行された場合、または
+# 他の理由でpluginsフォルダがsys.pathに追加された場合にloggerが見つかるようにする
+_logger_path_finder = Path(__file__).resolve()
+# plugins/coloring -> plugins -> ルート (jules_frac) のように上位へ移動
+_project_root_for_logger = _logger_path_finder.parent.parent.parent
+if str(_project_root_for_logger) not in sys.path:
+    sys.path.insert(0, str(_project_root_for_logger))
+try:
+    from logger.custom_logger import CustomLogger
+    logger = CustomLogger()
+except ImportError:
+    # loggerをインポートできない場合のフォールバック (例: 特定の実行コンテキストでのパスの問題)
+    print("警告: grayscale_coloring_plugin.py で CustomLogger をインポートできませんでした。標準のprintを使用します。")
+    class PrintLogger: # シンプルなフォールバックを定義
+        def log(self, message, level="INFO"): print(f"[{level}] {message}")
+    logger = PrintLogger()
+
 
 # Numba JITコンパイル済みヘルパー関数 (以前はFractalEngineなどにありました)
 @jit(nopython=True)
@@ -68,7 +88,7 @@ class GrayscaleColoringPlugin(ColoringAlgorithmPlugin):
             # これは理想的には、呼び出し元が有効な fractal_data を保証することで処理されるべきです。
             height_px = fractal_data.get('height_px', 100) # 寸法を取得しようとします
             width_px = fractal_data.get('width_px', 100)
-            print("GrayscaleColoringPlugin 警告: 'iterations' データが見つかりません。黒い画像を返します。")
+            logger.log("'iterations' データが見つかりません。黒い画像を返します。", level="WARNING")
             fallback_image = np.zeros((height_px, width_px, 4), dtype=np.uint8)
             fallback_image[:, :, 3] = 255 # アルファを不透明に設定
             return fallback_image
@@ -83,10 +103,10 @@ class GrayscaleColoringPlugin(ColoringAlgorithmPlugin):
         return colored_image
 
 if __name__ == '__main__':
-    print("GrayscaleColoringPlugin のテスト中...")
+    logger.log("GrayscaleColoringPlugin のテスト中...", level="INFO")
     plugin = GrayscaleColoringPlugin()
-    print(f"プラグイン名: {plugin.name}")
-    print(f"パラメータ定義: {plugin.get_parameters_definition()}")
+    logger.log(f"プラグイン名: {plugin.name}", level="INFO")
+    logger.log(f"パラメータ定義: {plugin.get_parameters_definition()}", level="INFO")
 
     # テストデータ
     test_iterations_data = np.array([
@@ -104,17 +124,17 @@ if __name__ == '__main__':
     test_algorithm_params = {} # このプラグインには固有のパラメータはありません
     test_color_map = None      # このプラグインはカラーマップを使用しません
 
-    print("\napply_coloring テストを実行中...")
+    logger.log("\napply_coloring テストを実行中...", level="INFO")
     result_image_data = plugin.apply_coloring(
         test_fractal_data,
         test_common_fractal_params,
         test_algorithm_params,
         test_color_map
     )
-    print(f"  生成された画像の形状: {result_image_data.shape}")
+    logger.log(f"  生成された画像の形状: {result_image_data.shape}", level="INFO")
     assert result_image_data.shape == (3, 3, 4) # 高さ, 幅, RGBA
 
-    print("  生成された画像データ (RGBコンポーネント):")
+    logger.log("  生成された画像データ (RGBコンポーネント):", level="INFO")
     expected_values = {
         (0,0): int(50/50*255), # iter=50 (max_iters) -> 'if iters == max_iters' のため黒 (0,0,0)
         (0,1): int(10/50*255), # iter=10 -> グレー値
@@ -140,9 +160,9 @@ if __name__ == '__main__':
                 val = max(0, min(255, val))
                 expected_rgb = np.array([val, val, val], dtype=np.uint8)
 
-            print(f"    ピクセル({r},{c}): Iter={iter_val}, RGBA={result_image_data[r,c]}, 期待RGB={expected_rgb}")
+            logger.log(f"    ピクセル({r},{c}): Iter={iter_val}, RGBA={result_image_data[r,c]}, 期待RGB={expected_rgb}", level="DEBUG")
             assert np.array_equal(rgb_val, expected_rgb), f"({r},{c}) で不一致"
             assert alpha_val == 255, f"({r},{c}) でアルファが不正"
 
-    print("  すべてのピクセルチェックが成功しました。")
-    print("\nGrayscaleColoringPlugin のテストが完了しました。")
+    logger.log("  すべてのピクセルチェックが成功しました。", level="INFO")
+    logger.log("\nGrayscaleColoringPlugin のテストが完了しました。", level="INFO")
