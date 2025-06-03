@@ -158,8 +158,8 @@ class HighResOutputDialog(QDialog):
         self.preset_combo.addItems(self.presets.keys())
         self.preset_combo.blockSignals(False)
 
-        # Load resolution settings
-        # Try to match saved width/height to a preset, otherwise set to custom
+        # 解像度設定を読み込み
+        # 保存された幅/高さをプリセットに一致させてみてください。それ以外の場合はカスタムに設定します
         saved_w = saved_settings.get('width', self.presets["現在の表示"][0])
         saved_h = saved_settings.get('height', self.presets["現在の表示"][1])
         current_preset_text = "カスタム" # 一致しない場合はカスタムをデフォルトとする
@@ -268,7 +268,7 @@ class HighResOutputDialog(QDialog):
     def _on_dimension_changed(self, changed_source: str):
         if not self.keep_aspect_ratio_enabled or not self.updates_enabled: return
 
-        self.updates_enabled = False # Prevent recursive updates
+        self.updates_enabled = False # 再帰的な更新を防ぐ
 
         w_box = self.width_spinbox
         h_box = self.height_spinbox
@@ -336,14 +336,16 @@ class HighResOutputDialog(QDialog):
 if __name__ == '__main__':
     import sys
     from PyQt6.QtWidgets import QApplication
+    from logger.custom_logger import CustomLogger
 
+    logger = CustomLogger() # テストブロック用のロガー
     app = QApplication(sys.argv)
     # テスト用のダミー設定マネージャーを作成
     # 実際のアプリでは、これは MainWindow/Application から渡されます
     test_settings_file = "dialog_test_settings.json"
     settings_mgr = SettingsManager(settings_filename=test_settings_file)
 
-    # Simulate some saved settings
+    # いくつかの保存された設定をシミュレート
     settings_mgr.set_setting(f"{HighResOutputDialog.SETTINGS_SECTION_NAME}.filepath", str(Path.home() / "my_fractal.png"))
     settings_mgr.set_setting(f"{HighResOutputDialog.SETTINGS_SECTION_NAME}.format", "PNG")
     settings_mgr.set_setting(f"{HighResOutputDialog.SETTINGS_SECTION_NAME}.width", 2000)
@@ -361,13 +363,13 @@ if __name__ == '__main__':
 
     if dialog.exec():
         final_settings = dialog.get_export_settings()
-        print("ダイアログからのエクスポート設定:", final_settings)
+        logger.log(f"ダイアログからのエクスポート設定: {final_settings}", level="INFO")
         # 設定がダイアログの accept() によって保存されたかどうかを確認
         reloaded_saved_settings = settings_mgr.get_setting(HighResOutputDialog.SETTINGS_SECTION_NAME)
-        print("ダイアログによって保存された設定:", reloaded_saved_settings)
+        logger.log(f"ダイアログによって保存された設定: {reloaded_saved_settings}", level="INFO")
         assert final_settings == reloaded_saved_settings # 返されたものが保存されたものであることを確認
     else:
-        print("ユーザーによってエクスポートがキャンセルされました。")
+        logger.log("ユーザーによってエクスポートがキャンセルされました。", level="INFO")
 
     # テスト設定ファイルをクリーンアップ
     if Path(test_settings_file).exists(): Path(test_settings_file).unlink(missing_ok=True)
@@ -395,6 +397,6 @@ if __name__ == '__main__':
     if not QApplication.instance(): # アプリインスタンスが存在しない場合 (例: スクリプトを直接実行)
         sys.exit(app.exec()) # イベントループを開始
     else: # アプリインスタンスが既に存在する場合 (例: テストランナーにインポート)
-        print("ダイアログテストが完了しました (外部イベントループまたはモーダル実行を想定しています)。")
+        logger.log("ダイアログテストが完了しました (外部イベントループまたはモーダル実行を想定しています)。", level="INFO")
         # dialog.show() # 必要に応じて検査用に非モーダルにし、手動で閉じる
         pass

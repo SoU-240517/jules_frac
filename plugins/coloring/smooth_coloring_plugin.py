@@ -8,6 +8,22 @@ except ImportError:
     # テストまたは直接スクリプト実行のためのフォールバック
     from plugins.base_coloring_plugin import ColoringAlgorithmPlugin
 
+# CustomLoggerをインポート
+import sys
+from pathlib import Path
+_logger_path_finder = Path(__file__).resolve()
+_project_root_for_logger = _logger_path_finder.parent.parent.parent
+if str(_project_root_for_logger) not in sys.path:
+    sys.path.insert(0, str(_project_root_for_logger))
+try:
+    from logger.custom_logger import CustomLogger
+    logger = CustomLogger()
+except ImportError:
+    print("Warning: CustomLogger could not be imported in smooth_coloring_plugin.py. Using standard print.")
+    class PrintLogger:
+        def log(self, message, level="INFO"): print(f"[{level}] {message}")
+    logger = PrintLogger()
+
 @jit(nopython=True, cache=False, fastmath=True) # ModuleNotFoundErrorに対処するため一時的にキャッシュを無効化
 def _apply_smooth_coloring_jit(
     iterations_array: np.ndarray,
@@ -15,7 +31,7 @@ def _apply_smooth_coloring_jit(
     max_iters: int,
     escape_radius_sq: float, # この式では直接使用されていませんが、将来の使用または一貫性のためにパラメータは保持されています
     color_scale_factor: float,
-    color_map: np.ndarray # Shape (N, 3), dtype=uint8
+    color_map: np.ndarray # 形状 (N, 3), dtype=uint8
 ) -> np.ndarray:
     height, width = iterations_array.shape
     output_image_rgba = np.empty((height, width, 4), dtype=np.uint8)
@@ -124,7 +140,7 @@ class SmoothColoringPlugin(ColoringAlgorithmPlugin):
         if iterations is None or last_z_mod_sq is None:
             height_px = common_fractal_params.get('image_height_px', 100) # 利用可能であれば共通パラメータから取得
             width_px = common_fractal_params.get('image_width_px', 100)
-            print("SmoothColoringPlugin 警告: 必須データ ('iterations' または 'last_z_modulus_sq') が見つかりません。")
+            logger.log("必須データ ('iterations' または 'last_z_modulus_sq') が見つかりません。", level="WARNING")
             fallback_img = np.zeros((height_px, width_px, 4), dtype=np.uint8)
             fallback_img[:,:,3] = 255 # アルファ
             return fallback_img
@@ -136,7 +152,7 @@ class SmoothColoringPlugin(ColoringAlgorithmPlugin):
         color_scale_from_plugin = algorithm_params.get('color_scale', 1.0)
 
         if not color_map_data or len(color_map_data) < 2: # 補間には少なくとも2色が必要です
-            # print("SmoothColoringPlugin 警告: color_map_data の色数が不足しています。デフォルトのグレースケールマップを使用します。")
+            # logger.log("SmoothColoringPlugin 警告: color_map_data の色数が不足しています。デフォルトのグレースケールマップを使用します。", level="WARNING")
             # 色が提供されていないか少なすぎる場合は、デフォルトの単純なグレースケールマップ
             color_map_np = np.array([(i,i,i) for i in range(256)], dtype=np.uint8)
         else:
@@ -151,10 +167,10 @@ class SmoothColoringPlugin(ColoringAlgorithmPlugin):
         return colored_image
 
 if __name__ == '__main__':
-    print("SmoothColoringPlugin のテスト中...")
+    logger.log("SmoothColoringPlugin のテスト中...", level="INFO")
     plugin = SmoothColoringPlugin()
-    print(f"プラグイン名: {plugin.name}")
-    print(f"パラメータ定義: {plugin.get_parameters_definition()}")
+    logger.log(f"プラグイン名: {plugin.name}", level="INFO")
+    logger.log(f"パラメータ定義: {plugin.get_parameters_definition()}", level="INFO")
 
     # テストデータ
     h, w = 60, 80
@@ -180,15 +196,15 @@ if __name__ == '__main__':
     # カラーマップでテスト
     test_color_map = [(255,0,0), (0,255,0), (0,0,255), (255,255,0), (0,255,255), (255,0,255)]
 
-    print("\nカラーマップを使用してカラーリングを適用中...")
+    logger.log("\nカラーマップを使用してカラーリングを適用中...", level="INFO")
     colored_img = plugin.apply_coloring(test_fractal_data, test_common_params, default_algo_params, test_color_map)
-    print(f"  カラー画像形状: {colored_img.shape}")
+    logger.log(f"  カラー画像形状: {colored_img.shape}", level="INFO")
     assert colored_img.shape == (h,w,4)
 
     # カラーマップなしでテスト (デフォルトのグレースケールを使用するはずです)
-    print("\nカラーマップなしでカラーリングを適用中 (デフォルトのグレースケールを使用するはずです)...")
+    logger.log("\nカラーマップなしでカラーリングを適用中 (デフォルトのグレースケールを使用するはずです)...", level="INFO")
     colored_img_no_map = plugin.apply_coloring(test_fractal_data, test_common_params, default_algo_params, None)
-    print(f"  カラー画像 (マップなし) 形状: {colored_img_no_map.shape}")
+    logger.log(f"  カラー画像 (マップなし) 形状: {colored_img_no_map.shape}", level="INFO")
     assert colored_img_no_map.shape == (h,w,4)
 
     # 集合内の点が黒であるかどうかを確認
@@ -196,14 +212,14 @@ if __name__ == '__main__':
 
     # 最小限のカラーマップ (長さ2) でテスト
     min_color_map = [(255,0,0), (0,0,255)]
-    print("\n最小限のカラーマップ (2色) を使用してカラーリングを適用中...")
+    logger.log("\n最小限のカラーマップ (2色) を使用してカラーリングを適用中...", level="INFO")
     colored_img_min_map = plugin.apply_coloring(test_fractal_data, test_common_params, default_algo_params, min_color_map)
-    print(f"  カラー画像 (最小マップ) 形状: {colored_img_min_map.shape}")
+    logger.log(f"  カラー画像 (最小マップ) 形状: {colored_img_min_map.shape}", level="INFO")
     assert colored_img_min_map.shape == (h,w,4)
 
     # 問題のある last_z_mod_sq 値 (例: 非常に小さい、または係数が <= 1) でテスト
     # これは smooth_val 計算の堅牢性をテストします
-    print("\n潜在的に問題のある mod_sq 値を使用してカラーリングを適用中...")
+    logger.log("\n潜在的に問題のある mod_sq 値を使用してカラーリングを適用中...", level="INFO")
     problem_mod_sq = np.copy(test_mod_sq)
     # 処理されない場合に係数が <= 1 になるような値をいくつか導入します
     problem_mod_sq[0,0] = 0.5 # 係数 < 1
@@ -212,124 +228,12 @@ if __name__ == '__main__':
     test_iters[0,1] = 10
     problem_fractal_data = {'iterations': test_iters, 'last_z_modulus_sq': problem_mod_sq, 'height_px':h, 'width_px':w}
     colored_img_problem = plugin.apply_coloring(problem_fractal_data, test_common_params, default_algo_params, test_color_map)
-    print(f"  カラー画像 (問題のある mod_sq) 形状: {colored_img_problem.shape}")
+    logger.log(f"  カラー画像 (問題のある mod_sq) 形状: {colored_img_problem.shape}", level="INFO")
     assert colored_img_problem.shape == (h,w,4)
     # 主にクラッシュせずに画像を生成することを確認します。
     # ピクセル (0,0) と (0,1) は iter ベースのカラーリングにフォールバックするはずです (または実質的に smooth_val = iters として)
     # 例えば、smooth_val が float(iters[0,0]) になった場合、色は iters[0,0] に基づくべきです
 
-    print("\nSmoothColoringPlugin のテストが完了しました。")
+    logger.log("\nSmoothColoringPlugin のテストが完了しました。", level="INFO")
 
-
-class SmoothColoringPlugin(ColoringAlgorithmPlugin):
-    @property
-    def name(self) -> str:
-        return "スムーズカラー"
-
-    def get_parameters_definition(self) -> list:
-        return [
-            {'name': 'color_scale', 'label': '色のスケール', # 訳注: 最初の定義ブロックと同一のため、翻訳も同一
-             'type': 'float', 'default': 1.0, 'range': (0.1, 50.0), 'step': 0.1,
-             'tooltip': '色の変化の速さを調整します。大きいほど色が細かく変化します。'}
-        ]
-
-    def apply_coloring(self, fractal_data: dict, common_fractal_params: dict,
-                       algorithm_params: dict, color_map_data: list[tuple[int,int,int]] | None) -> np.ndarray:
-
-        iterations = fractal_data.get('iterations')
-        last_z_mod_sq = fractal_data.get('last_z_modulus_sq')
-
-        # --- ここからデバッグ情報追加 ---
-        print(f"SmoothColoringPlugin: カラーリング適用中...")
-        print(f"  共通パラメータ: max_iters={common_fractal_params.get('max_iterations', 'N/A')}, escape_radius={common_fractal_params.get('escape_radius', 'N/A')}")
-        print(f"  アルゴリズムパラメータ: color_scale={algorithm_params.get('color_scale', 'N/A')}")
-        print(f"  受信した fractal_data キー: {list(fractal_data.keys())}")
-
-        if iterations is not None:
-            print(f"  反復回数: shape={iterations.shape}, dtype={iterations.dtype}, min={np.min(iterations)}, max={np.max(iterations)}, mean={np.mean(iterations):.2f}")
-            points_in_set = np.sum(iterations == common_fractal_params.get('max_iterations', 100))
-            print(f"  集合内の点 (iter == max_iter): {points_in_set} / {iterations.size} ({points_in_set/iterations.size*100:.2f}%)")
-        else:
-            print("  反復回数データがありません。")
-
-        if last_z_mod_sq is not None:
-            print(f"  最終Z係数二乗: shape={last_z_mod_sq.shape}, dtype={last_z_mod_sq.dtype}, min={np.min(last_z_mod_sq):.2e}, max={np.max(last_z_mod_sq):.2e}, mean={np.mean(last_z_mod_sq):.2e}")
-            if iterations is not None and np.any(iterations < common_fractal_params.get('max_iterations', 100)):
-                escaped_mask = iterations < common_fractal_params.get('max_iterations', 100)
-                print(f"    発散した点 (last_z_mod_sq): min={np.min(last_z_mod_sq[escaped_mask]):.2e}, max={np.max(last_z_mod_sq[escaped_mask]):.2e}, mean={np.mean(last_z_mod_sq[escaped_mask]):.2e}")
-        else:
-            print("  最終Z係数二乗データがありません。")
-        # --- デバッグ情報追加ここまで ---
-
-        if iterations is None or last_z_mod_sq is None:
-            height_px = common_fractal_params.get('image_height_px', 100) # 利用可能であれば共通パラメータから取得
-            width_px = common_fractal_params.get('image_width_px', 100)
-            print("SmoothColoringPlugin 警告: 必須データ ('iterations' または 'last_z_modulus_sq') が見つかりません。")
-            fallback_img = np.zeros((height_px, width_px, 4), dtype=np.uint8)
-            fallback_img[:,:,3] = 255 # アルファ
-            return fallback_img
-
-        max_iters = common_fractal_params.get('max_iterations', 100)
-        escape_radius = common_fractal_params.get('escape_radius', 2.0)
-        escape_radius_sq = escape_radius * escape_radius
-
-        color_scale_from_plugin = algorithm_params.get('color_scale', 1.0)
-
-        if not color_map_data or len(color_map_data) < 2: # 補間には少なくとも2色が必要です
-            print("SmoothColoringPlugin 警告: color_map_data の色数が不足しています。デフォルトのグレースケールマップを使用します。")
-            # 色が提供されていないか少なすぎる場合は、デフォルトの単純なグレースケールマップ
-            color_map_np = np.array([(i,i,i) for i in range(256)], dtype=np.uint8)
-        else:
-            color_map_np = np.array(color_map_data, dtype=np.uint8)
-
-        # print(f"SmoothColoringPlugin: スムーズカラーリング適用中。 MaxIters: {max_iters}, ER^2: {escape_radius_sq}, MapSize: {color_map_np.shape[0]}")
-
-        colored_image = _apply_smooth_coloring_jit(
-            iterations, last_z_mod_sq, max_iters, escape_radius_sq,
-            color_scale_from_plugin, # color_scale パラメータを渡す
-            color_map_np
-        )
-
-        # print(f"SmoothColoringPlugin: カラーリング完了。出力形状: {colored_image.shape}")
-        return colored_image
-
-if __name__ == '__main__':
-    print("SmoothColoringPlugin のテスト中...")
-    plugin = SmoothColoringPlugin()
-    print(f"プラグイン名: {plugin.name}")
-    print(f"パラメータ定義: {plugin.get_parameters_definition()}")
-
-    # テストデータ
-    h, w = 60, 80
-    max_i = 200
-    test_iters = np.random.randint(0, max_i + 1, size=(h, w), dtype=np.int32)
-    # 集合内のいくつかの点をシミュレート
-    test_iters[h//2 - 5 : h//2 + 5, w//2 - 5 : w//2 + 5] = max_i
-    # 様々な|Z|^2値を持ついくつかの発散した点をシミュレート
-    # 発散した点の場合、last_z_mod_sq は escape_radius_sq より大きくなるはずです
-    er_sq = 4.0
-    test_mod_sq = np.random.uniform(er_sq + 0.1, er_sq + 100.0, size=(h,w)).astype(np.float64)
-    test_mod_sq[test_iters == max_i] = 0.0 # 集合内の点の場合、|Z|^2 は 0 です
-
-    test_fractal_data = {'iterations': test_iters, 'last_z_modulus_sq': test_mod_sq, 'height_px':h, 'width_px':w}
-    test_common_params = {'max_iterations': max_i, 'escape_radius': math.sqrt(er_sq)}
-    test_algo_params = plugin.get_parameters_definition()[0]['default'] if plugin.get_parameters_definition() else {} # パラメータが存在する場合はデフォルトを使用
-
-    # カラーマップでテスト
-    test_color_map = [(255,0,0), (0,255,0), (0,0,255), (255,255,0), (0,255,255), (255,0,255)]
-
-    print("\nカラーマップを使用してカラーリングを適用中...")
-    colored_img = plugin.apply_coloring(test_fractal_data, test_common_params, test_algo_params, test_color_map)
-    print(f"  カラー画像形状: {colored_img.shape}")
-    assert colored_img.shape == (h,w,4)
-
-    # カラーマップなしでテスト (デフォルトのグレースケールを使用するはずです)
-    print("\nカラーマップなしでカラーリングを適用中 (デフォルトのグレースケールを使用するはずです)...")
-    colored_img_no_map = plugin.apply_coloring(test_fractal_data, test_common_params, test_algo_params, None)
-    print(f"  カラー画像 (マップなし) 形状: {colored_img_no_map.shape}")
-    assert colored_img_no_map.shape == (h,w,4)
-
-    # 集合内の点が黒であるかどうかを確認
-    assert np.array_equal(colored_img[h//2, w//2, :3], [0,0,0]), "Center (in set) point not black."
-
-    print("\nSmoothColoringPlugin のテストが完了しました。")
+# 重複したクラス定義とその__main__ブロックを削除しました

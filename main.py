@@ -13,6 +13,9 @@ from models.fractal_engine import FractalEngine
 from controllers.fractal_controller import FractalController
 from utils.settings_manager import SettingsManager # SettingsManagerのインポート
 from PyQt6.QtCore import Qt
+from logger.custom_logger import CustomLogger
+
+logger = CustomLogger()
 
 if __name__ == '__main__':
     if hasattr(Qt.ApplicationAttribute, 'AA_EnableHighDpiScaling'):
@@ -29,6 +32,21 @@ if __name__ == '__main__':
     # SettingsManager自体はユーザーのホーム/.fractalapp/に保存しようとする
     settings_file_path = _project_root / settings_file_name
     settings_manager = SettingsManager(settings_filename=str(settings_file_path))
+
+    # --- ロガー設定のロードと適用 ---
+    # CustomLogger はシングルトンなので、モジュールレベルの `logger` インスタンスが更新されます。
+    # CustomLogger の初期化時には、SettingsManager から設定を読み込もうとしますが、
+    # その時点ではSettingsManagerが完全に初期化されていない可能性があるため、デフォルト値で起動します。
+    # ここで、完全に初期化されたSettingsManagerから設定を明示的に適用します。
+    log_config = settings_manager.get_logging_settings()
+    log_level_to_set = log_config.get("level", "INFO") # get_logging_settingsがデフォルトを提供しますが、念のため
+    log_enabled_to_set = log_config.get("enabled", True) # 同上
+
+    logger.set_level(log_level_to_set)
+    logger.set_enabled(log_enabled_to_set)
+    # 実際にDEBUGレベルでログが出力されるかは、ファイル内の設定とここでの設定によります。
+    logger.log(f"ロガー設定を適用しました。レベル: {log_level_to_set}, 有効: {log_enabled_to_set}", level="DEBUG")
+    # --- ロガー設定完了 ---
 
     # モデル・コントローラーの作成
     # FractalEngineにプロジェクトルートパスを渡す
@@ -101,7 +119,7 @@ if __name__ == '__main__':
     if hasattr(main_window, 'status_bar') and main_window.status_bar is not None: # status_barが存在するか確認
         fractal_controller.status_updated.connect(main_window.update_status_bar)
     else:
-        print("警告: MainWindow.status_barが見つからない、または初期化されていないため、status_updatedシグナルを接続できません。")
+        logger.log("警告: MainWindow.status_barが見つからない、または初期化されていないため、status_updatedシグナルを接続できません。", level="WARNING")
 
     main_window.show()
 

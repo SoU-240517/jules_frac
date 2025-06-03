@@ -1,8 +1,22 @@
+import sys
+import os
+
+# スクリプトが直接実行された場合にsys.pathを調整し、
+# プロジェクトルート (jules_frac) からの絶対インポートを可能にします。
+if __name__ == "__main__" and (__package__ is None or __package__ == ""):
+    SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))  # .../jules_frac/views
+    PARENT_DIR = os.path.dirname(SCRIPT_DIR)  # .../jules_frac
+    if PARENT_DIR not in sys.path:
+        sys.path.insert(0, PARENT_DIR)
+
 from PyQt6.QtWidgets import QLabel, QSizePolicy
 from PyQt6.QtGui import QImage, QPixmap, QCursor
 from PyQt6.QtCore import Qt, QPointF
 import numpy as np
 from PIL import Image, ImageQt
+from logger.custom_logger import CustomLogger
+
+logger = CustomLogger()
 
 class RenderArea(QLabel):
     def __init__(self, parent=None, fractal_controller=None):
@@ -25,7 +39,7 @@ class RenderArea(QLabel):
 
     def update_image(self, image_data_np):
         if image_data_np is None or image_data_np.size == 0:
-            # print("RenderArea: No image data received. Displaying default background.")
+            # print("RenderArea: 画像データを受信しませんでした。デフォルトの背景を表示します。")
             # 画像データが受信されなかった場合はデフォルト背景を表示
             self.set_default_background()
             self._original_pixmap = None
@@ -35,14 +49,14 @@ class RenderArea(QLabel):
         try:
             height, width, channels = image_data_np.shape
             if channels != 4:
-                # print(f"RenderArea: Expected 4 channels (RGBA), but got {channels}.")
+                # print(f"RenderArea: 4チャンネル(RGBA)を期待しましたが、{channels}チャンネルでした。")
                 # RGBAの4チャンネルでない場合はデフォルト背景を表示
                 self.set_default_background()
                 self._original_pixmap = None
                 self.clear()
                 return
             if width == 0 or height == 0:
-                # print(f"RenderArea: Invalid image dimensions ({width}x{height}).")
+                # print(f"RenderArea: 無効な画像サイズ ({width}x{height})。")
                 # 幅または高さが0の場合はデフォルト背景を表示
                 self.set_default_background()
                 self._original_pixmap = None
@@ -53,10 +67,10 @@ class RenderArea(QLabel):
             qimage = ImageQt.ImageQt(pil_image)
             self._original_pixmap = QPixmap.fromImage(qimage)
             self._display_scaled_pixmap()
-            # print(f"RenderArea: Image updated ({width}x{height}). Display size: {self.width()}x{self.height()}")
+            # print(f"RenderArea: 画像更新 ({width}x{height})。表示サイズ: {self.width()}x{self.height()}")
             # 画像が更新された際のデバッグメッセージ
         except Exception as e:
-            print(f"RenderArea: 画像更新中にエラーが発生しました - {e}")
+            logger.log(f"画像更新中にエラーが発生しました - {e}", level="ERROR")
             self.set_default_background()
             self._original_pixmap = None
             self.clear()
@@ -213,7 +227,7 @@ if __name__ == '__main__':
         def pan_fractal(self, dr, di):
             self._params["center_real"] -= dr
             self._params["center_imag"] -= di
-            print(f"MockController: パン。新しい中心: ({self._params['center_real']:.4f}, {self._params['center_imag']:.4f})")
+            logger.log(f"MockController: パン。新しい中心: ({self._params['center_real']:.4f}, {self._params['center_imag']:.4f})", level="DEBUG")
             self.parameters_updated_externally.emit()
 
         def zoom_fractal_to_point(self, fixed_r, fixed_i, frac_x, frac_y, new_w):
@@ -226,11 +240,11 @@ if __name__ == '__main__':
             self._params["center_imag"] = fixed_i + (frac_y - 0.5) * new_h
             self._params["width"] = new_w
             self._params["height"] = new_h # 高さも更新
-            print(f"MockController: ズーム。新しい幅: {new_w:.4e} 新しい中心: ({self._params['center_real']:.4f}, {self._params['center_imag']:.4f})")
+            logger.log(f"MockController: ズーム。新しい幅: {new_w:.4e} 新しい中心: ({self._params['center_real']:.4f}, {self._params['center_imag']:.4f})", level="DEBUG")
             self.parameters_updated_externally.emit()
 
         def trigger_render(self, w, h):
-             print(f"MockController: trigger_renderが呼ばれました（{w}x{h}）")
+             logger.log(f"MockController: trigger_renderが呼ばれました（{w}x{h}）", level="DEBUG")
 
     app = QApplication(sys.argv)
     main_win = QMainWindow()
@@ -255,7 +269,7 @@ if __name__ == '__main__':
     dummy_data = create_dummy_image_data(320, 240)
     render_area.update_image(dummy_data)
 
-    print("\nRenderArea ホイールズームテスト: 画像上でマウスホイールを回してください。")
-    print("モックコントローラが新しい幅と中心座標を出力します。")
+    logger.log("\nRenderArea ホイールズームテスト: 画像上でマウスホイールを回してください。", level="INFO")
+    logger.log("モックコントローラが新しい幅と中心座標を出力します。", level="INFO")
 
     sys.exit(app.exec())

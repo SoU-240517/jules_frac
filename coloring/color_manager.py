@@ -1,10 +1,14 @@
 import json
 from pathlib import Path
 import numpy as np
+from logger.custom_logger import CustomLogger # CustomLoggerをインポート
+
+logger = CustomLogger() # ロガーインスタンスを作成
 
 class ColorManager:
     """カラーパックとカラーマップを管理するクラス。"""
     def __init__(self, color_packs_dir: str = "plugins/colorpacks"):
+        logger.log(f"ColorManager初期化中。カラーパックディレクトリ: {color_packs_dir}", level="DEBUG")
         # color_packs_dir はプロジェクトルートからの相対パスを想定
         self.color_packs_dir = Path(color_packs_dir)
         self.color_packs = {}  # {パック名: {マップ名: RGBタプルのリスト, ...}}
@@ -13,8 +17,7 @@ class ColorManager:
     def _generate_gradient_colors(self, gradient_points: list[dict], num_colors: int) -> list[tuple[int, int, int]]:
         """指定されたグラデーションポイントと色数に基づいてグラデーションカラーを生成する。"""
         if not gradient_points:
-            # フォールバック: 黒のリストを返すか、エラーを発生させる
-            print("ColorManager 警告: _generate_gradient_colors がグラデーションポイントなしで呼び出されました。")
+            logger.log("_generate_gradient_colors がグラデーションポイントなしで呼び出されました。", level="WARNING")
             return [(0, 0, 0)] * num_colors
         if num_colors <= 0:
             return []
@@ -70,9 +73,9 @@ class ColorManager:
              effective_packs_dir = self.color_packs_dir
 
 
-        print(f"ColorManager: ディレクトリからカラーパックを読み込み中: {effective_packs_dir.resolve()}")
+        logger.log("カラーパックを読込中...", level="INFO")
         if not effective_packs_dir.is_dir():
-            print(f"ColorManager エラー: カラーパックディレクトリが見つかりません: {effective_packs_dir.resolve()}")
+            logger.log(f"カラーパックディレクトリが見つかりません: {effective_packs_dir.resolve()}", level="ERROR")
             return
 
         for file_path in effective_packs_dir.glob("*.json"):
@@ -84,14 +87,14 @@ class ColorManager:
                 maps_data = data.get("maps")
 
                 if not pack_name or not isinstance(maps_data, list):
-                    print(f"ColorManager 警告: ファイル形式が無効または不完全です: {file_path.name}")
+                    logger.log(f"ファイル形式が無効または不完全です: {file_path.name}", level="WARNING")
                     continue
 
                 current_pack_maps = {}
                 for map_entry in maps_data:
                     map_name = map_entry.get("map_name")
                     if not map_name:
-                        print(f"ColorManager 警告: {pack_name} ({file_path.name}由来) に名前のないマップエントリがあります。")
+                        logger.log(f"{pack_name} ({file_path.name}由来) に名前のないマップエントリがあります。", level="WARNING")
                         continue
 
                     if "colors" in map_entry and isinstance(map_entry["colors"], list):
@@ -99,7 +102,7 @@ class ColorManager:
                         if colors_list: # 検証後に空でないことを確認
                            current_pack_maps[map_name] = colors_list
                         else:
-                            print(f"ColorManager 警告: '{pack_name}/{map_name}' のカラーフォーマットが無効です。")
+                            logger.log(f"'{pack_name}/{map_name}' のカラーフォーマットが無効です。", level="WARNING")
                     elif "gradient_points" in map_entry and "num_colors" in map_entry:
                         gradient_points = map_entry["gradient_points"]
                         num_colors = map_entry["num_colors"]
@@ -107,23 +110,23 @@ class ColorManager:
                             colors_list = self._generate_gradient_colors(gradient_points, num_colors)
                             current_pack_maps[map_name] = colors_list
                         else:
-                            print(f"ColorManager 警告: '{pack_name}/{map_name}' のグラデーション定義が無効です。")
+                            logger.log(f"'{pack_name}/{map_name}' のグラデーション定義が無効です。", level="WARNING")
                     else:
-                        print(f"ColorManager 警告: '{pack_name}/{map_name}' に有効なカラー定義が見つかりません。")
+                        logger.log(f"'{pack_name}/{map_name}' に有効なカラー定義が見つかりません。", level="WARNING")
 
                 if current_pack_maps:
                     if pack_name in self.color_packs:
-                         print(f"ColorManager 警告: カラーパック名 '{pack_name}' は重複しています。マップのマージまたは上書きが発生する可能性があります。")
+                         logger.log(f"カラーパック名 '{pack_name}' は重複しています。マップのマージまたは上書きが発生する可能性があります。", level="WARNING")
                     self.color_packs.setdefault(pack_name, {}).update(current_pack_maps)
-                    print(f"ColorManager: カラーパック '{pack_name}' ({len(current_pack_maps)} マップ) を {file_path.name} から読み込みました。")
+                    logger.log(f"{file_path.name} から{len(current_pack_maps)} マップ読込完了", level="INFO")
 
             except json.JSONDecodeError as e:
-                print(f"ColorManager エラー: {file_path.name} からのJSON解析に失敗しました: {e}")
+                logger.log(f"{file_path.name} からのJSON解析に失敗しました: {e}", level="ERROR")
             except Exception as e:
-                print(f"ColorManager エラー: ファイル '{file_path.name}' の処理中に予期せぬエラーが発生しました: {e}")
+                logger.log(f"ファイル '{file_path.name}' の処理中に予期せぬエラーが発生しました: {e}", level="ERROR")
 
         if not self.color_packs:
-            print("ColorManager: 有効なカラーパックは読み込まれませんでした。")
+            logger.log("有効なカラーパックは読み込まれませんでした。", level="INFO")
 
     def get_available_color_pack_names(self) -> list[str]:
         """利用可能なすべてのカラーパック名のリストを返す。"""
@@ -166,18 +169,18 @@ if __name__ == '__main__':
     with open(temp_dir / "custom_test.json", "w", encoding="utf-8") as f:
         json.dump(custom_pack_content, f, indent=4)
 
-    print(f"ColorManager テスト: 一時ディレクトリ '{temp_dir.resolve()}' を使用中")
+    logger.log(f"ColorManager テスト: 一時ディレクトリ '{temp_dir.resolve()}' を使用中", level="INFO")
     manager = ColorManager(color_packs_dir=str(temp_dir)) # 一時ディレクトリのパスを渡す
 
     pack_names = manager.get_available_color_pack_names()
-    print(f"\n利用可能なカラーパック: {pack_names}")
+    logger.log(f"利用可能なカラーパック: {pack_names}", level="INFO")
     assert "デフォルトテスト" in pack_names
     assert "カスタムテスト" in pack_names
 
     if pack_names:
         first_pack_name = "デフォルトテスト"
         map_names = manager.get_color_maps_in_pack(first_pack_name)
-        print(f"\n'{first_pack_name}' 内のカラーマップ: {map_names}")
+        logger.log(f"'{first_pack_name}' 内のカラーマップ: {map_names}", level="INFO")
         assert "グレースケール16" in map_names
         assert "RGB固定" in map_names
 
@@ -185,8 +188,8 @@ if __name__ == '__main__':
             map_name_gradient = "グレースケール16"
             map_data_gradient = manager.get_color_map_data(first_pack_name, map_name_gradient)
             if map_data_gradient:
-                print(f"  '{first_pack_name}/{map_name_gradient}' 最初の3色: {map_data_gradient[:3]}")
-                print(f"  '{first_pack_name}/{map_name_gradient}' 色数: {len(map_data_gradient)}")
+                logger.log(f"  '{first_pack_name}/{map_name_gradient}' 最初の3色: {map_data_gradient[:3]}", level="DEBUG")
+                logger.log(f"  '{first_pack_name}/{map_name_gradient}' 色数: {len(map_data_gradient)}", level="DEBUG")
                 assert len(map_data_gradient) == 16
                 assert map_data_gradient[0] == (0,0,0)
                 assert map_data_gradient[-1] == (240,240,240)
@@ -194,7 +197,7 @@ if __name__ == '__main__':
             map_name_fixed = "RGB固定"
             map_data_fixed = manager.get_color_map_data(first_pack_name, map_name_fixed)
             if map_data_fixed:
-                print(f"  '{first_pack_name}/{map_name_fixed}' カラー: {map_data_fixed}")
+                logger.log(f"  '{first_pack_name}/{map_name_fixed}' カラー: {map_data_fixed}", level="DEBUG")
                 assert len(map_data_fixed) == 3
                 assert map_data_fixed[0] == (255,0,0)
 
@@ -202,8 +205,8 @@ if __name__ == '__main__':
     import shutil
     try:
         shutil.rmtree(temp_dir)
-        print(f"\n一時ディレクトリをクリーンアップしました: {temp_dir}")
+        logger.log(f"一時ディレクトリをクリーンアップしました: {temp_dir}", level="INFO")
     except Exception as e:
-        print(f"\n一時ディレクトリ {temp_dir} のクリーンアップ中にエラーが発生しました: {e}")
+        logger.log(f"一時ディレクトリ {temp_dir} のクリーンアップ中にエラーが発生しました: {e}", level="ERROR")
 
-    print("\nColorManager テスト終了。")
+    logger.log("ColorManager テスト終了。", level="INFO")
