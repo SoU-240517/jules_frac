@@ -1,4 +1,8 @@
 {
+  "logging": {
+    "level": "INFO",
+    "enabled": true
+  },
   "window": {
     "width": 1200,
     "height": 800,

@@ -33,6 +33,21 @@ if __name__ == '__main__':
     settings_file_path = _project_root / settings_file_name
     settings_manager = SettingsManager(settings_filename=str(settings_file_path))
 
+    # --- ロガー設定のロードと適用 ---
+    # CustomLogger はシングルトンなので、モジュールレベルの `logger` インスタンスが更新されます。
+    # CustomLogger の初期化時には、SettingsManager から設定を読み込もうとしますが、
+    # その時点ではSettingsManagerが完全に初期化されていない可能性があるため、デフォルト値で起動します。
+    # ここで、完全に初期化されたSettingsManagerから設定を明示的に適用します。
+    log_config = settings_manager.get_logging_settings()
+    log_level_to_set = log_config.get("level", "INFO") # get_logging_settingsがデフォルトを提供しますが、念のため
+    log_enabled_to_set = log_config.get("enabled", True) # 同上
+
+    logger.set_level(log_level_to_set)
+    logger.set_enabled(log_enabled_to_set)
+    # 実際にDEBUGレベルでログが出力されるかは、ファイル内の設定とここでの設定によります。
+    logger.log(f"ロガー設定を適用しました。レベル: {log_level_to_set}, 有効: {log_enabled_to_set}", level="DEBUG")
+    # --- ロガー設定完了 ---
+
     # モデル・コントローラーの作成
     # FractalEngineにプロジェクトルートパスを渡す
     fractal_engine = FractalEngine(project_root_path=_project_root)

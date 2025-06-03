@@ -245,11 +245,11 @@ class FractalEngine:
         original_engine_complex_height = final_common_params['height'] # エンジン状態が直接変更された場合に後で復元するため
         final_common_params['height'] = (final_common_params['width'] * ss_height) / ss_width if ss_width > 0 else final_common_params['width']
 
-        logger.log(f"  - スーパーサンプリング解像度: {ss_width}x{ss_height} (AA係数: {aa_factor})", level="INFO")
-        logger.log(f"  - フラクタルプラグイン: {active_fractal_plugin.name}, パラメータ: {final_fractal_plugin_params}", level="INFO")
-        logger.log(f"  - カラーリングプラグイン: {active_coloring_plugin.name}, パラメータ: {final_coloring_algo_params}", level="INFO")
-        logger.log(f"  - カラーマップ: {pack_name}/{map_name}", level="INFO")
-        logger.log(f"  - 計算用共通パラメータ: 中心=({final_common_params['center_real']:.4f},{final_common_params['center_imag']:.4f}), 幅={final_common_params['width']:.3e}, 高さ(複素)={final_common_params['height']:.3e]}, 反復={final_common_params['max_iterations']}", level="INFO")
+        logger.log(f"  - スーパーサンプリング解像度: {ss_width}x{ss_height} (AA係数: {aa_factor})", level="DEBUG")
+        logger.log(f"  - フラクタルプラグイン: {active_fractal_plugin.name}, パラメータ: {final_fractal_plugin_params}", level="DEBUG")
+        logger.log(f"  - カラーリングプラグイン: {active_coloring_plugin.name}, パラメータ: {final_coloring_algo_params}", level="DEBUG")
+        logger.log(f"  - カラーマップ: {pack_name}/{map_name}", level="DEBUG")
+        logger.log(f"  - 計算用共通パラメータ: 中心=({final_common_params['center_real']:.4f},{final_common_params['center_imag']:.4f}), 幅={final_common_params['width']:.3e}, 高さ(複素)={final_common_params['height']:.3e]}, 反復={final_common_params['max_iterations']}", level="DEBUG")
 
         # 4. フラクタル計算 (スーパーサンプリング解像度で)
         fractal_data_ss = active_fractal_plugin.compute_fractal(
@@ -269,7 +269,7 @@ class FractalEngine:
 
         # 6. ダウンサンプリング (AAが有効な場合)
         if aa_factor > 1:
-            logger.log(f"  - {ss_width}x{ss_height} から {output_width}x{output_height} へダウンサンプリング中...", level="INFO")
+            logger.log(f"  - {ss_width}x{ss_height} から {output_width}x{output_height} へダウンサンプリング中...", level="DEBUG")
             try:
                 # リシェイプのためにRGBA (4チャンネル) を確認
                 if colored_image_ss_rgba.shape[2] != 4: # カラーリングプラグインからは常に4チャンネルのはず

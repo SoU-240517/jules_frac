@@ -240,7 +240,7 @@ class MainWindow(QMainWindow):
             logger.log("FractalController が利用できません。", level="ERROR")
             return
 
-        logger.log("'描画'ボタンがクリックされました.", level="INFO")
+        logger.log("'描画'ボタンがクリックされました.", level="DEBUG")
         if not hasattr(self, 'parameter_panel') or self.parameter_panel is None:
             logger.log("parameter_panel が初期化されていません。", level="ERROR")
             return
@@ -268,7 +268,7 @@ class MainWindow(QMainWindow):
             self.fractal_controller.trigger_render()
         else:
             self.fractal_controller.trigger_render(render_width, render_height)
-        logger.log(f"描画をトリガーしました (要求解像度: {render_width}x{render_height}).", level="INFO")
+        logger.log(f"描画をトリガーしました (要求解像度: {render_width}x{render_height}).", level="DEBUG")
 
     def showEvent(self, event):
         """ウィンドウが表示されたときに呼び出されます。"""
@@ -289,7 +289,7 @@ class MainWindow(QMainWindow):
             return
 
         self._initial_render_attempts += 1
-        logger.log(f"初回描画を試みます (試行: {self._initial_render_attempts}).", level="INFO")
+        logger.log(f"初回描画を試みます (試行: {self._initial_render_attempts}).", level="DEBUG")
 
         # 重要なコンポーネントが初期化され、RenderArea が有効なサイズを持っているか確認
         if not hasattr(self, 'render_area') or self.render_area is None or \
@@ -316,7 +316,7 @@ class MainWindow(QMainWindow):
         render_width = self.render_area.width()
         render_height = self.render_area.height()
 
-        logger.log(f"RenderAreaサイズ ({render_width}x{render_height}) で初回描画を実行します.", level="INFO")
+        logger.log(f"RenderAreaサイズ ({render_width}x{render_height}) で初回描画を実行します.", level="DEBUG")
         self.fractal_controller.trigger_render(render_width, render_height)
         self._initial_render_done = True
         logger.log("初回描画が完了しました.", level="INFO")
