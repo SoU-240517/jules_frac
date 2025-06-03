@@ -6,8 +6,8 @@ from pathlib import Path
 
 # アプリケーションの構造に基づいた絶対インポートを使用します。
 # main.py で _project_root (jules_frac ディレクトリ) が sys.path に追加されるため、
-# src.app.plugins.base_plugin のように参照可能です。
-from src.app.plugins.base_plugin import FractalPlugin
+# src.app.plugins.base_fractal_plugin のように参照可能です。
+from app.plugins.base_fractal_plugin import FractalPlugin
 from src.app.plugins.base_coloring_plugin import ColoringAlgorithmPlugin
 
 class PluginManager:

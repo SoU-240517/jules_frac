@@ -4,7 +4,7 @@ import traceback # トレースバック情報を取得するためにインポ�
 from pathlib import Path
 
 from src.app.plugins.plugin_manager import PluginManager
-from src.app.plugins.base_plugin import FractalPlugin
+from app.plugins.base_fractal_plugin import FractalPlugin
 from src.app.plugins.base_coloring_plugin import ColoringAlgorithmPlugin
 from src.app.coloring.color_manager import ColorManager
 # from PIL import Image # Pillowをリサイズに使用する場合 (このバージョンでは未使用)

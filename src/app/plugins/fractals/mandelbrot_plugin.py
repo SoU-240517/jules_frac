@@ -1,7 +1,7 @@
 import numpy as np
 from numba import jit
 
-from src.app.plugins.base_plugin import FractalPlugin
+from app.plugins.base_fractal_plugin import FractalPlugin
 
     # @jit(nopython=True, cache=True) # Numba JITを一時的に無効化
 def _calculate_mandelbrot_point_jit(c_real, c_imag, max_iters, escape_radius_sq):
