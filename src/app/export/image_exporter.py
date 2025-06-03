@@ -3,8 +3,8 @@ import time
 import numpy as np
 from PIL import Image # Import Pillow
 from pathlib import Path
-
-# For type hinting the fractal_engine_ref
+# Pillowをインポート
+# fractal_engine_refの型ヒント用
 # from src.app.models.fractal_engine import FractalEngine
 
 class ExporterSignals(QObject):
@@ -21,13 +21,13 @@ class ImageExporter(QRunnable):
 
     def run(self):
         filepath = self.export_settings.get('filepath', 'fractal_export.png') # Initialize for use in except block
-        try:
+        try: # exceptブロックで使用するために初期化
             self.signals.progress_updated.emit(0)
             if self._is_cancelled:
                 self.signals.export_finished.emit(False, "エクスポートがキャンセルされました。")
                 return
 
-            # Expand other settings from export_settings dict
+            # export_settings辞書から他の設定を展開
             output_width = self.export_settings.get('width', 1920)
             output_height = self.export_settings.get('height', 1080)
             common_params_override = {
@@ -36,16 +36,15 @@ class ImageExporter(QRunnable):
             fractal_plugin_name_override = self.export_settings.get('fractal_plugin_name')
             fractal_plugin_params_override = self.export_settings.get('fractal_plugin_params')
             coloring_algo_name_override = self.export_settings.get('coloring_algorithm_name') # Corrected key from dialog example
-            coloring_algo_params_override = self.export_settings.get('coloring_algorithm_params')
+            coloring_algo_params_override = self.export_settings.get('coloring_algorithm_params') # ダイアログの例からキーを修正
             color_pack_name_override = self.export_settings.get('color_pack_name')
             color_map_name_override = self.export_settings.get('color_map_name')
 
-            # Antialiasing: dialog passes factor, engine expects string
+            # アンチエイリアシング: ダイアログは係数を渡し、エンジンは文字列を期待
             aa_factor = self.export_settings.get('antialiasing_factor', 1)
             antialiasing_level_str = f"{aa_factor}x{aa_factor} SSAA" if aa_factor > 1 else "なし"
 
-
-            print(f"ImageExporter: Export process starting for {filepath} ({output_width}x{output_height}), AA: {antialiasing_level_str}")
+            print(f"ImageExporter: エクスポート処理開始: {filepath} ({output_width}x{output_height}), AA: {antialiasing_level_str}")
             self.signals.progress_updated.emit(5)
 
             if self._is_cancelled:
@@ -75,54 +74,54 @@ class ImageExporter(QRunnable):
                 self.signals.export_finished.emit(False, "画像データの生成に失敗しました (エンジンがNoneを返しました)。")
                 return
 
-            # --- Pillow based file saving ---
-            print(f"ImageExporter: Image data generated ({image_data_np.shape}). Starting file save: {filepath}")
+            # --- Pillowを使用したファイル保存 ---
+            print(f"ImageExporter: 画像データ生成完了 ({image_data_np.shape})。ファイル保存開始: {filepath}")
 
             pil_image = Image.fromarray(image_data_np, 'RGBA')
             format_str = self.export_settings.get('format', 'PNG').upper()
             save_options = {}
 
-            image_to_save = pil_image # Default to original RGBA
+            image_to_save = pil_image # デフォルトでは元のRGBAを使用
 
             if format_str == 'PNG':
                 save_options['optimize'] = True
-                # PNG supports RGBA directly. png_transparent option from dialog might mean
-                # "ensure alpha is used" or "make background transparent if it wasn't already".
-                # Assuming RGBA data from engine already has correct alpha.
-                # If 'png_transparent' is False and image HAS alpha, we might want to convert to RGB
-                # by blending with a white background, but usually, users expect alpha if present.
-                # For simplicity, save as RGBA if it has alpha, or RGB if it doesn't.
-                # Since we create RGBA in engine, it will be saved as RGBA.
-                # If png_transparent is False, one might convert to RGB:
+                # PNGはRGBAを直接サポート。ダイアログのpng_transparentオプションは、
+                # 「アルファが使用されていることを確認する」または「背景がまだ透明でない場合は透明にする」
+                # ことを意味する可能性がある。エンジンからのRGBAデータには既に正しいアルファがあると仮定。
+                # 'png_transparent'がFalseで画像にアルファがある場合、白い背景とブレンドしてRGBに変換
+                # することも考えられるが、通常ユーザーはアルファが存在する場合はそれを期待する。
+                # 簡単のため、アルファがあればRGBAとして保存し、なければRGBとして保存する。
+                # エンジンでRGBAを作成するため、RGBAとして保存される。
+                # png_transparentがFalseの場合、RGBに変換することもできる:
                 # if not self.export_settings.get('png_transparent', True) and pil_image.mode == 'RGBA':
                 #    background = Image.new('RGB', pil_image.size, (255, 255, 255))
                 #    background.paste(pil_image, mask=pil_image.split()[3])
                 #    image_to_save = background
-                pass # Default is to save RGBA as is for PNG
+                pass # デフォルトではPNG用にRGBAをそのまま保存
 
             elif format_str == 'JPEG':
                 save_options['quality'] = self.export_settings.get('jpeg_quality', 90)
                 save_options['optimize'] = True
-                # save_options['progressive'] = True # Optional
+                # save_options['progressive'] = True # オプション
                 if pil_image.mode == 'RGBA':
-                    # Blend with white background before converting to RGB for JPEG
+                    # JPEG用にRGBに変換する前に白い背景とブレンド
                     background = Image.new('RGB', pil_image.size, (255, 255, 255))
-                    # Use the alpha channel of the original image as a mask
+                    # 元の画像のアルファチャンネルをマスクとして使用
                     try:
                         alpha_channel = pil_image.split()[3]
                         background.paste(pil_image, mask=alpha_channel)
                         image_to_save = background
-                    except IndexError: # In case image is not RGBA (e.g. LA)
+                    except IndexError: # 画像がRGBAでない場合 (例: LA)
                         image_to_save = pil_image.convert('RGB')
-                else: # If not RGBA, ensure it's RGB
+                else: # RGBAでない場合は、RGBであることを確認
                     image_to_save = pil_image.convert('RGB')
 
             elif format_str == 'TIFF':
-                save_options['compression'] = 'tiff_lzw' # Common lossless compression
-                # TIFF can handle RGBA
+                save_options['compression'] = 'tiff_lzw' # 一般的な可逆圧縮
+                # TIFFはRGBAを処理可能
 
             elif format_str == 'BMP':
-                # BMP typically does not support alpha well, convert to RGB
+                # BMPは通常アルファをうまくサポートしないため、RGBに変換
                 if pil_image.mode == 'RGBA':
                     image_to_save = pil_image.convert('RGB')
             else:
@@ -133,39 +132,39 @@ class ImageExporter(QRunnable):
                 self.signals.export_finished.emit(False, "エクスポートがキャンセルされました (保存直前)。")
                 return
 
-            print(f"ImageExporter: Saving to '{filepath}' as '{format_str}' with options {save_options}...")
+            print(f"ImageExporter: '{filepath}' に '{format_str}' として保存中 (オプション: {save_options})...")
             image_to_save.save(filepath, format=format_str, **save_options)
 
             self.signals.progress_updated.emit(100)
             self.signals.export_finished.emit(True, filepath)
-            print(f"ImageExporter: Save complete.")
+            print(f"ImageExporter: 保存完了。")
 
         except FileNotFoundError:
             error_msg = f"指定されたパスのディレクトリが見つかりません: {Path(filepath).parent}"
-            print(f"ImageExporter: Error - {error_msg}")
+            print(f"ImageExporter: エラー - {error_msg}")
             self.signals.export_finished.emit(False, error_msg)
         except IOError as e:
             error_msg = f"ファイルの書き込みに失敗しました ({filepath}): {e}"
-            print(f"ImageExporter: Error - {error_msg}")
+            print(f"ImageExporter: エラー - {error_msg}")
             self.signals.export_finished.emit(False, error_msg)
         except Exception as e:
             import traceback
             error_msg = f"予期せぬエクスポートエラー: {e}"
-            print(f"ImageExporter: Unexpected error during export: {e}\n{traceback.format_exc()}")
+            print(f"ImageExporter: エクスポート中に予期せぬエラーが発生: {e}\n{traceback.format_exc()}")
             self.signals.export_finished.emit(False, error_msg)
 
     def cancel(self):
-        print("ImageExporter: Cancellation requested.")
+        print("ImageExporter: キャンセル要求を受け付けました。")
         self._is_cancelled = True
 
 if __name__ == '__main__':
-    print("ImageExporter Standalone Test (simulated execution)")
-    # ... (MockFractalEngine and test setup from previous step, potentially simplified)
+    print("ImageExporter スタンドアロンテスト (シミュレート実行)")
+    # ... (前のステップからのMockFractalEngineとテストセットアップ、簡略化されている可能性あり)
     class MockFractalEngine:
         def generate_image_for_output(self, output_width, output_height, **kwargs):
-            print(f"  MockEngine: generate_image_for_output for {output_width}x{output_height}, AA: {kwargs.get('antialiasing_level')}")
-            time.sleep(0.1) # Simulate generation time
-            if exporter_for_test._is_cancelled: return None # Use a more direct reference for test
+            print(f"  モックエンジン: generate_image_for_output ({output_width}x{output_height}), AA: {kwargs.get('antialiasing_level')}")
+            time.sleep(0.1) # 生成時間をシミュレート
+            if exporter_for_test._is_cancelled: return None # テスト用に直接参照を使用
             return np.random.randint(0, 256, size=(output_height, output_width, 4), dtype=np.uint8)
 
     mock_engine_instance = MockFractalEngine()
@@ -180,35 +179,35 @@ if __name__ == '__main__':
         'jpeg_quality': 85
     }
 
-    exporter_for_test = None # To be assigned for mock engine access
+    exporter_for_test = None # モックエンジンアクセス用に割り当てられる
 
-    def handle_progress(p): print(f"  Test Progress: {p}%")
+    def handle_progress(p): print(f"  テスト進捗: {p}%")
     def handle_finished(success, msg_or_path):
-        status = "SUCCESS" if success else "FAILURE"
-        print(f"  Test Finished {status}: {msg_or_path}")
+        status = "成功" if success else "失敗"
+        print(f"  テスト終了 {status}: {msg_or_path}")
 
-    print("\n--- Test 1: PNG export ---")
+    print("\n--- テスト1: PNGエクスポート ---")
     exporter_png = ImageExporter(mock_engine_instance, test_settings_png)
-    exporter_for_test = exporter_png # For mock engine to check cancel flag
+    exporter_for_test = exporter_png # モックエンジンがキャンセルフラグを確認するため
     exporter_png.signals.progress_updated.connect(handle_progress)
     exporter_png.signals.export_finished.connect(handle_finished)
     exporter_png.run()
-    if Path(test_settings_png['filepath']).exists(): Path(test_settings_png['filepath']).unlink() # Clean up
+    if Path(test_settings_png['filepath']).exists(): Path(test_settings_png['filepath']).unlink() # クリーンアップ
 
-    print("\n--- Test 2: JPEG export ---")
+    print("\n--- テスト2: JPEGエクスポート ---")
     exporter_jpg = ImageExporter(mock_engine_instance, test_settings_jpg)
     exporter_for_test = exporter_jpg
     exporter_jpg.signals.progress_updated.connect(handle_progress)
     exporter_jpg.signals.export_finished.connect(handle_finished)
     exporter_jpg.run()
-    if Path(test_settings_jpg['filepath']).exists(): Path(test_settings_jpg['filepath']).unlink()
+    if Path(test_settings_jpg['filepath']).exists(): Path(test_settings_jpg['filepath']).unlink() # クリーンアップ
 
-    print("\n--- Test 3: Cancellation during generation (simulated) ---")
+    print("\n--- テスト3: 生成中のキャンセル (シミュレート) ---")
     exporter_cancel = ImageExporter(mock_engine_instance, test_settings_png)
-    exporter_for_test = exporter_cancel # Mock engine needs access to this instance's flag
+    exporter_for_test = exporter_cancel # モックエンジンはこのインスタンスのフラグにアクセスする必要がある
     exporter_cancel.signals.progress_updated.connect(handle_progress)
     exporter_cancel.signals.export_finished.connect(handle_finished)
-    exporter_cancel.cancel() # Request cancel before run, generate_image_for_output should see it
+    exporter_cancel.cancel() # 実行前にキャンセルを要求、generate_image_for_outputがそれを検知するはず
     exporter_cancel.run()
 
-    print("\nImageExporter standalone test finished.")
+    print("\nImageExporter スタンドアロンテスト終了。")

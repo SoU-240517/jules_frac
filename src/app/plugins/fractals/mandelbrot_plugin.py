@@ -12,18 +12,18 @@ def _calculate_mandelbrot_point_jit(c_real, c_imag, max_iters, escape_radius_sq)
         z_imag_sq = z_imag * z_imag
         mod_sq = z_real_sq + z_imag_sq
         if mod_sq > escape_radius_sq:
-            return i, mod_sq # Return iterations and |Z|^2 upon escape
+            return i, mod_sq # 発散時に反復回数と|Z|^2を返す
 
         new_z_imag = 2.0 * z_real * z_imag + c_imag
         z_real = z_real_sq - z_imag_sq + c_real
         z_imag = new_z_imag
-    # Converged or max_iters reached, return 0.0 for |Z|^2 (or another indicator if needed)
+    # 収束したか最大反復回数に達した場合は、|Z|^2に0.0を返す (または必要に応じて別の指標)
     return max_iters, 0.0
 
     # @jit(nopython=True, cache=True, parallel=True) # Numba JITを一時的に無効化
 def _compute_mandelbrot_grid_jit(width_px, height_px, min_x, max_x, min_y, max_y, max_iters, escape_radius_sq):
     iter_result = np.empty((height_px, width_px), dtype=np.int32)
-    mod_sq_result = np.empty((height_px, width_px), dtype=np.float64) # For |Z|^2
+    mod_sq_result = np.empty((height_px, width_px), dtype=np.float64) # |Z|^2用
 
     pixel_width_complex = (max_x - min_x) / width_px
     pixel_height_complex = (max_y - min_y) / height_px
@@ -67,9 +67,9 @@ class MandelbrotPlugin(FractalPlugin):
         min_y = center_imag - height / 2.0
         max_y = center_imag + height / 2.0
 
-        print(f"MandelbrotPlugin: Starting computation - Image: {image_width_px}x{image_height_px}px, "
-              f"Complex area: Real ({min_x:.4f} to {max_x:.4f}), Imag ({min_y:.4f} to {max_y:.4f}), "
-              f"Max Iter: {max_iterations}")
+        print(f"MandelbrotPlugin: 計算開始 - 画像: {image_width_px}x{image_height_px}px, "
+              f"複素領域: 実数部 ({min_x:.4f} から {max_x:.4f}), 虚数部 ({min_y:.4f} から {max_y:.4f}), "
+              f"最大反復回数: {max_iterations}")
 
         iter_array, mod_sq_array = _compute_mandelbrot_grid_jit(
             image_width_px, image_height_px,
@@ -77,14 +77,14 @@ class MandelbrotPlugin(FractalPlugin):
             max_iterations, escape_radius_sq
         )
 
-        print(f"MandelbrotPlugin: Computation complete. Iterations shape: {iter_array.shape}, ModSq shape: {mod_sq_array.shape}")
+        print(f"MandelbrotPlugin: 計算完了。反復回数配列形状: {iter_array.shape}, ModSq形状: {mod_sq_array.shape}")
         return {'iterations': iter_array, 'last_z_modulus_sq': mod_sq_array}
 
 if __name__ == '__main__':
     plugin = MandelbrotPlugin()
-    print(f"Plugin Name: {plugin.name}")
-    print(f"Parameter Definitions: {plugin.get_parameters_definition()}")
-    print(f"Default View Parameters: {plugin.get_default_view_parameters()}")
+    print(f"プラグイン名: {plugin.name}")
+    print(f"パラメータ定義: {plugin.get_parameters_definition()}")
+    print(f"デフォルトビューパラメータ: {plugin.get_default_view_parameters()}")
 
     test_common_params = {
         'center_real': -0.5,
@@ -98,21 +98,21 @@ if __name__ == '__main__':
 
     img_width_test, img_height_test = 160, 120
 
-    print(f"\nTesting compute_fractal ({img_width_test}x{img_height_test})...")
+    print(f"\ncompute_fractal ({img_width_test}x{img_height_test}) をテスト中...")
     fractal_result_data = plugin.compute_fractal(test_common_params, test_plugin_params, img_width_test, img_height_test)
 
     iter_result_array = fractal_result_data['iterations']
     mod_sq_result_array = fractal_result_data['last_z_modulus_sq']
 
-    print(f"  Iterations array shape: {iter_result_array.shape}, dtype: {iter_result_array.dtype}")
-    print(f"  |Z|^2 array shape: {mod_sq_result_array.shape}, dtype: {mod_sq_result_array.dtype}")
+    print(f"  反復回数配列形状: {iter_result_array.shape}, dtype: {iter_result_array.dtype}")
+    print(f"  |Z|^2 配列形状: {mod_sq_result_array.shape}, dtype: {mod_sq_result_array.dtype}")
 
     center_y, center_x = img_height_test // 2, img_width_test // 2
     if iter_result_array[center_y, center_x] == test_common_params['max_iterations']:
-        print(f"  Center point iteration check: PASSED (Value: {iter_result_array[center_y, center_x]})")
-        print(f"  Center point |Z|^2 value: {mod_sq_result_array[center_y, center_x]}")
+        print(f"  中心点の反復回数チェック: 成功 (値: {iter_result_array[center_y, center_x]})")
+        print(f"  中心点の|Z|^2値: {mod_sq_result_array[center_y, center_x]}")
     else:
-        print(f"  Center point iteration check: FAILED or NOT MAX_ITER (Value: {iter_result_array[center_y, center_x]})")
+        print(f"  中心点の反復回数チェック: 失敗または最大反復回数ではない (値: {iter_result_array[center_y, center_x]})")
 
     try:
         import matplotlib.pyplot as plt
@@ -128,6 +128,6 @@ if __name__ == '__main__':
         plt.ylabel("Imaginary")
         plt.show()
     except ImportError:
-        print("  matplotlib not found. Skipping image display test.")
+        print("  matplotlibが見つかりません。画像表示テストをスキップします。")
 
-    print("\nMandelbrotPlugin test finished.")
+    print("\nMandelbrotPlugin のテストが完了しました。")

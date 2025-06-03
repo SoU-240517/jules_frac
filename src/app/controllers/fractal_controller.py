@@ -1,8 +1,8 @@
 import time
-from PyQt6.QtCore import QObject, pyqtSignal, QThreadPool, pyqtSlot
+from src.app.export.image_exporter import ImageExporter # ExporterSignals is used by ImageExporter internally
 # Assuming FractalEngine is correctly typed if imported, but not strictly necessary for this file if only passed.
 # from src.app.models.fractal_engine import FractalEngine
-from src.app.export.image_exporter import ImageExporter # ExporterSignals is used by ImageExporter internally
+from PyQt6.QtCore import QObject, pyqtSignal, QThreadPool, pyqtSlot
 
 class FractalController(QObject):
     image_rendered = pyqtSignal(object)
@@ -69,6 +69,27 @@ class FractalController(QObject):
             self.fractal_engine.set_fractal_plugin_parameter(param_name, value)
             self.update_status_display()
 
+    def set_fractal_plugin_parameter_and_update(self, param_name: str, value: any):
+        """
+        フラクタルプラグインの特定のパラメータを設定し、フラクタルを再計算・再描画します。
+        UIからのパラメータ変更時に使用されることを想定しています。
+        """
+        if self.fractal_engine:
+            # 1. エンジンにパラメータを設定
+            self.fractal_engine.set_fractal_plugin_parameter(param_name, value)
+
+            # 2. パラメータが外部から変更されたことを通知 (設定保存や他のUI要素の更新のため)
+            self.parameters_updated_externally.emit()
+
+            # 3. アクティブなフラクタルプラグインのUIが更新を必要とするかもしれないことを通知
+            active_plugin_name = self.get_active_fractal_plugin_name_from_engine()
+            if active_plugin_name:
+                self.active_fractal_plugin_ui_needs_update.emit(active_plugin_name)
+
+            # 4. 完全な再計算と再描画をトリガー
+            self.trigger_render(full_recompute=True)
+            # trigger_render内でupdate_status_displayが呼ばれるため、ここでは不要
+
     def set_active_fractal_plugin_and_redraw(self, plugin_name: str):
         if not self.fractal_engine: return
         success = self.fractal_engine.set_active_fractal_plugin(plugin_name)
@@ -90,6 +111,23 @@ class FractalController(QObject):
             plugin = self.fractal_engine.plugin_manager.get_coloring_plugin(plugin_name)
             if plugin: return plugin.get_parameters_definition()
         return []
+
+    def get_plugin_presets(self, plugin_name: str) -> list:
+        """
+        指定されたカラーリングプラグインのプリセットを取得します。
+        FractalEngineのPluginManagerに処理を委譲します。
+        """
+        if self.fractal_engine and hasattr(self.fractal_engine, 'plugin_manager'):
+            # plugin_nameがカラーリングプラグイン用であると想定
+            plugin = self.fractal_engine.plugin_manager.get_coloring_plugin(plugin_name)
+            if plugin and hasattr(plugin, 'get_presets'):
+                try:
+                    return plugin.get_presets()
+                except Exception as e:
+                    print(f"警告: プラグイン '{plugin_name}' のプリセット取得中にエラー: {e}")
+                    return []
+        return []
+
     def get_current_coloring_plugin_parameters_from_engine(self) -> dict:
         return self.fractal_engine.get_coloring_plugin_parameters() if self.fractal_engine else {}
     def set_active_coloring_plugin_and_recolor(self, plugin_name: str):
@@ -122,6 +160,13 @@ class FractalController(QObject):
     # --- Rendering ---
     def trigger_render(self, image_width_px=None, image_height_px=None, full_recompute:bool = True):
         if not self.fractal_engine: self.status_updated.emit("エラー: フラクタルエンジン未設定"); return
+
+        # --- 一時的なデバッグコード：エスケープ半径を大きくしてみる ---
+        # self.fractal_engine.escape_radius = 50.0 # 例えば50に設定
+        # self.fractal_engine.set_common_parameters(self.fractal_engine.center_real, self.fractal_engine.center_imag, self.fractal_engine.width, self.fractal_engine.max_iterations, self.fractal_engine.escape_radius)
+        # print(f"DEBUG: Temporarily set escape_radius to {self.fractal_engine.escape_radius}")
+        # --- デバッグコードここまで ---
+
         active_fp_name = self.get_active_fractal_plugin_name_from_engine() or "N/A"
         active_cp_name = self.get_active_coloring_plugin_name_from_engine() or "N/A"
         self.status_updated.emit(f"処理中 ({active_fp_name} / {active_cp_name})...")

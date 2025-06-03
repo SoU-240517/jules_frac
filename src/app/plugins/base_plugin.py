@@ -91,27 +91,27 @@ if __name__ == '__main__':
             return [{'name': 'dummy_param', 'label': 'Dummy Param', 'type': 'float', 'default': 1.0, 'range': (0.0, 10.0)}]
 
         def compute_fractal(self, common_params: dict, plugin_params: dict, image_width_px: int, image_height_px: int) -> np.ndarray:
-            print(f"DummyPlugin: compute_fractal called with:")
-            print(f"  Common Params: {common_params}")
-            print(f"  Plugin Params: {plugin_params}")
-            print(f"  Image Size: {image_width_px}x{image_height_px}")
-            # Ensure a valid numpy array is returned, matching expected dimensions and type
+            print(f"DummyPlugin: compute_fractal が以下の引数で呼び出されました:")
+            print(f"  共通パラメータ: {common_params}")
+            print(f"  プラグインパラメータ: {plugin_params}")
+            print(f"  画像サイズ: {image_width_px}x{image_height_px}")
+            # 期待される次元と型に一致する有効なnumpy配列が返されることを確認してください
             return np.zeros((image_height_px, image_width_px), dtype=np.int32)
 
         def get_default_view_parameters(self) -> dict:
             return {'center_real': 0.0, 'center_imag': 0.0, 'width': 4.0}
 
     dummy = DummyPlugin()
-    print(f"Plugin Name: {dummy.name}")
-    print(f"Params Def: {dummy.get_parameters_definition()}")
-    print(f"Default View: {dummy.get_default_view_parameters()}")
+    print(f"プラグイン名: {dummy.name}")
+    print(f"パラメータ定義: {dummy.get_parameters_definition()}")
+    print(f"デフォルトビュー: {dummy.get_default_view_parameters()}")
 
-    # Example common_params (ensure all expected keys are present)
+    # common_params の例 (すべての期待されるキーが存在することを確認してください)
     test_common_params = {
         'center_real': 0.0,
         'center_imag': 0.0,
         'width': 4.0,
-        'height': 3.0, # Assuming a 4:3 aspect ratio for test
+        'height': 3.0, # テスト用に4:3のアスペクト比を想定
         'max_iterations': 100,
         'escape_radius': 2.0
     }
@@ -123,9 +123,9 @@ if __name__ == '__main__':
         image_width_px=80,
         image_height_px=60
     )
-    print(f"Compute result shape: {result_array.shape}, dtype: {result_array.dtype}")
+    print(f"計算結果の形状: {result_array.shape}, dtype: {result_array.dtype}")
     assert result_array.shape == (60, 80)
     assert result_array.dtype == np.int32
 
-    print(f"Presets: {dummy.get_presets()}")
-    print("\nDummyPlugin test completed.")
+    print(f"プリセット: {dummy.get_presets()}")
+    print("\nDummyPlugin のテストが完了しました。")

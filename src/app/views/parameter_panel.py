@@ -3,8 +3,8 @@ from PyQt6.QtWidgets import (
     QLabel, QSpinBox, QDoubleSpinBox, QSlider, QComboBox, QPushButton,
     QListWidget, QListWidgetItem
 )
-from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize # Added QSize
-from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QLinearGradient, QIcon # Added QtGui imports
+from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize # QSize を追加
+from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QLinearGradient, QIcon # QtGui のインポートを追加
 from functools import partial
 
 class ParameterPanel(QScrollArea):
@@ -34,7 +34,7 @@ class ParameterPanel(QScrollArea):
             self.fractal_controller.active_coloring_plugin_ui_needs_update.connect(self._update_coloring_plugin_specific_ui)
             self.fractal_controller.active_color_map_changed_externally.connect(self._update_color_selection_from_controller)
         else:
-            # Fallback if no controller
+            # コントローラーがない場合のフォールバック
             self._set_ui_values(-0.5, 0.0, 3.0, 100)
             if hasattr(self, 'plugin_specific_group'): self.plugin_specific_group.setVisible(False)
             if hasattr(self, 'coloring_group'): self.coloring_group.setEnabled(False)
@@ -47,13 +47,12 @@ class ParameterPanel(QScrollArea):
         self.main_layout = QVBoxLayout(self.content_widget)
         self.content_widget.setLayout(self.main_layout)
 
-        # Fractal Selection
+        # フラクタル選択
         fractal_group = QGroupBox("フラクタル選択")
         fractal_layout = QVBoxLayout(); self.fractal_combo = QComboBox()
         fractal_layout.addWidget(self.fractal_combo); fractal_group.setLayout(fractal_layout)
         self.main_layout.addWidget(fractal_group)
         self.fractal_combo.currentTextChanged.connect(self._on_fractal_type_changed)
-
         # Common Parameters
         common_params_group = QGroupBox("共通描画設定")
         self.common_params_layout = QFormLayout()
@@ -70,39 +69,39 @@ class ParameterPanel(QScrollArea):
         common_params_group.setLayout(self.common_params_layout)
         self.main_layout.addWidget(common_params_group)
 
-        # Fractal Plugin-Specific Parameters
+        # フラクタルプラグイン固有設定
         self.plugin_specific_group = QGroupBox("フラクタル固有設定")
         self.plugin_specific_layout = QFormLayout()
         self.plugin_specific_group.setLayout(self.plugin_specific_layout)
         self.main_layout.addWidget(self.plugin_specific_group)
         self.plugin_specific_group.setVisible(False)
 
-        # Coloring Settings Group
+        # カラーリング設定グループ
         self.coloring_group = QGroupBox("カラーリング設定")
-        self.true_coloring_layout = QVBoxLayout() # Main layout for this group
+        self.true_coloring_layout = QVBoxLayout() # このグループのメインレイアウト
 
-        # Coloring Algorithm selection
+        # カラーリングアルゴリズム選択
         form_algo_select = QFormLayout()
         self.coloring_algorithm_combo = QComboBox()
         form_algo_select.addRow(QLabel("アルゴリズム:"), self.coloring_algorithm_combo)
         self.true_coloring_layout.addLayout(form_algo_select)
         self.coloring_algorithm_combo.currentTextChanged.connect(self._on_coloring_algorithm_changed)
 
-        # Coloring Algorithm Specific UI
+        # カラーリングアルゴリズム固有UI
         self.coloring_plugin_specific_group = QGroupBox("アルゴリズム固有設定")
         self.coloring_plugin_specific_layout = QFormLayout()
         self.coloring_plugin_specific_group.setLayout(self.coloring_plugin_specific_layout)
         self.true_coloring_layout.addWidget(self.coloring_plugin_specific_group)
         self.coloring_plugin_specific_group.setVisible(False)
 
-        # Color Pack selection
+        # カラーパック選択
         form_pack_select = QFormLayout()
         self.color_pack_combo = QComboBox()
         form_pack_select.addRow(QLabel("カラーパック:"), self.color_pack_combo)
         self.true_coloring_layout.addLayout(form_pack_select)
         self.color_pack_combo.currentTextChanged.connect(self._on_color_pack_changed)
 
-        # Color Map selection
+        # カラーマップ選択
         form_map_select = QFormLayout()
         self.color_map_listwidget = QListWidget()
         self.color_map_listwidget.setIconSize(QSize(96, 18)) # Increased width for better preview
@@ -115,12 +114,11 @@ class ParameterPanel(QScrollArea):
         self.coloring_group.setLayout(self.true_coloring_layout)
         self.main_layout.addWidget(self.coloring_group)
 
-        # Render Button
+        # 描画ボタン
         self.render_button = QPushButton("描画実行")
         self.main_layout.addWidget(self.render_button)
         self.main_layout.addStretch(1)
-
-        # Connect common parameter signals
+        # 共通パラメータシグナルの接続
         self.iter_spinbox.valueChanged.connect(self._on_iter_spinbox_changed)
         self.iter_slider.valueChanged.connect(self._on_iter_slider_changed)
         self.center_real_spinbox.valueChanged.connect(self._on_value_changed_by_ui)
@@ -139,7 +137,7 @@ class ParameterPanel(QScrollArea):
         if len(colors) == 1:
             painter.fillRect(0, 0, thumb_width, thumb_height, QColor(colors[0][0], colors[0][1], colors[0][2]))
         else:
-            gradient = QLinearGradient(0, 0, thumb_width, 0) # Horizontal gradient
+            gradient = QLinearGradient(0, 0, thumb_width, 0) # 水平グラデーション
             num_color_stops = len(colors)
             for i, color_tuple in enumerate(colors):
                 position = i / (num_color_stops - 1) if num_color_stops > 1 else 0.0
@@ -150,7 +148,7 @@ class ParameterPanel(QScrollArea):
         painter.end()
         return QPixmap.fromImage(img)
 
-    # --- Fractal Plugin UI Methods (略 - 変更なし) ---
+    # --- フラクタルプラグインUIメソッド (以下、変更なし) ---
     def _populate_fractal_combo(self):
         if not self.fractal_controller: return
         plugin_names = self.fractal_controller.get_available_fractal_plugin_names_from_engine()
@@ -206,7 +204,7 @@ class ParameterPanel(QScrollArea):
             if '_preset_combo' in self.plugin_widgets:
                 self.plugin_widgets['_preset_combo'].blockSignals(True); self.plugin_widgets['_preset_combo'].setCurrentText("カスタム"); self.plugin_widgets['_preset_combo'].blockSignals(False)
 
-    # --- Coloring UI Methods ---
+    # --- カラーリングUIメソッド ---
     def _populate_coloring_algorithm_combo(self):
         if not self.fractal_controller: return
         algo_names = self.fractal_controller.get_available_coloring_plugin_names_from_engine()
@@ -242,7 +240,7 @@ class ParameterPanel(QScrollArea):
         self.coloring_plugin_specific_group.setTitle(f"{algo_name} 固有設定")
         current_vals = self.fractal_controller.get_current_coloring_plugin_parameters_from_engine()
 
-        # Add preset combobox for coloring plugins if they have presets
+        # カラーリングプラグインにプリセットがある場合、プリセットコンボボックスを追加
         presets = self.fractal_controller.get_plugin_presets(algo_name) # Assuming fractal_controller has this for coloring plugins too
         if presets:
             preset_combo = QComboBox()
@@ -285,7 +283,7 @@ class ParameterPanel(QScrollArea):
                 if p_name in self.coloring_plugin_widgets:
                     widget = self.coloring_plugin_widgets[p_name]
                     widget.blockSignals(True); widget.setValue(val); widget.blockSignals(False)
-                self.fractal_controller.set_coloring_plugin_parameter_and_recolor(p_name, val) # Notify even if no UI widget
+                self.fractal_controller.set_coloring_plugin_parameter_and_recolor(p_name, val) # UIウィジェットがなくても通知
 
     def _populate_color_pack_combo(self):
         if not self.fractal_controller: return
@@ -309,7 +307,7 @@ class ParameterPanel(QScrollArea):
             first_map_item = self.color_map_listwidget.item(0)
             if first_map_item:
                 self.color_map_listwidget.setCurrentItem(first_map_item)
-                # If selection didn't change but we want to force update based on new pack's first map:
+                # 選択が変更されなかったが、新しいパックの最初のマップに基づいて強制的に更新したい場合:
                 if self.fractal_controller.get_active_color_map_name_from_engine() != first_map_item.text() or \
                    self.fractal_controller.get_active_color_pack_name_from_engine() != pack_name:
                      self.fractal_controller.set_active_color_map_and_recolor(pack_name, first_map_item.text())
@@ -362,7 +360,7 @@ class ParameterPanel(QScrollArea):
             if item.text() == map_name: self.color_map_listwidget.setCurrentItem(item); found = True; break
         self.color_pack_combo.blockSignals(False); self.color_map_listwidget.blockSignals(False)
 
-    # --- Common UI Parameter Handling (略 - 変更なし) ---
+    # --- 共通UIパラメータ処理 (以下、変更なし) ---
     def _on_iter_spinbox_changed(self, value):
         self.iter_slider.setValue(value); self._on_value_changed_by_ui()
     def _on_iter_slider_changed(self, value):
@@ -375,7 +373,7 @@ class ParameterPanel(QScrollArea):
         if self.fractal_controller:
             params = self.fractal_controller.get_current_common_parameters()
             if params: self._set_ui_values(params.get('center_real',-0.5), params.get('center_imag',0.0), params.get('width',3.0), params.get('max_iterations',100))
-            active_fp_name = self.fractal_controller.get_active_fractal_plugin_name_from_engine()
+            active_fp_name = self.fractal_controller.get_active_fractal_plugin_name_from_engine() # メソッド名を変更
             if active_fp_name: self._update_fractal_plugin_specific_ui(active_fp_name) # Renamed method
             active_cp_name = self.fractal_controller.get_active_coloring_plugin_name_from_engine()
             if active_cp_name: self._update_coloring_plugin_specific_ui(active_cp_name)
@@ -392,6 +390,6 @@ class ParameterPanel(QScrollArea):
         return {"center_real":self.center_real_spinbox.value(), "center_imag":self.center_imag_spinbox.value(), "width":self.width_spinbox.value(), "max_iterations":self.iter_spinbox.value()}
 
 if __name__ == '__main__':
-    # ... (Standalone test code remains complex and is best done via main application) ...
-    print("ParameterPanel standalone test requires a comprehensive mock controller and setup.")
-    print("Please test through the main application or a dedicated test suite.")
+    # ... (スタンドアロンテストコードは複雑なため、メインアプリケーションでのテストを推奨) ...
+    print("ParameterPanelのスタンドアロンテストには包括的なモックコントローラとセットアップが必要です。")
+    print("メインアプリケーションまたは専用のテストスイートでテストしてください。")

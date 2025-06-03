@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 from functools import partial
 from PyQt6.QtWidgets import (
     QDialog, QLineEdit, QPushButton, QComboBox, QCheckBox,
@@ -7,25 +8,24 @@ from PyQt6.QtWidgets import (
     QSizePolicy
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QSize
-from PyQt6.QtWidgets import QMessageBox # For error display on accept
+from PyQt6.QtWidgets import QMessageBox # accept時のエラー表示用
 
-from src.app.utils.settings_manager import SettingsManager # Import SettingsManager
+from src.app.utils.settings_manager import SettingsManager # SettingsManager をインポート
 
 class HighResOutputDialog(QDialog):
-    SETTINGS_SECTION_NAME = "high_res_export_defaults" # Settings section key
+    SETTINGS_SECTION_NAME = "high_res_export_defaults" # 設定セクションキー
 
     def __init__(self, settings_manager: SettingsManager,
-                 current_dialog_defaults: dict | None = None, # Previously current_export_settings
+                 current_dialog_defaults: dict | None = None, # 以前の current_export_settings
                  current_view_params: dict | None = None,
                  parent=None):
         super().__init__(parent)
         self.settings_manager = settings_manager
         self.setWindowTitle("高解像度出力設定")
         self.setMinimumWidth(550)
-
-        # current_dialog_defaults are the values to populate if no saved settings are found,
-        # or to use as a base before applying saved settings.
-        # These could be the app's general defaults or last *used* (not necessarily saved) settings.
+        # current_dialog_defaults は、保存された設定が見つからない場合に設定する値、
+        # または保存された設定を適用する前のベースとして使用する値です。
+        # これらはアプリの一般的なデフォルト値、または最後に *使用された* (必ずしも保存されていない) 設定である可能性があります。
         self.dialog_defaults = current_dialog_defaults if current_dialog_defaults else {}
         self.current_view_params = current_view_params if current_view_params else {}
 
@@ -33,7 +33,7 @@ class HighResOutputDialog(QDialog):
         initial_height_px = self.current_view_params.get('image_height_px', 600)
         self.source_aspect_ratio = initial_width_px / initial_height_px if initial_height_px > 0 else 16.0/9.0
         self.keep_aspect_ratio_enabled = True
-        self.updates_enabled = True # To manage recursive updates in dimension change
+        self.updates_enabled = True # 寸法変更時の再帰的更新を管理するため
 
         main_layout = QVBoxLayout(self)
         main_layout.addWidget(self._create_file_group())
@@ -42,17 +42,17 @@ class HighResOutputDialog(QDialog):
         main_layout.addWidget(self._create_buttons())
 
         self._connect_signals()
-        self._load_settings() # Load saved settings and apply them
+        self._load_settings() # 保存された設定を読み込み、適用する
         self._update_memory_usage_label()
 
-    def _create_file_group(self) -> QGroupBox: # No change, just for context
+    def _create_file_group(self) -> QGroupBox: # 変更なし、コンテキスト用
         group = QGroupBox("ファイル設定")
         layout = QFormLayout()
 
         self.filepath_edit = QLineEdit()
         self.filepath_edit.setReadOnly(True)
         browse_button = QPushButton("参照...")
-        browse_button.clicked.connect(self._browse_filepath) # Connect here for early access
+        browse_button.clicked.connect(self._browse_filepath) # 早期アクセスのためにここで接続
         path_layout = QHBoxLayout()
         path_layout.addWidget(self.filepath_edit)
         path_layout.addWidget(browse_button)
@@ -74,19 +74,18 @@ class HighResOutputDialog(QDialog):
         self.jpeg_quality_slider.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         jpeg_quality_layout.addWidget(self.jpeg_quality_slider)
         jpeg_quality_layout.addWidget(self.jpeg_quality_value_label)
-        self.jpeg_quality_widgets = [self.jpeg_quality_label, self.jpeg_quality_slider, self.jpeg_quality_value_label] # Keep this list
+        self.jpeg_quality_widgets = [self.jpeg_quality_label, self.jpeg_quality_slider, self.jpeg_quality_value_label] # このリストを保持
         layout.addRow(self.jpeg_quality_label, jpeg_quality_layout)
 
         group.setLayout(layout)
         return group
 
-    def _create_resolution_group(self) -> QGroupBox: # No change, just for context
+    def _create_resolution_group(self) -> QGroupBox: # 変更なし、コンテキスト用
         group = QGroupBox("解像度設定")
         layout = QFormLayout()
-
         self.preset_combo = QComboBox()
-        # self.presets will be initialized in _load_settings or based on current_view_params
-        # It's better to populate items after self.presets is fully defined.
+        # self.presets は _load_settings で初期化されるか、current_view_params に基づいて初期化されます。
+        # self.presets が完全に定義された後にアイテムを設定する方が良いです。
         layout.addRow(QLabel("プリセット:"), self.preset_combo)
 
         self.width_spinbox = QSpinBox(); self.width_spinbox.setRange(1, 32768); self.width_spinbox.setSuffix(" px")
@@ -99,7 +98,7 @@ class HighResOutputDialog(QDialog):
         layout.addRow(QLabel("サイズ (幅x高):"), dims_layout)
 
         self.aspect_ratio_check = QCheckBox("現在のアスペクト比を維持")
-        # self.aspect_ratio_check.setChecked(True) # Set in _load_settings
+        # self.aspect_ratio_check.setChecked(True) # _load_settings で設定
         layout.addRow(self.aspect_ratio_check)
 
         self.memory_usage_label = QLabel("予測メモリ使用量: N/A MB")
@@ -108,13 +107,13 @@ class HighResOutputDialog(QDialog):
         group.setLayout(layout)
         return group
 
-    def _create_options_group(self) -> QGroupBox: # No change, just for context
+    def _create_options_group(self) -> QGroupBox: # 変更なし、コンテキスト用
         group = QGroupBox("出力オプション")
         layout = QFormLayout()
         self.iterations_spinbox = QSpinBox(); self.iterations_spinbox.setRange(10, 1000000)
         layout.addRow(QLabel("最大反復回数:"), self.iterations_spinbox)
         self.antialiasing_combo = QComboBox()
-        self.antialiasing_combo.addItems(["なし", "2x2 SSAA", "3x3 SSAA", "4x4 SSAA"]) # SSAA = Super-sampling Anti-aliasing
+        self.antialiasing_combo.addItems(["なし", "2x2 SSAA", "3x3 SSAA", "4x4 SSAA"]) # SSAA = スーパーサンプリングアンチエイリアス
         layout.addRow(QLabel("アンチエイリアス:"), self.antialiasing_combo)
         group.setLayout(layout)
         return group
@@ -130,33 +129,31 @@ class HighResOutputDialog(QDialog):
         self.format_combo.currentTextChanged.connect(self._on_format_changed)
         self.jpeg_quality_slider.valueChanged.connect(self._on_jpeg_quality_changed)
         self.preset_combo.currentTextChanged.connect(self._on_preset_changed)
-
-        # Use partial to pass which dimension changed
+        # partial を使用して、どの寸法が変更されたかを渡す
         self.width_spinbox.valueChanged.connect(partial(self._on_dimension_changed, "width"))
         self.height_spinbox.valueChanged.connect(partial(self._on_dimension_changed, "height"))
         self.aspect_ratio_check.stateChanged.connect(self._on_aspect_ratio_toggled)
 
-    def _load_settings(self): # Renamed from _load_initial_settings
-        self.updates_enabled = False # Disable updates during loading
+    def _load_settings(self): # _load_initial_settings から名前変更
+        self.updates_enabled = False # 読み込み中は更新を無効化
 
         saved_settings = self.settings_manager.get_setting(self.SETTINGS_SECTION_NAME, {})
 
-        # File settings - Use saved settings, then dialog_defaults, then hardcoded defaults
+        # ファイル設定 - 保存された設定、次に dialog_defaults、次にハードコードされたデフォルトを使用
         default_file_path_base = self.dialog_defaults.get('filepath', Path.home() / "fractal_render")
         file_format = saved_settings.get('format', self.dialog_defaults.get('format', 'PNG'))
         self.filepath_edit.setText(saved_settings.get('filepath', str(default_file_path_base) + f".{file_format.lower()}"))
         self.format_combo.setCurrentText(file_format)
         self.png_transparent_check.setChecked(saved_settings.get('png_transparent', self.dialog_defaults.get('png_transparent', False)))
         self.jpeg_quality_slider.setValue(saved_settings.get('jpeg_quality', self.dialog_defaults.get('jpeg_quality', 90)))
-
-        # Resolution presets - needs self.presets to be defined
+        # 解像度プリセット - self.presets が定義されている必要がある
         self.presets = {
             "現在の表示": (self.current_view_params.get('image_width_px',800), self.current_view_params.get('image_height_px',600)),
             "HD (1280x720)": (1280, 720), "FHD (1920x1080)": (1920, 1080),
             "4K UHD (3840x2160)": (3840, 2160), "8K UHD (7680x4320)": (7680, 4320),
             "カスタム": (-1, -1)
         }
-        self.preset_combo.blockSignals(True) # Block while populating
+        self.preset_combo.blockSignals(True) # 設定中はブロック
         self.preset_combo.clear()
         self.preset_combo.addItems(self.presets.keys())
         self.preset_combo.blockSignals(False)
@@ -165,28 +162,28 @@ class HighResOutputDialog(QDialog):
         # Try to match saved width/height to a preset, otherwise set to custom
         saved_w = saved_settings.get('width', self.presets["現在の表示"][0])
         saved_h = saved_settings.get('height', self.presets["現在の表示"][1])
-        current_preset_text = "カスタム" # Default to custom if no match
+        current_preset_text = "カスタム" # 一致しない場合はカスタムをデフォルトとする
         for name, (pw, ph) in self.presets.items():
             if pw == saved_w and ph == saved_h and name != "カスタム":
                 current_preset_text = name
                 break
 
-        self.preset_combo.setCurrentText(current_preset_text) # This will trigger _on_preset_changed
-        # If it was custom, _on_preset_changed might not set width/height if they are already correct.
+        self.preset_combo.setCurrentText(current_preset_text) # これにより _on_preset_changed がトリガーされる
+        # カスタムの場合、_on_preset_changed は幅/高さが既に正しい場合は設定しない可能性がある
         if current_preset_text == "カスタム":
             self.width_spinbox.setValue(saved_w)
-            self.height_spinbox.setValue(saved_h) # This will trigger _on_dimension_changed if aspect is kept
+            self.height_spinbox.setValue(saved_h) # アスペクト比が維持されている場合、これにより _on_dimension_changed がトリガーされる
 
         self.aspect_ratio_check.setChecked(saved_settings.get('keep_aspect_ratio', True))
 
-        # Output options
+        # 出力オプション
         default_iters = self.current_view_params.get('max_iterations', 100) * 2
         self.iterations_spinbox.setValue(saved_settings.get('iterations', default_iters))
         self.antialiasing_combo.setCurrentText(saved_settings.get('antialiasing', 'なし'))
 
         self._on_format_changed(self.format_combo.currentText())
         self.updates_enabled = True
-        self._update_memory_usage_label() # Update once all resolution settings are stable
+        self._update_memory_usage_label() # すべての解像度設定が安定したら一度更新
 
     @pyqtSlot()
     def _browse_filepath(self):
@@ -217,14 +214,14 @@ class HighResOutputDialog(QDialog):
         if not is_png: self.png_transparent_check.setChecked(False)
         for widget in self.jpeg_quality_widgets:
             widget.setEnabled(is_jpeg)
-        # Update file extension in path if user hasn't typed one
+        # ユーザーが入力していない場合、パス内のファイル拡張子を更新
         current_path = self.filepath_edit.text()
         if current_path:
             name, ext = os.path.splitext(current_path)
             new_ext = f".{format_str.lower()}"
             if ext.lower() in ['.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp'] and ext.lower() != new_ext:
                  self.filepath_edit.setText(name + new_ext)
-            elif not ext: # if no extension was there
+            elif not ext: # 拡張子がなかった場合
                  self.filepath_edit.setText(current_path + new_ext)
 
 
@@ -246,28 +243,28 @@ class HighResOutputDialog(QDialog):
                 self.height_spinbox.setValue(height)
                 self.width_spinbox.blockSignals(False)
                 self.height_spinbox.blockSignals(False)
-                self.width_spinbox.setEnabled(False) # Or based on aspect_ratio_check
+                self.width_spinbox.setEnabled(False) # または aspect_ratio_check に基づく
                 self.height_spinbox.setEnabled(False)
-                self._update_memory_usage_label() # Update for new preset
+                self._update_memory_usage_label() # 新しいプリセット用に更新
 
-        # If aspect ratio is kept, changing preset should ensure width/height are disabled
-        # or one of them is if custom editing is allowed while keeping ratio.
-        # For simplicity, preset disables direct W/H edit. "Custom" enables them.
+        # アスペクト比が維持されている場合、プリセットを変更すると幅/高さが無効になるか、
+        # 比率を維持しながらカスタム編集が許可されている場合はそのいずれかが無効になるようにする必要があります。
+        # 簡単にするために、プリセットは直接の幅/高さ編集を無効にします。「カスタム」はそれらを有効にします。
         self._on_aspect_ratio_toggled(self.aspect_ratio_check.isChecked())
 
 
-    @pyqtSlot(int) # state is int for QCheckBox.stateChanged
+    @pyqtSlot(int) # state は QCheckBox.stateChanged の int です
     def _on_aspect_ratio_toggled(self, state_int: int):
         self.keep_aspect_ratio_enabled = (state_int == Qt.CheckState.Checked.value)
-        # If "Custom" preset, and aspect ratio is checked, one of width/height should be disabled
-        # For now, let's assume user changes one, the other follows if checked.
-        # And if preset is not "Custom", width/height are usually disabled by _on_preset_changed.
+        # 「カスタム」プリセットでアスペクト比がチェックされている場合、幅/高さのいずれかを無効にする必要があります。
+        # ここでは、ユーザーが一方を変更すると、チェックされていればもう一方が追従すると仮定します。
+        # プリセットが「カスタム」でない場合、幅/高さは通常 _on_preset_changed によって無効にされます。
         if self.preset_combo.currentText() == "カスタム":
-             self.width_spinbox.setEnabled(True) # Both enabled for custom, aspect handled by _on_dimension_changed
+             self.width_spinbox.setEnabled(True) # カスタムでは両方有効、アスペクトは _on_dimension_changed で処理
              self.height_spinbox.setEnabled(True)
 
 
-    @pyqtSlot(str) # Argument 'changed_source' will be "width" or "height"
+    @pyqtSlot(str) # 引数 'changed_source' は "width" または "height" になります
     def _on_dimension_changed(self, changed_source: str):
         if not self.keep_aspect_ratio_enabled or not self.updates_enabled: return
 
@@ -287,9 +284,9 @@ class HighResOutputDialog(QDialog):
 
         if self.preset_combo.currentText() != "カスタム":
             self.preset_combo.blockSignals(True)
-            self.preset_combo.setCurrentText("カスタム") # Dimensions changed, so it's custom now
+            self.preset_combo.setCurrentText("カスタム") # 寸法が変更されたため、カスタムになりました
             self.preset_combo.blockSignals(False)
-            self.width_spinbox.setEnabled(True) # Enable for custom edit
+            self.width_spinbox.setEnabled(True) # カスタム編集用に有効化
             self.height_spinbox.setEnabled(True)
 
         self._update_memory_usage_label()
@@ -305,22 +302,22 @@ class HighResOutputDialog(QDialog):
         mem_mb = mem_bytes / (1024 * 1024)
         self.memory_usage_label.setText(f"予測メモリ使用量: {mem_mb:.2f} MB")
 
-    def accept(self): # Override accept to save settings
+    def accept(self): # 設定を保存するために accept をオーバーライド
         current_settings = self.get_export_settings()
         if not current_settings.get('filepath'):
             QMessageBox.warning(self, "入力エラー", "ファイルパスを指定してください。")
-            return # Prevent dialog from closing
+            return # ダイアログが閉じるのを防ぐ
 
         self.settings_manager.set_setting(self.SETTINGS_SECTION_NAME, current_settings)
         super().accept()
 
 
     def get_export_settings(self) -> dict:
-        # Ensure all relevant settings are gathered from UI
+        # UIからすべての関連設定が収集されていることを確認する
         s = {
             'filepath': self.filepath_edit.text(),
             'format': self.format_combo.currentText(),
-            'png_transparent': self.png_transparent_check.isChecked(), # Checked state is fine
+            'png_transparent': self.png_transparent_check.isChecked(), # チェック状態は問題なし
             'jpeg_quality': self.jpeg_quality_slider.value(),
             'width': self.width_spinbox.value(),
             'height': self.height_spinbox.value(),
@@ -328,22 +325,21 @@ class HighResOutputDialog(QDialog):
             'iterations': self.iterations_spinbox.value(),
             'antialiasing': self.antialiasing_combo.currentText()
         }
-        # Convert antialiasing text to factor for engine
+        # アンチエイリアステキストをエンジン用の係数に変換
         aa_text = s['antialiasing']
         if "SSAA" in aa_text and aa_text[0].isdigit(): s['antialiasing_factor'] = int(aa_text[0])
         else: s['antialiasing_factor'] = 1
         return s
 
-    # Removed custom __setattr__ for updates_enabled, using explicit calls or signal blocking.
+    # updates_enabled のカスタム __setattr__ を削除し、明示的な呼び出しまたはシグナルブロッキングを使用。
 
 if __name__ == '__main__':
     import sys
     from PyQt6.QtWidgets import QApplication
 
     app = QApplication(sys.argv)
-
-    # Create a dummy settings manager for the test
-    # In a real app, this would be passed from MainWindow/Application
+    # テスト用のダミー設定マネージャーを作成
+    # 実際のアプリでは、これは MainWindow/Application から渡されます
     test_settings_file = "dialog_test_settings.json"
     settings_mgr = SettingsManager(settings_filename=test_settings_file)
 
@@ -365,40 +361,40 @@ if __name__ == '__main__':
 
     if dialog.exec():
         final_settings = dialog.get_export_settings()
-        print("Export Settings from Dialog:", final_settings)
-        # Check if settings were saved by the dialog's accept()
+        print("ダイアログからのエクスポート設定:", final_settings)
+        # 設定がダイアログの accept() によって保存されたかどうかを確認
         reloaded_saved_settings = settings_mgr.get_setting(HighResOutputDialog.SETTINGS_SECTION_NAME)
-        print("Settings saved by Dialog:", reloaded_saved_settings)
-        assert final_settings == reloaded_saved_settings # Ensure what's returned is what's saved
+        print("ダイアログによって保存された設定:", reloaded_saved_settings)
+        assert final_settings == reloaded_saved_settings # 返されたものが保存されたものであることを確認
     else:
-        print("Export Cancelled by user.")
+        print("ユーザーによってエクスポートがキャンセルされました。")
 
-    # Clean up test settings file
+    # テスト設定ファイルをクリーンアップ
     if Path(test_settings_file).exists(): Path(test_settings_file).unlink(missing_ok=True)
-    # Clean up settings file potentially created by SettingsManager in default location
-    default_sm_file = Path.home() / ".fractalapp" / "fractal_app_settings.json" # Default path in SettingsManager
+    # SettingsManager によってデフォルトの場所に作成された可能性のある設定ファイルをクリーンアップ
+    default_sm_file = Path.home() / ".fractalapp" / "fractal_app_settings.json" # SettingsManager のデフォルトパス
     if default_sm_file.exists(): default_sm_file.unlink(missing_ok=True)
     if (Path.home() / ".fractalapp").exists() and not any((Path.home() / ".fractalapp").iterdir()):
         (Path.home() / ".fractalapp").rmdir()
 
-    # sys.exit(app.exec()) # Only if this is the main app loop
-    # For testing, usually don't start a new app.exec() if one is already running.
-    # If this is run as a standalone script, app.exec() is fine.
-    # In a larger app, this dialog is modal, so app.exec() isn't needed here.
-    # For this test, we'll just let it finish.
-    # sys.exit(0) if no event loop was started by this script directly.
-    # If app = QApplication(sys.argv) is the only QApplication instance, then sys.exit(app.exec()) is fine.
-    # For this specific case, we can omit sys.exit if this is meant to be imported.
-    # If run as main:
-    # exit_code = app.exec()
-    # sys.exit(exit_code)
+    # sys.exit(app.exec()) # これがメインアプリループの場合のみ
+    # テストの場合、通常、既に実行中の場合は新しい app.exec() を開始しません。
+    # これがスタンドアロンスクリプトとして実行される場合、app.exec() は問題ありません。
+    # より大きなアプリでは、このダイアログはモーダルなので、ここでは app.exec() は不要です。
+    # このテストでは、単に終了させます。
+    # このスクリプトによって直接イベントループが開始されなかった場合は sys.exit(0)。
+    # app = QApplication(sys.argv) が唯一の QApplication インスタンスである場合、sys.exit(app.exec()) は問題ありません。
+    # この特定のケースでは、これがインポートされることを意図している場合は sys.exit を省略できます。
+    # main として実行する場合:
+    #   exit_code = app.exec()
+    #   sys.exit(exit_code)
 
-    # Test done, no app.exec() needed if run as part of a larger test suite that manages the app loop
-    # or if just testing dialog logic without showing it modally for long.
-    # For this type of __main__ block, usually it's for quick visual check, so app.exec() is fine.
-    if not QApplication.instance(): # If no app instance exists (e.g. running script directly)
-        sys.exit(app.exec()) # Start event loop
-    else: # If an app instance already exists (e.g. imported in a test runner)
-        print("Dialog test finished (assuming an external event loop or modal execution).")
-        # dialog.show() # Non-modal for inspection if needed, then manually close
+    # テスト完了。アプリループを管理するより大きなテストスイートの一部として実行される場合、
+    # またはモーダルで長時間表示せずにダイアログロジックをテストするだけの場合は、app.exec() は不要です。
+    # このタイプの __main__ ブロックの場合、通常は簡単な視覚的確認用なので、app.exec() は問題ありません。
+    if not QApplication.instance(): # アプリインスタンスが存在しない場合 (例: スクリプトを直接実行)
+        sys.exit(app.exec()) # イベントループを開始
+    else: # アプリインスタンスが既に存在する場合 (例: テストランナーにインポート)
+        print("ダイアログテストが完了しました (外部イベントループまたはモーダル実行を想定しています)。")
+        # dialog.show() # 必要に応じて検査用に非モーダルにし、手動で閉じる
         pass

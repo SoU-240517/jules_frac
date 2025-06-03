@@ -26,6 +26,7 @@ class RenderArea(QLabel):
     def update_image(self, image_data_np):
         if image_data_np is None or image_data_np.size == 0:
             # print("RenderArea: No image data received. Displaying default background.")
+            # 画像データが受信されなかった場合はデフォルト背景を表示
             self.set_default_background()
             self._original_pixmap = None
             self.clear()
@@ -35,12 +36,14 @@ class RenderArea(QLabel):
             height, width, channels = image_data_np.shape
             if channels != 4:
                 # print(f"RenderArea: Expected 4 channels (RGBA), but got {channels}.")
+                # RGBAの4チャンネルでない場合はデフォルト背景を表示
                 self.set_default_background()
                 self._original_pixmap = None
                 self.clear()
                 return
             if width == 0 or height == 0:
                 # print(f"RenderArea: Invalid image dimensions ({width}x{height}).")
+                # 幅または高さが0の場合はデフォルト背景を表示
                 self.set_default_background()
                 self._original_pixmap = None
                 self.clear()
@@ -51,8 +54,9 @@ class RenderArea(QLabel):
             self._original_pixmap = QPixmap.fromImage(qimage)
             self._display_scaled_pixmap()
             # print(f"RenderArea: Image updated ({width}x{height}). Display size: {self.width()}x{self.height()}")
+            # 画像が更新された際のデバッグメッセージ
         except Exception as e:
-            print(f"RenderArea: Error updating image - {e}")
+            print(f"RenderArea: 画像更新中にエラーが発生しました - {e}")
             self.set_default_background()
             self._original_pixmap = None
             self.clear()
@@ -143,10 +147,10 @@ class RenderArea(QLabel):
             event.ignore()
             return
 
-        # Standard step for wheel is 120 units for 15 degrees
+        # マウスホイールの標準ステップは120単位（15度）
         num_steps = delta_angle / 120.0
 
-        zoom_factor_per_std_step = 1.2 # Zoom 20% per standard wheel step (120 units)
+        zoom_factor_per_std_step = 1.2 # 標準ホイールステップごとに20%ズーム
 
         effective_zoom_factor = zoom_factor_per_std_step ** num_steps
 
@@ -162,21 +166,21 @@ class RenderArea(QLabel):
 
         new_width = current_width / effective_zoom_factor
 
-        mouse_pos_pixel = event.position() # QPointF, position relative to this widget
+        mouse_pos_pixel = event.position() # QPointF, このウィジェット内での位置
 
-        if self.width() == 0 or self.height() == 0: # Prevent division by zero if widget not sized
+        if self.width() == 0 or self.height() == 0: # ウィジェットのサイズが0の場合は除外
             event.ignore()
             return
 
         mouse_x_frac = mouse_pos_pixel.x() / self.width()
         mouse_y_frac = mouse_pos_pixel.y() / self.height()
 
-        # Fractal coordinates of the mouse pointer
+        # マウス位置のフラクタル座標
         mouse_real_coord = (current_center_real - current_width / 2.0) + (mouse_x_frac * current_width)
-        # Y-axis for fractal imaginary part is often inverted relative to screen Y
+        # フラクタルの虚数軸は画面Yと逆向きの場合が多い
         mouse_imag_coord = (current_center_imag + current_height / 2.0) - (mouse_y_frac * current_height)
 
-        # Call controller method to handle zoom logic
+        # コントローラのズーム処理を呼び出し
         self.fractal_controller.zoom_fractal_to_point(
             mouse_real_coord,
             mouse_imag_coord,
@@ -190,7 +194,7 @@ class RenderArea(QLabel):
 if __name__ == '__main__':
     import sys
     from PyQt6.QtWidgets import QApplication, QMainWindow
-    from PyQt6.QtCore import QObject, pyqtSignal # Added for MockController test
+    from PyQt6.QtCore import QObject, pyqtSignal # MockControllerテスト用に追加
 
     class MockController(QObject):
         parameters_updated_externally = pyqtSignal()
@@ -198,10 +202,10 @@ if __name__ == '__main__':
         def __init__(self):
             super().__init__()
             self._params = {"center_real": -0.5, "center_imag": 0.0, "width": 3.0, "max_iterations": 100}
-            # Approximate height based on a common aspect ratio for testing
+            # テスト用に一般的なアスペクト比で高さを近似
             self._params["height"] = self._params["width"] * (0.75)
-            self.image_width_px = 800 # Mock image pixel width for aspect calc in controller
-            self.image_height_px = 600 # Mock image pixel height
+            self.image_width_px = 800 # コントローラ内でのアスペクト計算用のダミー画像幅
+            self.image_height_px = 600 # ダミー画像高さ
 
         def get_current_engine_parameters(self):
             return self._params.copy()
@@ -209,11 +213,11 @@ if __name__ == '__main__':
         def pan_fractal(self, dr, di):
             self._params["center_real"] -= dr
             self._params["center_imag"] -= di
-            print(f"MockController: Pan. New center: ({self._params['center_real']:.4f}, {self._params['center_imag']:.4f})")
+            print(f"MockController: パン。新しい中心: ({self._params['center_real']:.4f}, {self._params['center_imag']:.4f})")
             self.parameters_updated_externally.emit()
 
         def zoom_fractal_to_point(self, fixed_r, fixed_i, frac_x, frac_y, new_w):
-            # Simplified zoom logic for mock - actual logic is in real controller
+            # モック用の簡易ズーム処理（本来のロジックは実コントローラ側）
             old_w = self._params["width"]
             aspect = self.image_height_px / self.image_width_px
             new_h = new_w * aspect
@@ -221,16 +225,16 @@ if __name__ == '__main__':
             self._params["center_real"] = fixed_r - (frac_x - 0.5) * new_w
             self._params["center_imag"] = fixed_i + (frac_y - 0.5) * new_h
             self._params["width"] = new_w
-            self._params["height"] = new_h # Update height as well
-            print(f"MockController: Zoom. New width: {new_w:.4e}. New center: ({self._params['center_real']:.4f}, {self._params['center_imag']:.4f})")
+            self._params["height"] = new_h # 高さも更新
+            print(f"MockController: ズーム。新しい幅: {new_w:.4e} 新しい中心: ({self._params['center_real']:.4f}, {self._params['center_imag']:.4f})")
             self.parameters_updated_externally.emit()
 
         def trigger_render(self, w, h):
-             print(f"MockController: trigger_render called for {w}x{h}")
+             print(f"MockController: trigger_renderが呼ばれました（{w}x{h}）")
 
     app = QApplication(sys.argv)
     main_win = QMainWindow()
-    main_win.setWindowTitle("RenderArea Wheel Zoom Test")
+    main_win.setWindowTitle("RenderArea ホイールズームテスト")
     main_win.resize(400, 300)
 
     mock_ctrl = MockController()
@@ -251,7 +255,7 @@ if __name__ == '__main__':
     dummy_data = create_dummy_image_data(320, 240)
     render_area.update_image(dummy_data)
 
-    print("\nRenderArea Wheel Zoom Test: Try scrolling the mouse wheel over the image.")
-    print("The mock controller will print new width and center coordinates.")
+    print("\nRenderArea ホイールズームテスト: 画像上でマウスホイールを回してください。")
+    print("モックコントローラが新しい幅と中心座標を出力します。")
 
     sys.exit(app.exec())

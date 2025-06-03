@@ -8,8 +8,8 @@ from .render_area import RenderArea
 from .parameter_panel import ParameterPanel
 from .high_res_dialog import HighResOutputDialog
 from PyQt6.QtCore import Qt, pyqtSlot, QTimer
-# Import SettingsManager for type hinting if not already (though not strictly necessary for constructor arg)
-# from src.app.utils.settings_manager import SettingsManager
+# SettingsManager を型ヒントのためにインポート (コンストラクタ引数には厳密には不要)
+# from src.app.utils.settings_manager import SettingsManager (コメントアウト)
 
 
 class MainWindow(QMainWindow):
@@ -22,7 +22,7 @@ class MainWindow(QMainWindow):
         self.resize(1400, 800)
 
         self.progress_dialog: QProgressDialog | None = None
-        # Load last export settings from SettingsManager, or use empty dict
+        # SettingsManager から最後のエクスポート設定を読み込む、または空の辞書を使用
         self.last_export_settings: dict = self.settings_manager.get_setting(
             HighResOutputDialog.SETTINGS_SECTION_NAME, {}
         )
@@ -30,11 +30,11 @@ class MainWindow(QMainWindow):
 
         # UI Initialization
         self._create_actions()
-        self._create_menu_bar() # Then create menus and add actions
-        self.status_bar = self.statusBar() # Get status bar
+        self._create_menu_bar() # メニューを作成しアクションを追加
+        self.status_bar = self.statusBar() # ステータスバーを取得
         self.status_bar.showMessage("準備完了")
 
-        self._setup_central_widget() # Setup RenderArea and ParameterPanel
+        self._setup_central_widget() # RenderArea と ParameterPanel をセットアップ
 
         self._connect_controller_signals() # Connect signals from FractalController
 
@@ -44,9 +44,9 @@ class MainWindow(QMainWindow):
     def _create_actions(self):
         self.export_action = QAction("高解像度出力...", self)
         self.export_action.setShortcut("Ctrl+E")
-        # self.export_action.triggered.connect(self._open_high_res_dialog) # Connection moved to _connect_controller_signals or direct in menu
+        # self.export_action.triggered.connect(self._open_high_res_dialog) # 接続は _connect_controller_signals またはメニュー内で直接行うように移動
 
-        # Example Exit Action (can be expanded)
+        # 終了アクションの例 (拡張可能)
         self.exit_action = QAction("終了", self)
         self.exit_action.setShortcut("Ctrl+Q")
         self.exit_action.triggered.connect(self.close)
@@ -54,16 +54,16 @@ class MainWindow(QMainWindow):
 
     def _create_menu_bar(self): # Renamed from _create_menus for consistency
         menu_bar = self.menuBar()
-        # File Menu
+        # ファイルメニュー
         file_menu = menu_bar.addMenu("&ファイル")
         file_menu.addAction(self.export_action)
         file_menu.addSeparator()
         file_menu.addAction(self.exit_action)
 
-        # Help Menu (Placeholder)
+        # ヘルプメニュー (プレースホルダー)
         help_menu = menu_bar.addMenu("&ヘルプ")
         about_action = QAction("バージョン情報", self)
-        # about_action.triggered.connect(self._show_about_dialog) # Placeholder for about dialog
+        # about_action.triggered.connect(self._show_about_dialog) # バージョン情報ダイアログのプレースホルダー
         help_menu.addAction(about_action)
 
 
@@ -74,7 +74,7 @@ class MainWindow(QMainWindow):
                 self.fractal_controller.image_rendered.connect(self.render_area.update_image)
             if hasattr(self.parameter_panel, 'parameters_changed_in_ui_signal'):
                 self.parameter_panel.parameters_changed_in_ui_signal.connect(self.on_ui_parameters_changed)
-            if hasattr(self.parameter_panel, 'render_button'): # Assuming render button is on ParameterPanel
+            if hasattr(self.parameter_panel, 'render_button'): # ParameterPanel に描画ボタンがあると仮定
                 self.parameter_panel.render_button.clicked.connect(self.trigger_render_from_panel)
 
             if hasattr(self.fractal_controller, 'parameters_updated_externally') and \
@@ -83,9 +83,9 @@ class MainWindow(QMainWindow):
                     self.parameter_panel.update_ui_from_controller_parameters)
 
             if hasattr(self.fractal_controller, 'active_fractal_plugin_ui_needs_update') and \
-               hasattr(self.parameter_panel, '_update_fractal_plugin_specific_ui'): # Assuming method name
+               hasattr(self.parameter_panel, '_update_fractal_plugin_specific_ui'): # メソッド名を仮定
                 self.fractal_controller.active_fractal_plugin_ui_needs_update.connect(
-                    self.parameter_panel._update_fractal_plugin_specific_ui) # Connect to the correct slot
+                    self.parameter_panel._update_fractal_plugin_specific_ui) # 正しいスロットに接続
 
             if hasattr(self.fractal_controller, 'active_coloring_plugin_ui_needs_update') and \
                hasattr(self.parameter_panel, '_update_coloring_plugin_specific_ui'):
@@ -97,21 +97,21 @@ class MainWindow(QMainWindow):
                 self.fractal_controller.active_color_map_changed_externally.connect(
                     self.parameter_panel._update_color_selection_from_controller)
 
-            # High-resolution export signals
+            # 高解像度エクスポートシグナル
             self.fractal_controller.export_started.connect(self._on_export_started)
             self.fractal_controller.export_progress_updated.connect(self._on_export_progress_updated)
             self.fractal_controller.export_process_finished.connect(self._on_export_process_finished)
 
-            # Connect export action trigger
+            # エクスポートアクショントリガーを接続
             if hasattr(self, 'export_action'):
                  self.export_action.triggered.connect(self._open_high_res_dialog)
-            # Ensure status bar connection is robust
+            # ステータスバー接続の堅牢性を確保
             if hasattr(self, 'status_bar') and self.status_bar is not None:
                  self.fractal_controller.status_updated.connect(self.update_status_bar)
             else:
-                 print("MainWindow Warning: StatusBar not initialized before connecting signals.")
+                 print("MainWindow 警告: シグナル接続前に StatusBar が初期化されていません。")
         else:
-            print("MainWindow: FractalController not available for signal connections.")
+            print("MainWindow: シグナル接続に FractalController が利用できません。")
 
 
     def update_status_bar(self, message: str): # No change
@@ -131,7 +131,7 @@ class MainWindow(QMainWindow):
         if self.fractal_controller:
             self.fractal_controller.update_common_fractal_parameters(center_real, center_imag, width, max_iterations)
         else:
-            print("MainWindow: FractalController not available to update parameters.")
+            print("MainWindow: パラメータ更新に FractalController が利用できません。")
 
     @pyqtSlot()
     def _open_high_res_dialog(self):
@@ -145,7 +145,7 @@ class MainWindow(QMainWindow):
         coloring_algo_name = self.fractal_controller.get_active_coloring_plugin_name_from_engine()
         coloring_algo_params = self.fractal_controller.get_current_coloring_plugin_parameters_from_engine()
 
-        # Corrected way to get pack and map names
+        # パック名とマップ名を取得する修正された方法
         current_pack_name_ctrl = self.fractal_controller.get_active_color_pack_name_from_engine()
         current_color_map_ctrl = self.fractal_controller.get_active_color_map_name_from_engine()
 
@@ -158,8 +158,8 @@ class MainWindow(QMainWindow):
 
         dialog_defaults = self.last_export_settings.copy()
         dialog_defaults['iterations'] = common_params.get('max_iterations', 100) * 2
-        # If last_export_settings is empty, dialog_defaults will use HighResOutputDialog's internal defaults for width/height
-        # or we can explicitly set them from current view if last_export_settings is empty.
+        # last_export_settings が空の場合、dialog_defaults は HighResOutputDialog の内部デフォルト値を幅/高さに使用します。
+        # または、last_export_settings が空の場合は現在のビューから明示的に設定できます。
         if not self.last_export_settings.get('width'): # if no width in saved settings
              dialog_defaults['width'] = self.render_area.width()
              dialog_defaults['height'] = self.render_area.height()
@@ -173,28 +173,28 @@ class MainWindow(QMainWindow):
         )
 
         if dialog.exec():
-            export_settings = dialog.get_export_settings() # This gets settings from UI & saves them via dialog.accept()
+            export_settings = dialog.get_export_settings() # UIから設定を取得し、dialog.accept()経由で保存します
             if export_settings and export_settings.get('filepath'):
-                print(f"MainWindow: Export dialog accepted. Settings from dialog: {export_settings}")
+                print(f"MainWindow: エクスポートダイアログが承認されました。ダイアログからの設定: {export_settings}")
 
-                # Pass current engine state for parts not directly set in dialog but needed by engine's generate method
+                # ダイアログで直接設定されていないが、エンジンの生成メソッドに必要な部分の現在のエンジン状態を渡す
                 export_settings['fractal_plugin_name'] = fractal_plugin_name
                 export_settings['fractal_plugin_params'] = fractal_plugin_params
                 export_settings['coloring_algorithm_name'] = coloring_algo_name
                 export_settings['coloring_algorithm_params'] = coloring_algo_params
                 export_settings['color_pack_name'] = current_pack_name_ctrl
                 export_settings['color_map_name'] = current_color_map_ctrl
-                # Common params like center/width for the fractal itself are taken from current engine state by default
-                # in generate_image_for_output, unless overridden by common_params_override.
-                # The dialog mainly overrides iterations, resolution, AA, file details.
-                # We must ensure that the common_params_override in generate_image_for_output correctly uses
-                # the iterations from export_settings['iterations'].
-                # The current engine's center_real, center_imag, width will be used by default by generate_image_for_output
-                # which is typically what is desired for exporting the "current view" at high-res.
-                # If the dialog were to allow changing center/width for export, those would go into common_params_override.
+                # フラクタル自体の中心/幅などの共通パラメータは、common_params_override によって上書きされない限り、
+                # generate_image_for_output で現在のエンジン状態からデフォルトで取得されます。
+                # ダイアログは主に反復回数、解像度、AA、ファイル詳細を上書きします。
+                # generate_image_for_output の common_params_override が export_settings['iterations'] からの反復回数を
+                # 正しく使用することを確認する必要があります。
+                # 現在のエンジンの center_real、center_imag、width は generate_image_for_output によってデフォルトで使用されます。
+                # これは通常、高解像度で「現在のビュー」をエクスポートする場合に望ましい動作です。
+                # ダイアログでエクスポート用の中心/幅の変更を許可する場合、それらは common_params_override に入ります。
 
                 self.fractal_controller.start_high_res_export(export_settings)
-                self.last_export_settings = export_settings # Update last used settings for next dialog open
+                self.last_export_settings = export_settings # 次回ダイアログを開くために最後に使用した設定を更新
             else:
                 QMessageBox.warning(self, "出力エラー", "ファイルパスが指定されていません。")
         else:
@@ -210,8 +210,8 @@ class MainWindow(QMainWindow):
         self.progress_dialog.setAutoReset(False)
         if self.fractal_controller: self.progress_dialog.canceled.connect(self.fractal_controller.cancel_current_export)
         self.progress_dialog.setValue(0)
-        if hasattr(self, 'export_action'): self.export_action.setEnabled(False) # Disable while exporting
-        print("MainWindow: Export started. Progress dialog shown.")
+        if hasattr(self, 'export_action'): self.export_action.setEnabled(False) # エクスポート中は無効化
+        print("MainWindow: エクスポートが開始されました。プログレスダイアログが表示されました。")
 
     @pyqtSlot(int)
     def _on_export_progress_updated(self, value: int):
@@ -219,7 +219,7 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(bool, str)
     def _on_export_process_finished(self, success: bool, message: str):
-        print(f"MainWindow: Export process finished. Success: {success}, Message: {message}")
+        print(f"MainWindow: エクスポート処理が完了しました。成功: {success}, メッセージ: {message}")
         if self.progress_dialog:
             self.progress_dialog.close()
             self.progress_dialog = None
@@ -227,7 +227,7 @@ class MainWindow(QMainWindow):
         if success: QMessageBox.information(self, "エクスポート完了", f"画像を保存しました:\n{message}")
         else: QMessageBox.warning(self, "エクスポート失敗", f"エラーが発生しました:\n{message}")
 
-        if hasattr(self, 'export_action'): self.export_action.setEnabled(True) # Re-enable
+        if hasattr(self, 'export_action'): self.export_action.setEnabled(True) # 再度有効化
         self.update_status_bar(f"エクスポート完了: {message}" if success else f"エクスポート失敗: {message}")
 
 
@@ -235,26 +235,26 @@ class MainWindow(QMainWindow):
     def trigger_render_from_panel(self):
         """Triggers rendering using current parameters from ParameterPanel and RenderArea size."""
         if not self.fractal_controller:
-            print("MainWindow Error: FractalController is not available.")
+            print("MainWindow エラー: FractalController が利用できません。")
             return
 
         print("MainWindow: '描画'ボタンがクリックされました.")
         if not hasattr(self, 'parameter_panel') or self.parameter_panel is None:
-            print("MainWindow Error: parameter_panel is not initialized.")
+            print("MainWindow エラー: parameter_panel が初期化されていません。")
             return
 
         params = self.parameter_panel.get_current_ui_parameters()
-        # Update engine parameters based on current UI state before triggering render
+        # 描画トリガー前に現在のUI状態に基づいてエンジンパラメータを更新
         self.fractal_controller.update_common_fractal_parameters(
             params['center_real'],
             params['center_imag'],
             params['width'],
             params['max_iterations']
-            # source="ui_button" # If source argument is used in controller
+            # source="ui_button" # コントローラーで source 引数を使用する場合
         )
 
-        if not hasattr(self, 'render_area') or self.render_area is None:
-            print("MainWindow Error: render_area is not initialized.")
+        if not hasattr(self, 'render_area') or self.render_area is None: # render_area の存在確認
+            print("MainWindow エラー: render_area が初期化されていません。")
             return
 
         render_width = self.render_area.width()
@@ -262,7 +262,7 @@ class MainWindow(QMainWindow):
 
         if render_width <= 0 or render_height <= 0:
             print("MainWindow: RenderAreaのサイズが不正です. デフォルトサイズで描画を試みます.")
-            # Trigger render with controller's current (possibly default) image size settings
+            # コントローラーの現在 (おそらくデフォルト) の画像サイズ設定で描画をトリガー
             self.fractal_controller.trigger_render()
         else:
             self.fractal_controller.trigger_render(render_width, render_height)
@@ -271,10 +271,10 @@ class MainWindow(QMainWindow):
     def showEvent(self, event):
         """Called when the window is shown."""
         super().showEvent(event)
-        # Perform initial render only once, after a short delay to allow UI to stabilize.
+        # UIが安定するのを待つために短い遅延の後、初回描画を一度だけ実行します。
         if not self._initial_render_done:
-            # Using QTimer.singleShot to delay the initial render slightly,
-            # ensuring the window and its widgets have been sized and are visible.
+            # QTimer.singleShot を使用して初回描画をわずかに遅延させ、
+            # ウィンドウとそのウィジェットのサイズが決定され、表示されていることを確認します。
             QTimer.singleShot(100, self._perform_initial_render)
 
     def _perform_initial_render(self):
@@ -283,32 +283,32 @@ class MainWindow(QMainWindow):
             return
 
         if not self.fractal_controller:
-            print("MainWindow Error: FractalController not available for initial render.")
+            print("MainWindow エラー: 初回描画に FractalController が利用できません。")
             return
 
         self._initial_render_attempts += 1
         print(f"MainWindow: 初回描画を試みます (試行: {self._initial_render_attempts}).")
 
-        # Check if critical components are initialized and RenderArea has a valid size
+        # 重要なコンポーネントが初期化され、RenderArea が有効なサイズを持っているか確認
         if not hasattr(self, 'render_area') or self.render_area is None or \
            self.render_area.width() <= 0 or self.render_area.height() <= 0 or \
            not hasattr(self, 'parameter_panel') or self.parameter_panel is None:
 
-            if self._initial_render_attempts <= 5: # Retry a few times
+            if self._initial_render_attempts <= 5: # 数回リトライ
                 print(f"MainWindow: RenderAreaまたはParameterPanelが未初期化かサイズ不正のため初回描画を遅延します.")
                 QTimer.singleShot(200 * self._initial_render_attempts, self._perform_initial_render)
             else:
-                print("MainWindow Error: RenderAreaまたはParameterPanelの初期化/サイズ確定に失敗しました. 初回描画を中止します.")
+                print("MainWindow エラー: RenderAreaまたはParameterPanelの初期化/サイズ確定に失敗しました. 初回描画を中止します.")
             return
 
-        # Load initial parameters from the panel (which should have loaded from controller or defaults)
+        # パネルから初期パラメータを読み込み (コントローラーまたはデフォルトから読み込まれているはず)
         initial_params = self.parameter_panel.get_current_ui_parameters()
         self.fractal_controller.update_common_fractal_parameters(
             initial_params['center_real'],
             initial_params['center_imag'],
             initial_params['width'],
             initial_params['max_iterations']
-            # source="initial_load" # If source argument is used
+            # source="initial_load" # source 引数を使用する場合
         )
 
         render_width = self.render_area.width()
@@ -322,15 +322,15 @@ class MainWindow(QMainWindow):
 
 if __name__ == '__main__':
     import sys
-    from PyQt6.QtCore import QTimer, QObject, pyqtSignal # For timed emission in test and QObject/pyqtSignal
-    import numpy # For creating dummy data in test
+    from PyQt6.QtCore import QTimer, QObject, pyqtSignal # テストでの時間指定エミッションおよび QObject/pyqtSignal 用
+    import numpy # テストでのダミーデータ作成用
 
     import numpy as np  # Ensure numpy is imported as np
 
     class MockFractalController(QObject):
         status_updated = pyqtSignal(str)
         image_rendered = pyqtSignal(object)
-        parameters_updated_externally = pyqtSignal() # Keep this for consistency if ParameterPanel uses it
+        parameters_updated_externally = pyqtSignal() # ParameterPanel が使用する場合の一貫性のために保持
 
         def __init__(self, engine=None):
             super().__init__()
@@ -341,7 +341,7 @@ if __name__ == '__main__':
         def set_main_window(self, win): pass
 
         def trigger_render(self, w=None, h=None):
-            print(f"MockController: render triggered for approx {w}x{h}")
+            print(f"MockController: 約 {w}x{h} で描画がトリガーされました")
             self.dummy_image_counter += 1
             width, height = 100 + self.dummy_image_counter*20, 80 + self.dummy_image_counter*15
             dummy_data = np.zeros((height, width, 4), dtype=np.uint8) # RGBA
@@ -350,43 +350,42 @@ if __name__ == '__main__':
             dummy_data[:, :, 2] = (50 + self.dummy_image_counter * 5) % 255
             dummy_data[:, :, 3] = 255
             self.image_rendered.emit(dummy_data)
-            self.status_updated.emit(f"Mock: Rendered dummy image {self.dummy_image_counter} ({width}x{height})")
+            self.status_updated.emit(f"Mock: ダミー画像 {self.dummy_image_counter} ({width}x{height}) を描画しました")
 
         def update_status_display(self):
-            self.status_updated.emit("Mock status: Parameters updated")
+            self.status_updated.emit("Mock ステータス: パラメータが更新されました")
 
         def get_current_parameters(self):
             return self._params_cache
 
-        def get_current_engine_parameters(self): # For RenderArea pan calculation
+        def get_current_engine_parameters(self): # RenderArea パン計算用
              return self.get_current_parameters()
 
-        def update_fractal_parameters(self, cr, ci, w, iters): # Removed source for simplicity in mock
-            print(f"MockController: update_fractal_parameters: CR={cr}, CI={ci}, W={w}, Iters={iters}")
+        def update_fractal_parameters(self, cr, ci, w, iters): # モックの簡略化のため source を削除
+            print(f"MockController: update_fractal_parameters: CR={cr}, CI={ci}, W={w}, Iters={iters}") # ログメッセージ
             self._params_cache = {"center_real":cr, "center_imag":ci, "width":w, "max_iterations":iters}
-            # Ensure height is updated based on some aspect ratio if relevant for mock tests
+            # モックテストに関連する場合、高さが何らかのアスペクト比に基づいて更新されることを確認
             self._params_cache["height"] = w * ( (self._params_cache.get("image_height_px",3) / self._params_cache.get("image_width_px",4) ) if self._params_cache.get("image_width_px",4) > 0 else 0.75)
-            self.status_updated.emit(f"Mock: Params updated to CR={cr:.2f}, W={w:.2f}, Iters={iters}")
-            # self.parameters_updated_externally.emit() # Only if change was non-UI
+            self.status_updated.emit(f"Mock: パラメータが CR={cr:.2f}, W={w:.2f}, Iters={iters} に更新されました")
+            # self.parameters_updated_externally.emit() # UI以外の変更の場合のみ
 
         def pan_fractal(self, dr, di):
-            print(f"MockController (MainWindow test): pan_fractal called with dr={dr:.4e}, di={di:.4e}")
+            print(f"MockController (MainWindow テスト): pan_fractal が dr={dr:.4e}, di={di:.4e} で呼び出されました")
             params = self.get_current_parameters()
             new_cr = params["center_real"] - dr
             new_ci = params["center_imag"] - di
             self.update_fractal_parameters(new_cr, new_ci, params["width"], params["max_iterations"])
-            self.parameters_updated_externally.emit() # Panning is an external update to parameters
+            self.parameters_updated_externally.emit() # パンはパラメータへの外部更新です
             self.trigger_render()
 
 
     app = QApplication(sys.argv)
     mock_controller = MockFractalController()
     main_win = MainWindow(fractal_controller=mock_controller)
-
-    # Connect status update, already done if MainWindow connects it internally, but good for test clarity
+    # ステータス更新を接続、MainWindow が内部で接続していれば既に完了していますが、テストの明確性のために良い
     if hasattr(mock_controller, 'status_updated') and hasattr(main_win, 'update_status_bar'):
          mock_controller.status_updated.connect(main_win.update_status_bar)
-    # The key connections are now inside MainWindow's __init__
+    # 主要な接続は MainWindow の __init__ 内にあります
 
     main_win.show()
 
@@ -394,19 +393,19 @@ if __name__ == '__main__':
     # In a real scenario, user would click ParameterPanel's render_button
     def simulate_render_button_click():
         if hasattr(main_win, 'trigger_render_from_panel'):
-            print("\nTest Harness: Simulating render button click...")
+            print("\nテストハーネス: 描画ボタンクリックをシミュレート中...")
             main_win.trigger_render_from_panel()
 
     QTimer.singleShot(1000, simulate_render_button_click)
 
     # Simulate a UI parameter change then render button click
     def simulate_ui_change_then_render():
-        print("\nTest Harness: Simulating UI parameter change in panel...")
+        print("\nテストハーネス: パネルでのUIパラメータ変更をシミュレート中...")
         if hasattr(main_win, 'parameter_panel'):
-            # This will emit parameters_changed_in_ui_signal, which MainWindow connects to on_ui_parameters_changed
+            # これにより parameters_changed_in_ui_signal が発行され、MainWindow は on_ui_parameters_changed に接続します
             main_win.parameter_panel.width_spinbox.setValue(1.5)
 
-        # Then simulate render button click after a short delay for param update to process
+        # パラメータ更新処理のための短い遅延の後、描画ボタンクリックをシミュレート
         QTimer.singleShot(200, simulate_render_button_click)
 
 

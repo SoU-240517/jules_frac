@@ -2,8 +2,7 @@ import numpy as np
 from numba import jit
 
 from src.app.plugins.base_plugin import FractalPlugin
-
-@jit(nopython=True) # cache=True を削除
+@jit(nopython=True) # cache=True を削除しました
 def _calculate_julia_point_jit(z_real_start, z_imag_start, c_real_const, c_imag_const, max_iters, escape_radius_sq):
     z_real = z_real_start
     z_imag = z_imag_start
@@ -12,14 +11,14 @@ def _calculate_julia_point_jit(z_real_start, z_imag_start, c_real_const, c_imag_
         z_imag_sq = z_imag * z_imag
         mod_sq = z_real_sq + z_imag_sq
         if mod_sq > escape_radius_sq:
-            return i, mod_sq # Return iterations and |Z|^2
+            return i, mod_sq # 反復回数と|Z|^2を返します
 
         new_z_imag = 2.0 * z_real * z_imag + c_imag_const
         z_real = z_real_sq - z_imag_sq + c_real_const
         z_imag = new_z_imag
-    return max_iters, 0.0 # Converged or max_iters reached
+    return max_iters, 0.0 # 収束したか、最大反復回数に達しました
 
-@jit(nopython=True) # cache=True を削除
+@jit(nopython=True) # cache=True を削除しました
 def _compute_julia_grid_jit(width_px, height_px, min_x, max_x, min_y, max_y,
                             c_real_const, c_imag_const, max_iters, escape_radius_sq):
     iter_result = np.empty((height_px, width_px), dtype=np.int32)
@@ -94,10 +93,10 @@ class JuliaPlugin(FractalPlugin):
         min_y = center_imag - height / 2.0
         max_y = center_imag + height / 2.0
 
-        print(f"JuliaPlugin: Starting computation - C=({c_real_const:.4f} + {c_imag_const:.4f}i), "
-              f"Image: {image_width_px}x{image_height_px}px, "
-              f"Complex Area: Real ({min_x:.4f} to {max_x:.4f}), Imag ({min_y:.4f} to {max_y:.4f}), "
-              f"Max Iter: {max_iterations}")
+        print(f"JuliaPlugin: 計算開始 - C=({c_real_const:.4f} + {c_imag_const:.4f}i), "
+              f"画像: {image_width_px}x{image_height_px}px, "
+              f"複素領域: 実数部 ({min_x:.4f} から {max_x:.4f}), 虚数部 ({min_y:.4f} から {max_y:.4f}), "
+              f"最大反復回数: {max_iterations}")
 
         iter_array, mod_sq_array = _compute_julia_grid_jit(
             image_width_px, image_height_px,
@@ -105,19 +104,18 @@ class JuliaPlugin(FractalPlugin):
             c_real_const, c_imag_const,
             max_iterations, escape_radius_sq
         )
-
-        print(f"JuliaPlugin: Computation complete. Iterations shape: {iter_array.shape}, ModSq shape: {mod_sq_array.shape}")
+        print(f"JuliaPlugin: 計算完了。反復回数配列形状: {iter_array.shape}, ModSq形状: {mod_sq_array.shape}")
         return {'iterations': iter_array, 'last_z_modulus_sq': mod_sq_array}
 
     def get_presets(self) -> dict | None:
         return {
-            "Classic Beauty": {"c_real": -0.745, "c_imag": 0.113},
-            "Feigenbaum Point": {"c_real": -1.401155, "c_imag": 0.0},
-            "Seahorse": {"c_real": -0.75, "c_imag": 0.1},
-            "Dragon Tail": {"c_real": -0.8, "c_imag": 0.156},
-            "Electric Eels": {"c_real": -0.162, "c_imag": 1.04},
-            "Snowflakes": {"c_real": 0.285, "c_imag": 0.01},
-            "Spiral": {"c_real": -0.778, "c_imag": -0.136},
+            "クラシックビューティー": {"c_real": -0.745, "c_imag": 0.113},
+            "ファイゲンバウム点": {"c_real": -1.401155, "c_imag": 0.0},
+            "シーホース": {"c_real": -0.75, "c_imag": 0.1},
+            "ドラゴンテール": {"c_real": -0.8, "c_imag": 0.156},
+            "電気ウナギ": {"c_real": -0.162, "c_imag": 1.04},
+            "雪の結晶": {"c_real": 0.285, "c_imag": 0.01},
+            "スパイラル": {"c_real": -0.778, "c_imag": -0.136},
         }
 
 if __name__ == '__main__':
@@ -128,7 +126,7 @@ if __name__ == '__main__':
     print(f"Default View Parameters: {plugin.get_default_view_parameters()}")
 
     presets = plugin.get_presets()
-    print(f"Presets Available: {list(presets.keys()) if presets else 'None'}")
+    print(f"利用可能なプリセット: {list(presets.keys()) if presets else 'なし'}")
 
     test_common_params = {
         'center_real': 0.0,
@@ -143,22 +141,21 @@ if __name__ == '__main__':
     if presets:
         first_preset_name = list(presets.keys())[0]
         test_plugin_params = presets[first_preset_name]
-        print(f"\nUsing preset '{first_preset_name}' for computation test: {test_plugin_params}")
+        print(f"\n計算テストにプリセット '{first_preset_name}' を使用: {test_plugin_params}")
     else:
         for p_def in param_defs:
             test_plugin_params[p_def['name']] = p_def['default']
-        print(f"\nUsing default plugin parameters for computation test: {test_plugin_params}")
+        print(f"\n計算テストにデフォルトのプラグインパラメータを使用: {test_plugin_params}")
 
     img_width_test, img_height_test = 160, 120
 
-    print(f"Testing compute_fractal ({img_width_test}x{img_height_test})...")
+    print(f"compute_fractal ({img_width_test}x{img_height_test}) をテスト中...")
     fractal_result_data = plugin.compute_fractal(test_common_params, test_plugin_params, img_width_test, img_height_test)
 
     iter_result_array = fractal_result_data['iterations']
     mod_sq_result_array = fractal_result_data['last_z_modulus_sq']
-
-    print(f"  Iterations array shape: {iter_result_array.shape}, dtype: {iter_result_array.dtype}")
-    print(f"  |Z|^2 array shape: {mod_sq_result_array.shape}, dtype: {mod_sq_result_array.dtype}")
+    print(f"  反復回数配列形状: {iter_result_array.shape}, dtype: {iter_result_array.dtype}")
+    print(f"  |Z|^2 配列形状: {mod_sq_result_array.shape}, dtype: {mod_sq_result_array.dtype}")
 
 
     try:
@@ -176,6 +173,6 @@ if __name__ == '__main__':
         plt.ylabel("Imaginary")
         plt.show()
     except ImportError:
-        print("  matplotlib not found. Skipping image display test.")
+        print("  matplotlibが見つかりません。画像表示テストをスキップします。")
 
-    print("\nJuliaPlugin test finished.")
+    print("\nJuliaPlugin のテストが完了しました。")
