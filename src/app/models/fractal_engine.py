@@ -1,5 +1,7 @@
 import numpy as np
 import time
+import traceback # トレースバック情報を取得するためにインポート
+from pathlib import Path
 
 from src.app.plugins.plugin_manager import PluginManager
 from src.app.plugins.base_plugin import FractalPlugin
@@ -9,7 +11,7 @@ from src.app.coloring.color_manager import ColorManager
 
 
 class FractalEngine:
-    def __init__(self, image_width_px=800, image_height_px=600,
+    def __init__(self, project_root_path: Path, image_width_px=800, image_height_px=600,
                  fractal_plugin_folder="src/app/plugins/fractals",
                  coloring_plugin_folder="src/app/plugins/coloring",
                  color_pack_folder="assets/colorpacks"):
@@ -25,10 +27,12 @@ class FractalEngine:
         self.height = (self.width * self.image_height_px) / self.image_width_px if self.image_width_px > 0 else self.width
 
         self.plugin_manager = PluginManager(
+            project_root_path=project_root_path,
             fractal_plugin_folder_path=fractal_plugin_folder,
             coloring_plugin_folder_path=coloring_plugin_folder
         )
-        self.color_manager = ColorManager(color_packs_dir=color_pack_folder)
+        # ColorManagerもプロジェクトルートからの相対パスで初期化するのが望ましい
+        self.color_manager = ColorManager(color_packs_dir=str(project_root_path / color_pack_folder))
 
         self.current_fractal_plugin: FractalPlugin | None = None
         self.current_fractal_plugin_parameters: dict = {}
@@ -170,6 +174,9 @@ class FractalEngine:
                 data_to_color, common_fp, self.current_coloring_plugin_parameters, color_map_list
             )
         except Exception as e:
+            print(f"FractalEngine Error during coloring: {e}")
+            print("Traceback (most recent call last):")
+            traceback.print_exc() # トレースバック情報を標準エラー出力に出力
             h = common_fp['image_height_px']; w = common_fp['image_width_px']
             err_img = np.full((h if h>0 else 1, w if w>0 else 1, 4), [255,0,0,255], dtype=np.uint8)
             return err_img
@@ -282,7 +289,10 @@ if __name__ == '__main__':
     # Test requires plugins and color packs in default locations relative to CWD
     # e.g., CWD = project root, then paths like "src/app/plugins/fractals" are valid.
     print("FractalEngine (with generate_image_for_output) Standalone Test")
-    engine = FractalEngine(image_width_px=80, image_height_px=60) # Small default for screen
+    # For standalone test, assume CWD is project root
+    test_project_root = Path.cwd()
+    print(f"  Using project root for test: {test_project_root}")
+    engine = FractalEngine(project_root_path=test_project_root, image_width_px=80, image_height_px=60) # Small default for screen
 
     if not engine.get_active_fractal_plugin() or not engine.get_active_coloring_plugin():
         print("Default plugins not loaded. Check paths or plugin availability. Test cannot proceed fully.")

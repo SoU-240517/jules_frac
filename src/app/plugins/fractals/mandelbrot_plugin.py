@@ -1,13 +1,9 @@
 import numpy as np
 from numba import jit
 
-try:
-    from ..base_plugin import FractalPlugin
-except ImportError:
-    from base_plugin import FractalPlugin
+from src.app.plugins.base_plugin import FractalPlugin
 
-
-@jit(nopython=True, cache=True)
+    # @jit(nopython=True, cache=True) # Numba JITを一時的に無効化
 def _calculate_mandelbrot_point_jit(c_real, c_imag, max_iters, escape_radius_sq):
     z_real = 0.0
     z_imag = 0.0
@@ -24,7 +20,7 @@ def _calculate_mandelbrot_point_jit(c_real, c_imag, max_iters, escape_radius_sq)
     # Converged or max_iters reached, return 0.0 for |Z|^2 (or another indicator if needed)
     return max_iters, 0.0
 
-@jit(nopython=True, cache=True, parallel=True)
+    # @jit(nopython=True, cache=True, parallel=True) # Numba JITを一時的に無効化
 def _compute_mandelbrot_grid_jit(width_px, height_px, min_x, max_x, min_y, max_y, max_iters, escape_radius_sq):
     iter_result = np.empty((height_px, width_px), dtype=np.int32)
     mod_sq_result = np.empty((height_px, width_px), dtype=np.float64) # For |Z|^2

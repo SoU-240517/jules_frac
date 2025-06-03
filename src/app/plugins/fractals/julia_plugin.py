@@ -1,12 +1,9 @@
 import numpy as np
 from numba import jit
 
-try:
-    from ..base_plugin import FractalPlugin
-except ImportError:
-    from base_plugin import FractalPlugin
+from src.app.plugins.base_plugin import FractalPlugin
 
-@jit(nopython=True, cache=True)
+@jit(nopython=True) # cache=True を削除
 def _calculate_julia_point_jit(z_real_start, z_imag_start, c_real_const, c_imag_const, max_iters, escape_radius_sq):
     z_real = z_real_start
     z_imag = z_imag_start
@@ -22,7 +19,7 @@ def _calculate_julia_point_jit(z_real_start, z_imag_start, c_real_const, c_imag_
         z_imag = new_z_imag
     return max_iters, 0.0 # Converged or max_iters reached
 
-@jit(nopython=True, cache=True, parallel=True)
+@jit(nopython=True) # cache=True を削除
 def _compute_julia_grid_jit(width_px, height_px, min_x, max_x, min_y, max_y,
                             c_real_const, c_imag_const, max_iters, escape_radius_sq):
     iter_result = np.empty((height_px, width_px), dtype=np.int32)
@@ -77,6 +74,7 @@ class JuliaPlugin(FractalPlugin):
             'center_real': 0.0,
             'center_imag': 0.0,
             'width': 3.0,
+            'max_iterations': 100
         }
 
     def compute_fractal(self, common_params: dict, plugin_params: dict, image_width_px: int, image_height_px: int) -> dict:

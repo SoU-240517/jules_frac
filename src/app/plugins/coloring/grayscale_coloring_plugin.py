@@ -11,7 +11,7 @@ except ImportError:
 
 
 # Numba JIT-compiled helper function (formerly in FractalEngine or similar)
-@jit(nopython=True, cache=True)
+@jit(nopython=True)
 def _apply_grayscale_coloring_jit(iterations_array: np.ndarray, max_iters: int) -> np.ndarray:
     height, width = iterations_array.shape
     colored_image_rgba = np.empty((height, width, 4), dtype=np.uint8)

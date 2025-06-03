@@ -32,8 +32,8 @@ if __name__ == '__main__':
     settings_manager = SettingsManager(settings_filename=str(settings_file_path))
 
     # モデル、コントローラーの作成
-    # FractalEngineのコンストラクタで各プラグインフォルダのデフォルトパスが使われる
-    fractal_engine = FractalEngine()
+    # FractalEngineにプロジェクトルートパスを渡す
+    fractal_engine = FractalEngine(project_root_path=_project_root)
     fractal_controller = FractalController(fractal_engine)
 
     # ダークテーマのスタイルシート (変更なし)

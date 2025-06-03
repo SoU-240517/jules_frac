@@ -35,7 +35,7 @@ class FractalPlugin(ABC):
         pass
 
     @abstractmethod
-    def compute_fractal(self, common_params: dict, plugin_params: dict, image_width_px: int, image_height_px: int) -> np.ndarray:
+    def compute_fractal(self, common_params: dict, plugin_params: dict, image_width_px: int, image_height_px: int) -> dict:
         """
         フラクタル計算を実行し、エスケープ時間のNumPy配列を返します。
 
@@ -53,7 +53,9 @@ class FractalPlugin(ABC):
             image_height_px (int): 生成画像の高さ (ピクセル単位)
 
         戻り値:
-            numpy.ndarray: 各ピクセルのエスケープ回数を格納した2D配列 (dtype=np.int32)
+            dict: 計算結果を格納した辞書。最低限以下のキーを含むことを期待:
+                  'iterations': numpy.ndarray (dtype=np.int32) - 各ピクセルのエスケープ回数
+                  他のキーはプラグインやカラーリングアルゴリズムの要求に応じて追加可能 (例: 'last_z_modulus_sq')
         """
         pass
 

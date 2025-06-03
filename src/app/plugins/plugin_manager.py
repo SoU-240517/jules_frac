@@ -1,43 +1,35 @@
 import os
 import importlib.util
+import sys
 import inspect
 from pathlib import Path
 
-try:
-    from .base_plugin import FractalPlugin
-    from .base_coloring_plugin import ColoringAlgorithmPlugin
-except ImportError:
-    # Fallback for tests or if script is run in a way that relative imports don't work as expected
-    # This assumes the base_plugin files are discoverable in PYTHONPATH or current dir.
-    from base_plugin import FractalPlugin
-    from base_coloring_plugin import ColoringAlgorithmPlugin
+# アプリケーションの構造に基づいた絶対インポートを使用します。
+# main.py で _project_root (jules_frac ディレクトリ) が sys.path に追加されるため、
+# src.app.plugins.base_plugin のように参照可能です。
+from src.app.plugins.base_plugin import FractalPlugin
+from src.app.plugins.base_coloring_plugin import ColoringAlgorithmPlugin
 
 class PluginManager:
     """
     Manages the dynamic loading of fractal and coloring algorithm plugins.
     """
     def __init__(self,
+                 project_root_path: Path,
                  fractal_plugin_folder_path: str = "src/app/plugins/fractals",
                  coloring_plugin_folder_path: str = "src/app/plugins/coloring"):
         """
         Initializes the PluginManager.
-        Paths are treated as relative to the project root.
+        `fractal_plugin_folder_path` and `coloring_plugin_folder_path` are relative to `project_root_path`.
         """
-        self.fractal_plugin_folder = Path(fractal_plugin_folder_path)
+        self.project_root = project_root_path
+        self.fractal_plugin_folder = (self.project_root / fractal_plugin_folder_path).resolve()
         self.fractal_plugins: dict[str, FractalPlugin] = {}
 
-        self.coloring_plugin_folder = Path(coloring_plugin_folder_path)
+        self.coloring_plugin_folder = (self.project_root / coloring_plugin_folder_path).resolve()
         self.coloring_plugins: dict[str, ColoringAlgorithmPlugin] = {}
 
         self.load_all_plugins()
-
-    def _resolve_folder_path(self, folder_path: Path) -> Path:
-        """Resolves the given folder path. If not absolute, assumes relative to CWD."""
-        # For robustness, this should ideally be relative to the application's root directory,
-        # which might need to be passed in or determined reliably.
-        if not folder_path.is_absolute():
-            return (Path.cwd() / folder_path).resolve()
-        return folder_path.resolve()
 
     def load_all_plugins(self):
         """Loads all types of plugins."""
@@ -60,47 +52,59 @@ class PluginManager:
         Loads plugins of a specific base_class from the given folder_path into target_dict.
         """
         target_dict.clear()
-        effective_folder = self._resolve_folder_path(folder_path)
 
-        print(f"PluginManager: Loading {plugin_type_name} plugins from '{effective_folder}'...")
+        print(f"PluginManager: Loading {plugin_type_name} plugins from '{folder_path}'...")
 
-        if not effective_folder.is_dir():
-            print(f"PluginManager Error: {plugin_type_name} plugin folder not found: {effective_folder}")
+        if not folder_path.is_dir():
+            print(f"PluginManager Error: {plugin_type_name} plugin folder not found: {folder_path}")
             return
 
-        for file_path in effective_folder.glob("*.py"):
-            module_name = file_path.stem
+        # sys.path modification is no longer needed as plugins will use absolute imports from 'src.'
+        for file_path in folder_path.glob("*.py"):
+                module_name = file_path.stem
 
-            if module_name.startswith("__") or module_name in ["base_plugin", "base_coloring_plugin"]:
-                continue
-
-            try:
-                spec = importlib.util.spec_from_file_location(module_name, str(file_path.resolve()))
-                if spec is None or spec.loader is None:
-                    print(f"PluginManager Warning: Could not create module spec for {file_path.name}")
+                if module_name.startswith("__") or module_name in ["base_plugin", "base_coloring_plugin"]:
                     continue
 
-                module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(module)
+                try:
+                    spec = importlib.util.spec_from_file_location(module_name, str(file_path.resolve()))
+                    if spec is None or spec.loader is None:
+                        print(f"PluginManager Warning: Could not create module spec for {file_path.name}")
+                        continue
 
-                for member_name, cls in inspect.getmembers(module, inspect.isclass):
-                    if issubclass(cls, base_class) and cls is not base_class and not inspect.isabstract(cls):
-                        try:
-                            plugin_instance = cls()
-                            if plugin_instance.name in target_dict:
-                                print(f"PluginManager Warning: Duplicate {plugin_type_name} plugin name '{plugin_instance.name}'. "
-                                      f"Ignoring {file_path.name}, using existing.")
-                            else:
-                                target_dict[plugin_instance.name] = plugin_instance
-                                print(f"PluginManager: Loaded {plugin_type_name} plugin '{plugin_instance.name}' from {file_path.name}.")
-                        except Exception as e:
-                            print(f"PluginManager Error: Failed to instantiate {plugin_type_name} plugin '{member_name}' "
-                                  f"from {file_path.name}: {e}")
-            except Exception as e:
-                print(f"PluginManager Error: Failed to load {plugin_type_name} plugin file '{file_path.name}': {e}")
+                    module = importlib.util.module_from_spec(spec)
+                    spec.loader.exec_module(module)
+
+                    for member_name, cls in inspect.getmembers(module, inspect.isclass):
+                        # ---- ここからデバッグ用コード ----
+                        # print(f"PluginManager DEBUG: Checking class '{cls.__module__}.{cls.__name__}' (id: {id(cls)})")
+                        # print(f"PluginManager DEBUG: Against base_class '{base_class.__module__}.{base_class.__name__}' (id: {id(base_class)})")
+                        # is_sub = False
+                        # try:
+                        #     is_sub = issubclass(cls, base_class)
+                        # except TypeError as te:
+                        #     print(f"PluginManager DEBUG: issubclass check failed with TypeError: {te}")
+                        # print(f"PluginManager DEBUG: issubclass(cls, base_class) -> {is_sub}")
+                        # print(f"PluginManager DEBUG: cls is base_class -> {cls is base_class}")
+                        # print(f"PluginManager DEBUG: inspect.isabstract(cls) -> {inspect.isabstract(cls)}")
+                        # ---- ここまでデバッグ用コード ----
+                        if issubclass(cls, base_class) and cls is not base_class and not inspect.isabstract(cls):
+                            try:
+                                plugin_instance = cls()
+                                if plugin_instance.name in target_dict:
+                                    print(f"PluginManager Warning: Duplicate {plugin_type_name} plugin name '{plugin_instance.name}'. "
+                                          f"Ignoring {file_path.name}, using existing.")
+                                else:
+                                    target_dict[plugin_instance.name] = plugin_instance
+                                    print(f"PluginManager: Loaded {plugin_type_name} plugin '{plugin_instance.name}' from {file_path.name}.")
+                            except Exception as e:
+                                print(f"PluginManager Error: Failed to instantiate {plugin_type_name} plugin '{member_name}' "
+                                      f"from {file_path.name}: {e}")
+                except Exception as e:
+                    print(f"PluginManager Error: Failed to load {plugin_type_name} plugin file '{file_path.name}': {e}")
 
         if not target_dict:
-            print(f"PluginManager: No valid {plugin_type_name} plugins found in '{effective_folder}'.")
+            print(f"PluginManager: No valid {plugin_type_name} plugins found in '{folder_path}'.")
 
     # Fractal Plugin specific methods
     def get_available_fractal_plugins(self) -> list[FractalPlugin]:
@@ -205,9 +209,12 @@ class TestGray(ColoringAlgorithmPlugin):
 
     print(f"  Created temp plugin dirs: {test_fractal_dir.resolve()}, {test_coloring_dir.resolve()}")
 
+    # For the standalone test, the project_root is the current directory,
+    # and plugin folder paths are relative to this.
     manager = PluginManager(
-        fractal_plugin_folder_path=str(test_fractal_dir),
-        coloring_plugin_folder_path=str(test_coloring_dir)
+        project_root_path=Path.cwd(), # Test assumes CWD is where temp dirs are created
+        fractal_plugin_folder_path=test_fractal_dir.name, # Pass as relative path string from CWD
+        coloring_plugin_folder_path=test_coloring_dir.name # Pass as relative path string from CWD
     )
 
     print("\nAvailable Fractal Plugins:")
