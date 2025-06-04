@@ -11,7 +11,7 @@ from numba import jit
 
 logger = CustomLogger()
 
-@jit(nopython=True, cache=True)
+# @jit(nopython=True, cache=True)
 def _calculate_potentials_jit(
     iterations: np.ndarray,
     last_zn_values: np.ndarray, # complex
@@ -39,7 +39,7 @@ def _calculate_potentials_jit(
                     has_valid = True # It's a valid point to color, even if its potential is effectively minimal
     return potentials, min_p, max_p, has_valid
 
-@jit(nopython=True, cache=True)
+# @jit(nopython=True, cache=True)
 def _normalize_and_color_jit(
     potentials: np.ndarray,
     min_potential_norm: float, # Min potential to use for normalization

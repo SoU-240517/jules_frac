@@ -144,9 +144,19 @@ class PluginManager:
         plugin = self.coloring_plugins.get(name)
         if plugin and target_type:
             if plugin.target_type == target_type:
-                return plugin
+                pass # プラグインが見つかり、タイプも一致
             else:
+                # logger.log(f"PluginManager.get_coloring_plugin: Plugin '{name}' found, but target_type mismatch (expected '{target_type}', got '{plugin.target_type}').", level="DEBUG") # このログは重複するので削除
                 return None # 名前は一致したが、タイプが異なる
+
+        if plugin:
+            try:
+                params = plugin.get_parameters_definition()
+                logger.log(f"PluginManager.get_coloring_plugin: Found plugin '{plugin.name}' for target '{getattr(plugin, 'target_type', 'N/A')}'. Params: {params}", level="DEBUG")
+            except Exception as e:
+                logger.log(f"PluginManager.get_coloring_plugin: Error getting params for '{plugin.name}': {e}", level="ERROR")
+        else:
+            logger.log(f"PluginManager.get_coloring_plugin: No plugin found for name '{name}' and target '{target_type}'.", level="WARNING")
         return plugin
 
     def reload_all_plugins(self):

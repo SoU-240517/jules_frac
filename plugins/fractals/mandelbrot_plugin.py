@@ -85,11 +85,14 @@ class MandelbrotPlugin(FractalPlugin):
         last_zn_values_complex = last_z_real_array + 1j * last_z_imag_array
         last_z_modulus_sq = np.abs(last_zn_values_complex)**2 # Calculate |Z|^2
 
+        is_diverged = iter_array < max_iterations
+
         logger.log(f"計算完了。反復回数配列形状: {iter_array.shape}, last_zn_values形状: {last_zn_values_complex.shape}", level="DEBUG")
         return {
             'iterations': iter_array,
             'last_zn_values': last_zn_values_complex, # Keep for other uses or compatibility
-            'last_z_modulus_sq': last_z_modulus_sq    # Add this for smooth coloring
+            'last_z_modulus_sq': last_z_modulus_sq,    # Add this for smooth coloring
+            'is_diverged': is_diverged
         }
 
 if __name__ == '__main__':

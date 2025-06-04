@@ -109,10 +109,7 @@ class MainWindow(QMainWindow):
                 self.fractal_controller.active_fractal_plugin_ui_needs_update.connect(
                     self.parameter_panel._update_fractal_plugin_specific_ui) # 正しいスロットに接続
 
-            if hasattr(self.fractal_controller, 'active_coloring_plugin_ui_needs_update') and \
-               hasattr(self.parameter_panel, '_update_coloring_plugin_specific_ui'):
-                self.fractal_controller.active_coloring_plugin_ui_needs_update.connect(
-                    self.parameter_panel._update_coloring_plugin_specific_ui)
+            # 以下の active_coloring_plugin_ui_needs_update 接続ブロックは削除されました。
 
             if hasattr(self.fractal_controller, 'active_color_map_changed_externally') and \
                hasattr(self.parameter_panel, '_update_color_selection_from_controller'):

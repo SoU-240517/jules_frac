@@ -1127,22 +1127,22 @@ class ParameterPanel(QScrollArea):
             # This should already be the case as the user selected it, but good to be mindful.
             # The UI update for parameters should be handled by the controller signals if parameters changed there.
 
-    @pyqtSlot(str, str, str) # target_type, plugin_name, preset_name (if any)
-    def update_active_coloring_target_and_plugin_from_controller(self, target_type: str, plugin_name: str, preset_name: str | None = None):
+    @pyqtSlot(str, str) # preset_name argument removed
+    def update_active_coloring_target_and_plugin_from_controller(self, target_type: str, plugin_name: str): # preset_name argument removed
         """
-        コントローラーからの指示でアクティブなカラーリングターゲットとプラグイン（およびオプションでプリセット）を更新します。
+        コントローラーからの指示でアクティブなカラーリングターゲットとプラグインを更新します。
         """
-        logger.log(f"ParameterPanel.update_active_coloring_target_and_plugin_from_controller: target='{target_type}', plugin='{plugin_name}', preset='{preset_name}'", level="DEBUG")
+        logger.log(f"ParameterPanel.update_active_coloring_target_and_plugin_from_controller: target='{target_type}', plugin='{plugin_name}'", level="DEBUG") # preset_name removed from log
 
         algo_combo = None
-        plugin_widgets_dict = None
+        # plugin_widgets_dict = None # No longer needed for preset logic
 
         if target_type == 'divergent':
             algo_combo = self.coloring_algorithm_combo_divergent
-            plugin_widgets_dict = self.coloring_plugin_widgets_divergent
+            # plugin_widgets_dict = self.coloring_plugin_widgets_divergent # No longer needed
         elif target_type == 'non_divergent':
             algo_combo = self.coloring_algorithm_combo_non_divergent
-            plugin_widgets_dict = self.coloring_plugin_widgets_non_divergent
+            # plugin_widgets_dict = self.coloring_plugin_widgets_non_divergent # No longer needed
         else:
             logger.log(f"Invalid target_type '{target_type}' received.", level="ERROR")
             return
@@ -1151,46 +1151,23 @@ class ParameterPanel(QScrollArea):
 
         # 1. Update algorithm combo box selection
         algo_combo.blockSignals(True)
-        # Populate if needed, though typically it should be populated already.
-        # self._populate_coloring_algorithm_combo(target_type) # Avoid re-populating if not necessary to prevent cursor jumps
         current_algo_text = algo_combo.currentText()
         if current_algo_text != plugin_name:
-            # Check if plugin_name exists in combo, if not, populate might be needed
             items = [algo_combo.itemText(i) for i in range(algo_combo.count())]
             if plugin_name not in items:
                 logger.log(f"Plugin '{plugin_name}' not found in combo for {target_type}, re-populating.", level="INFO")
-                self._populate_coloring_algorithm_combo(target_type) # Re-populate if new plugin isn't there
+                self._populate_coloring_algorithm_combo(target_type)
             algo_combo.setCurrentText(plugin_name)
         algo_combo.blockSignals(False)
 
         # 2. Update the plugin specific UI for the new algorithm
-        # This will also recreate the preset combo if presets exist for this new algo_name
         self._update_coloring_plugin_specific_ui(plugin_name, target_type)
 
-        # 3. If a preset_name is provided, try to set it
-        if preset_name:
-            if plugin_widgets_dict and '_coloring_preset_combo' in plugin_widgets_dict:
-                preset_combo = plugin_widgets_dict['_coloring_preset_combo']
-                preset_combo.blockSignals(True)
-                preset_combo.setCurrentText(preset_name) # Try to set it
-                if preset_combo.currentText() != preset_name: # If not successful (e.g. preset name typo)
-                    logger.log(f"Preset '{preset_name}' could not be set for {plugin_name} on {target_type}. It might not exist.", level="WARNING")
-                    preset_combo.setCurrentText("カスタム") # Fallback to custom
-                preset_combo.blockSignals(False)
-                # Applying the preset values from controller usually means the controller already has these values.
-                # The UI should reflect them via _update_coloring_plugin_specific_ui's call to get_current_coloring_plugin_parameters_from_engine
-                # If _on_coloring_preset_selected needs to be called to apply values, that's a different flow.
-                # For now, assume controller handles the state, UI just reflects.
-            else:
-                logger.log(f"Preset combo not found for {target_type} when trying to set preset '{preset_name}'. UI might not have updated yet.", level="WARNING")
+        # 3. Preset related logic removed
+        # if preset_name:
+        #     ...
         # else:
-            # If no preset name, ensure the preset combo (if exists) is set to "カスタム"
-            # if plugin_widgets_dict and '_coloring_preset_combo' in plugin_widgets_dict:
-            #     preset_combo = plugin_widgets_dict['_coloring_preset_combo']
-            #     if preset_combo.currentText() != "カスタム":
-            #         preset_combo.blockSignals(True)
-            #         preset_combo.setCurrentText("カスタム")
-            #         preset_combo.blockSignals(False)
+        #     ...
 
 
 if __name__ == '__main__':

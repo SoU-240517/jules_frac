@@ -147,9 +147,15 @@ class FractalController(QObject):
 
     def get_coloring_plugin_parameter_definitions_from_engine(self, plugin_name: str, target_type: str) -> list: # target_type is now mandatory
         if not self.fractal_engine: return []
-        # tt = target_type if target_type is not None else self.active_coloring_target_type # No longer needed
         plugin = self.fractal_engine.plugin_manager.get_coloring_plugin(plugin_name, target_type=target_type)
-        return plugin.get_parameters_definition() if plugin else []
+        if plugin:
+            logger.log(f"FractalController: Plugin '{getattr(plugin, 'name', plugin_name)}' ({target_type}) obtained from PluginManager: {plugin}", level="DEBUG")
+            definitions = plugin.get_parameters_definition()
+            logger.log(f"FractalController: For plugin '{getattr(plugin, 'name', plugin_name)}' ({target_type}), got definitions from engine: {definitions}", level="DEBUG")
+            return definitions
+        else:
+            logger.log(f"FractalController: Plugin '{plugin_name}' ({target_type}) not found by PluginManager.", level="WARNING")
+            return []
 
     def get_plugin_presets(self, plugin_name: str, target_type: str) -> dict: # target_type is now mandatory
         """

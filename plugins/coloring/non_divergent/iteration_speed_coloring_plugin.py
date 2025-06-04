@@ -13,7 +13,7 @@ from numba import jit
 
 logger = CustomLogger()
 
-@jit(nopython=True, cache=True)
+# @jit(nopython=True, cache=True)
 def _apply_iteration_speed_coloring_jit(
     iterations: np.ndarray,
     max_iterations: int,
