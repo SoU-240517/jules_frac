@@ -41,9 +41,27 @@ class FractalController(QObject):
         self.update_status_display()
 
     # --- フラクタル共通パラメータ処理 ---
-    def update_common_fractal_parameters(self, center_real, center_imag, width, max_iterations, escape_radius=None):
+    def update_common_fractal_parameters(self, max_iterations: int, escape_radius: float | None = None, source: str | None = None):
+        """
+        共通のフラクタルパラメータ（現在は最大反復回数とエスケープ半径）を更新します。
+        中心座標と幅は、パンやズーム操作によって直接エンジンパラメータが更新されるため、
+        このメソッドでは扱いません。UIからの最大反復回数の変更時に呼び出されます。
+
+        Args:
+            max_iterations (int): 新しい最大反復回数。
+            escape_radius (float, optional): 新しいエスケープ半径。Noneの場合、エンジンは現在の値を使用するか、デフォルト値を使用します。
+            source (str, optional): パラメータ更新のトリガー元を示す文字列。 Defaults to None.
+        """
         if self.fractal_engine:
-            self.fractal_engine.set_common_parameters(center_real, center_imag, width, max_iterations, escape_radius)
+            current_params = self.fractal_engine.get_common_parameters()
+            if current_params:
+                self.fractal_engine.set_common_parameters(
+                    center_real=current_params.get('center_real'),
+                    center_imag=current_params.get('center_imag'),
+                    width=current_params.get('width'),
+                    max_iterations=max_iterations,
+                    escape_radius=escape_radius if escape_radius is not None else current_params.get('escape_radius')
+                )
             self.fractal_engine.last_fractal_data_cache = None
         self.update_status_display()
 

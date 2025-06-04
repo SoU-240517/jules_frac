@@ -16,7 +16,7 @@ class ParameterPanel(QScrollArea):
     選択・調整できるようにします。
     変更は `FractalController` と連携して処理されます。
     """
-    parameters_changed_in_ui_signal = pyqtSignal(float, float, float, int)
+    parameters_changed_in_ui_signal = pyqtSignal(int)
     """共通パラメータ (中心実部, 中心虚部, 幅, 最大反復回数) がUIで変更されたときに発行されるシグナル。"""
 
     def __init__(self, fractal_controller, parent=None):
@@ -53,7 +53,7 @@ class ParameterPanel(QScrollArea):
             self.fractal_controller.active_color_map_changed_externally.connect(self._update_color_selection_from_controller)
         else:
             # コントローラーが利用できない場合のフォールバックUI設定
-            self._set_ui_values(-0.5, 0.0, 3.0, 100)
+            self._set_ui_values(100)
             if hasattr(self, 'plugin_specific_group'): self.plugin_specific_group.setVisible(False)
             if hasattr(self, 'coloring_group'): self.coloring_group.setEnabled(False)
 
@@ -81,12 +81,6 @@ class ParameterPanel(QScrollArea):
         self.iter_slider = QSlider(Qt.Orientation.Horizontal); self.iter_slider.setRange(10,10000)
         self.common_params_layout.addRow(QLabel("最大反復回数:"), self.iter_spinbox)
         self.common_params_layout.addRow(self.iter_slider)
-        self.center_real_spinbox = QDoubleSpinBox(); self.center_real_spinbox.setRange(-2.5,2.5); self.center_real_spinbox.setDecimals(15); self.center_real_spinbox.setSingleStep(0.01)
-        self.common_params_layout.addRow(QLabel("中心 (実部):"), self.center_real_spinbox)
-        self.center_imag_spinbox = QDoubleSpinBox(); self.center_imag_spinbox.setRange(-2.0,2.0); self.center_imag_spinbox.setDecimals(15); self.center_imag_spinbox.setSingleStep(0.01)
-        self.common_params_layout.addRow(QLabel("中心 (虚部):"), self.center_imag_spinbox)
-        self.width_spinbox = QDoubleSpinBox(); self.width_spinbox.setRange(1e-15,10.0); self.width_spinbox.setDecimals(15); self.width_spinbox.setSingleStep(0.1)
-        self.common_params_layout.addRow(QLabel("幅:"), self.width_spinbox)
         common_params_group.setLayout(self.common_params_layout)
         self.main_layout.addWidget(common_params_group)
 
@@ -142,9 +136,6 @@ class ParameterPanel(QScrollArea):
         # 共通パラメータシグナルの接続
         self.iter_spinbox.valueChanged.connect(self._on_iter_spinbox_changed)
         self.iter_slider.valueChanged.connect(self._on_iter_slider_changed)
-        self.center_real_spinbox.valueChanged.connect(self._on_value_changed_by_ui)
-        self.center_imag_spinbox.valueChanged.connect(self._on_value_changed_by_ui)
-        self.width_spinbox.valueChanged.connect(self._on_value_changed_by_ui)
 
     def _create_colormap_thumbnail(self, colors: list[tuple[int,int,int]], thumb_width: int = 96, thumb_height: int = 18) -> QPixmap:
         """
@@ -498,8 +489,8 @@ class ParameterPanel(QScrollArea):
         共通パラメータ関連のUI要素 (中心座標、幅、反復回数) のいずれかが変更されたときに呼び出されます。
         `parameters_changed_in_ui_signal` を発行します。
         """
-        cr=self.center_real_spinbox.value(); ci=self.center_imag_spinbox.value(); w=self.width_spinbox.value(); iters=self.iter_spinbox.value()
-        self.parameters_changed_in_ui_signal.emit(cr, ci, w, iters)
+        iters=self.iter_spinbox.value()
+        self.parameters_changed_in_ui_signal.emit(iters)
     def load_initial_parameters(self):
         """
         コントローラーから初期パラメータを取得し、UIに設定します。
@@ -507,7 +498,7 @@ class ParameterPanel(QScrollArea):
         """
         if self.fractal_controller:
             params = self.fractal_controller.get_current_common_parameters()
-            if params: self._set_ui_values(params.get('center_real',-0.5), params.get('center_imag',0.0), params.get('width',3.0), params.get('max_iterations',100))
+            if params: self._set_ui_values(params.get('max_iterations',100))
             active_fp_name = self.fractal_controller.get_active_fractal_plugin_name_from_engine()
             if active_fp_name: self._update_fractal_plugin_specific_ui(active_fp_name)
             active_cp_name = self.fractal_controller.get_active_coloring_plugin_name_from_engine()
@@ -519,29 +510,26 @@ class ParameterPanel(QScrollArea):
         """
         if self.fractal_controller:
             params = self.fractal_controller.get_current_common_parameters()
-            if params: self._set_ui_values(params['center_real'], params['center_imag'], params['width'], params['max_iterations'])
-    def _set_ui_values(self, cr, ci, w, iters):
+            if params: self._set_ui_values(params['max_iterations'])
+    def _set_ui_values(self, iters):
         """
         指定された値で共通パラメータUI要素 (スピンボックス、スライダー) を設定します。
         値設定中のシグナル発行を防ぐために、一時的にシグナルをブロックします。
 
         Args:
-            cr (float): 中心のReal部。
-            ci (float): 中心のImaginary部。
-            w (float): 幅。
             iters (int): 最大反復回数。
         """
-        self.iter_spinbox.blockSignals(True); self.iter_slider.blockSignals(True); self.center_real_spinbox.blockSignals(True); self.center_imag_spinbox.blockSignals(True); self.width_spinbox.blockSignals(True)
-        self.iter_spinbox.setValue(int(iters)); self.iter_slider.setValue(int(iters)); self.center_real_spinbox.setValue(cr); self.center_imag_spinbox.setValue(ci); self.width_spinbox.setValue(w)
-        self.iter_spinbox.blockSignals(False); self.iter_slider.blockSignals(False); self.center_real_spinbox.blockSignals(False); self.center_imag_spinbox.blockSignals(False); self.width_spinbox.blockSignals(False)
+        self.iter_spinbox.blockSignals(True); self.iter_slider.blockSignals(True)
+        self.iter_spinbox.setValue(int(iters)); self.iter_slider.setValue(int(iters))
+        self.iter_spinbox.blockSignals(False); self.iter_slider.blockSignals(False)
     def get_current_ui_parameters(self) -> dict:
         """
         現在のUIから共通パラメータの値を取得して辞書として返します。
 
         Returns:
-            dict: 'center_real', 'center_imag', 'width', 'max_iterations' をキーとする辞書。
+            dict: 'max_iterations' をキーとする辞書。
         """
-        return {"center_real":self.center_real_spinbox.value(), "center_imag":self.center_imag_spinbox.value(), "width":self.width_spinbox.value(), "max_iterations":self.iter_spinbox.value()}
+        return {"max_iterations":self.iter_spinbox.value()}
 
 if __name__ == '__main__':
     from logger.custom_logger import CustomLogger

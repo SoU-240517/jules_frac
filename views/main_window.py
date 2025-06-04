@@ -177,20 +177,16 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(splitter)
         initial_width = self.width()
         splitter.setSizes([int(initial_width * 0.7), int(initial_width * 0.3)])
-
-    def on_ui_parameters_changed(self, center_real, center_imag, width, max_iterations):
+    def on_ui_parameters_changed(self, max_iterations):
         """
         ParameterPanel で共通パラメータが変更されたときに呼び出されるスロット。
         FractalController にパラメータの更新を通知します。
 
         Args:
-            center_real (float): 複素平面の中心の実部。
-            center_imag (float): 複素平面の中心の虚部。
-            width (float): 複素平面の表示幅。
             max_iterations (int): 最大反復回数。
         """
         if self.fractal_controller:
-            self.fractal_controller.update_common_fractal_parameters(center_real, center_imag, width, max_iterations)
+            self.fractal_controller.update_common_fractal_parameters(max_iterations=max_iterations)
         else:
             logger.log("パラメータ更新に FractalController が利用できません。", level="WARNING")
 
@@ -332,11 +328,7 @@ class MainWindow(QMainWindow):
 
         params = self.parameter_panel.get_current_ui_parameters()
         # 描画トリガー前に現在のUI状態に基づいてエンジンパラメータを更新
-        self.fractal_controller.update_common_fractal_parameters(
-            params['center_real'],
-            params['center_imag'],
-            params['width'],
-            params['max_iterations']
+        self.fractal_controller.update_common_fractal_parameters(max_iterations=params['max_iterations']
             # source="ui_button" # コントローラーで source 引数を使用する場合
         )
 
@@ -399,11 +391,7 @@ class MainWindow(QMainWindow):
 
         # パネルから初期パラメータを読み込み (コントローラーまたはデフォルトから読み込まれているはず)
         initial_params = self.parameter_panel.get_current_ui_parameters()
-        self.fractal_controller.update_common_fractal_parameters(
-            initial_params['center_real'],
-            initial_params['center_imag'],
-            initial_params['width'],
-            initial_params['max_iterations']
+        self.fractal_controller.update_common_fractal_parameters(max_iterations=initial_params['max_iterations']
             # source="initial_load" # source 引数を使用する場合
         )
 
