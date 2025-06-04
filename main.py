@@ -34,7 +34,8 @@ if __name__ == '__main__':
     # CustomLogger の初期化時には、SettingsManager から設定を読み込もうとしますが、
     # その時点ではSettingsManagerが完全に初期化されていない可能性があるため、デフォルト値で起動します。
     # ここで、完全に初期化されたSettingsManagerから設定を明示的に適用します。
-    log_config = settings_manager.get_logging_settings()
+    # "logging" セクション全体を取得し、存在しない場合のデフォルト値を指定します。
+    log_config = settings_manager.get_setting("logging", {"level": "INFO", "enabled": True})
     log_level_to_set = log_config.get("level", "INFO")
     log_enabled_to_set = log_config.get("enabled", True)
 
