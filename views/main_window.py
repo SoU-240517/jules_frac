@@ -125,6 +125,15 @@ class MainWindow(QMainWindow):
             else:
                 logger.log("FractalController に rendering_task_started シグナルが存在しません。", level="WARNING")
 
+            # rendering_state_changed シグナルの接続 (ParameterPanel の UI 更新用)
+            if hasattr(self.fractal_controller, 'rendering_state_changed') and \
+               hasattr(self.parameter_panel, '_on_rendering_state_changed'):
+                self.fractal_controller.rendering_state_changed.connect(
+                    self.parameter_panel._on_rendering_state_changed
+                )
+            else:
+                logger.log("ParameterPanel または FractalController に rendering_state_changed 関連の属性が存在しません。", level="WARNING")
+
             # 高解像度エクスポートシグナル
             self.fractal_controller.export_started.connect(self._on_export_started)
             self.fractal_controller.export_progress_updated.connect(self._on_export_progress_updated)

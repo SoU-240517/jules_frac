@@ -51,6 +51,7 @@ class ParameterPanel(QScrollArea):
             self.fractal_controller.active_fractal_plugin_ui_needs_update.connect(self._update_fractal_plugin_specific_ui)
             self.fractal_controller.active_coloring_plugin_ui_needs_update.connect(self._update_coloring_plugin_specific_ui)
             self.fractal_controller.active_color_map_changed_externally.connect(self._update_color_selection_from_controller)
+            # self.fractal_controller.rendering_state_changed.connect(self._on_rendering_state_changed) # This line is moved to MainWindow
         else:
             # コントローラーが利用できない場合のフォールバックUI設定
             self._set_ui_values(100)
@@ -595,6 +596,15 @@ class ParameterPanel(QScrollArea):
             dict: 'max_iterations' をキーとする辞書。
         """
         return {"max_iterations":self.iter_spinbox.value()}
+
+    @pyqtSlot(bool)
+    def _on_rendering_state_changed(self, is_rendering: bool):
+        """
+        レンダリング状態が変更されたときに呼び出されるスロット。
+        フラクタルタイプ選択コンボボックスの有効/無効を切り替えます。
+        """
+        if hasattr(self, 'fractal_combo'):
+            self.fractal_combo.setEnabled(not is_rendering)
 
 if __name__ == '__main__':
     from logger.custom_logger import CustomLogger

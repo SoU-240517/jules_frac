@@ -16,6 +16,7 @@ class FractalController(QObject):
     active_coloring_plugin_ui_needs_update = pyqtSignal(str)
     active_color_map_changed_externally = pyqtSignal(str, str)
     rendering_task_started = pyqtSignal() # New signal
+    rendering_state_changed = pyqtSignal(bool) # True if rendering started, False if finished/failed
 
     # 高解像度エクスポート処理用のシグナル
     export_started = pyqtSignal()
@@ -30,6 +31,7 @@ class FractalController(QObject):
         self.last_coloring_time_ms = 0.0
         self.initial_width = self.fractal_engine.width if self.fractal_engine else 3.0
         self.logger = CustomLogger() # Add logger instance
+        self.is_rendering = False
 
         self.current_exporter: ImageExporter | None = None
         self.thread_pool = QThreadPool.globalInstance()
@@ -220,7 +222,9 @@ class FractalController(QObject):
     @pyqtSlot()
     def _on_renderer_started(self):
         self.logger.log("FractalController: Renderer task started signal received.", level="DEBUG") # Uses self.logger
+        self.is_rendering = True
         self.rendering_task_started.emit()
+        self.rendering_state_changed.emit(True)
 
     @pyqtSlot(object, float, float)
     def _on_renderer_finished(self, colored_image, compute_time_ms, coloring_time_ms):
@@ -230,12 +234,16 @@ class FractalController(QObject):
         self.image_rendered.emit(colored_image)
         self.update_status_display() # Generate and emit final status message
         self.current_renderer_task = None
+        self.is_rendering = False
+        self.rendering_state_changed.emit(False)
 
     @pyqtSlot(str)
     def _on_renderer_failed(self, error_message):
         self.logger.log(f"FractalController: Renderer task failed: {error_message}", level="ERROR") # Uses self.logger
         self.status_updated.emit(f"描画エラー: {error_message}")
         self.current_renderer_task = None
+        self.is_rendering = False
+        self.rendering_state_changed.emit(False)
 
     def trigger_recolor(self):
         self.trigger_render(full_recompute=False)
