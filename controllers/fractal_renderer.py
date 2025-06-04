@@ -15,12 +15,13 @@ class FractalRendererSignals(QObject):
 
 
 class FractalRenderer(QRunnable):
-    def __init__(self, fractal_engine: FractalEngine, image_width_px: int, image_height_px: int, full_recompute: bool):
+    def __init__(self, fractal_engine: FractalEngine, image_width_px: int, image_height_px: int, full_recompute: bool, active_coloring_target_type: str):
         super().__init__()
         self.fractal_engine = fractal_engine
         self.image_width_px = image_width_px
         self.image_height_px = image_height_px
         self.full_recompute = full_recompute
+        self.active_coloring_target_type = active_coloring_target_type # Store this
         self.signals = FractalRendererSignals()
         self.logger = CustomLogger()
 
@@ -52,7 +53,11 @@ class FractalRenderer(QRunnable):
                     return
 
             start_t_coloring = time.perf_counter()
-            colored_image = self.fractal_engine.apply_coloring(fractal_data_override=fractal_data)
+            # Pass the stored active_coloring_target_type to apply_coloring
+            colored_image = self.fractal_engine.apply_coloring(
+                target_type=self.active_coloring_target_type,
+                fractal_data_override=fractal_data
+            )
             coloring_time_ms = (time.perf_counter() - start_t_coloring) * 1000
 
             if colored_image is None:

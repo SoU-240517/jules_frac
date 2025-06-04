@@ -60,11 +60,13 @@ class ParameterPanel(QScrollArea):
             self.fractal_controller.active_coloring_plugin_ui_needs_update.connect(
                 lambda algo_name: self._update_coloring_plugin_specific_ui(algo_name, None) # Pass None for target_type to use current UI selection
             )
-            # Hypothetical new signal from controller:
-            if hasattr(self.fractal_controller, 'active_coloring_target_and_plugin_changed'):
-                self.fractal_controller.active_coloring_target_and_plugin_changed.connect(
+            # Connect to the actual signal name from FractalController
+            if hasattr(self.fractal_controller, 'active_coloring_target_and_plugin_changed_externally'):
+                self.fractal_controller.active_coloring_target_and_plugin_changed_externally.connect(
                     self.update_active_coloring_target_and_plugin_from_controller
                 )
+            else:
+                logger.log("Warning: FractalController does not have 'active_coloring_target_and_plugin_changed_externally' signal.", level="WARNING")
             self.fractal_controller.active_color_map_changed_externally.connect(self._update_color_selection_from_controller)
             # self.fractal_controller.rendering_state_changed.connect(self._on_rendering_state_changed) # This line is moved to MainWindow
         else:
@@ -939,8 +941,4 @@ if __name__ == '__main__':
             # -> widget.setValue の後に focused_value_store から削除するように修正。
 
 if __name__ == '__main__':
-    from logger.custom_logger import CustomLogger
-    logger = CustomLogger()
-    # ... (スタンドアロンテストコードは複雑なため、メインアプリケーションでのテストを推奨) ...
-    logger.log("ParameterPanelのスタンドアロンテストには包括的なモックコントローラとセットアップが必要です。", level="INFO")
-    logger.log("メインアプリケーションまたは専用のテストスイートでテストしてください。", level="INFO")
+    pass
