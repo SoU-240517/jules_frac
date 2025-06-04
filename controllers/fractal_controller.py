@@ -209,12 +209,18 @@ class FractalController(QObject):
     def get_available_color_pack_names_from_engine(self) -> list[str]:
         return self.fractal_engine.get_available_color_pack_names() if self.fractal_engine else []
     def get_active_color_pack_name_from_engine(self) -> str | None:
-        if self.fractal_engine: return self.fractal_engine.get_current_color_map_selection()[0]
+        if self.fractal_engine:
+            # Pass the controller's currently active target type
+            selection = self.fractal_engine.get_current_color_map_selection(target_type=self.active_coloring_target_type)
+            return selection[0] if selection else None
         return None
     def get_color_map_names_in_pack_from_engine(self, pack_name: str) -> list[str]:
         return self.fractal_engine.get_available_color_map_names_in_pack(pack_name) if self.fractal_engine else []
     def get_active_color_map_name_from_engine(self) -> str | None:
-        if self.fractal_engine: return self.fractal_engine.get_current_color_map_selection()[1]
+        if self.fractal_engine:
+            # Pass the controller's currently active target type
+            selection = self.fractal_engine.get_current_color_map_selection(target_type=self.active_coloring_target_type)
+            return selection[1] if selection else None
         return None
     def get_color_map_data_from_engine(self, pack_name: str, map_name: str) -> list[tuple[int,int,int]] | None:
         if self.fractal_engine: return self.fractal_engine.color_manager.get_color_map_data(pack_name, map_name)
