@@ -54,7 +54,17 @@ class ParameterPanel(QScrollArea):
 
             self.fractal_controller.parameters_updated_externally.connect(self.update_ui_from_controller_parameters)
             self.fractal_controller.active_fractal_plugin_ui_needs_update.connect(self._update_fractal_plugin_specific_ui)
-            self.fractal_controller.active_coloring_plugin_ui_needs_update.connect(self._update_coloring_plugin_specific_ui)
+            # active_coloring_plugin_ui_needs_update might need to provide more info or be replaced
+            # For now, assume it updates the UI for the currently selected target_type's active plugin.
+            # The more specific signal below is preferred for changing target_type.
+            self.fractal_controller.active_coloring_plugin_ui_needs_update.connect(
+                lambda algo_name: self._update_coloring_plugin_specific_ui(algo_name, None) # Pass None for target_type to use current UI selection
+            )
+            # Hypothetical new signal from controller:
+            if hasattr(self.fractal_controller, 'active_coloring_target_and_plugin_changed'):
+                self.fractal_controller.active_coloring_target_and_plugin_changed.connect(
+                    self.update_active_coloring_target_and_plugin_from_controller
+                )
             self.fractal_controller.active_color_map_changed_externally.connect(self._update_color_selection_from_controller)
             # self.fractal_controller.rendering_state_changed.connect(self._on_rendering_state_changed) # This line is moved to MainWindow
         else:
@@ -104,10 +114,16 @@ class ParameterPanel(QScrollArea):
         self.true_coloring_layout = QVBoxLayout() # このグループのメインレイアウト
 
         # カラーリングアルゴリズム選択
-        form_algo_select = QFormLayout()
+        coloring_selection_layout = QFormLayout() # Changed to QFormLayout for consistency
+        self.coloring_target_combo = QComboBox()
+        self.coloring_target_combo.addItems(["発散部", "非発散部"]) # "Divergent", "Non-Divergent"
+        coloring_selection_layout.addRow(QLabel("対象:"), self.coloring_target_combo)
+
         self.coloring_algorithm_combo = QComboBox()
-        form_algo_select.addRow(QLabel("アルゴリズム:"), self.coloring_algorithm_combo)
-        self.true_coloring_layout.addLayout(form_algo_select)
+        coloring_selection_layout.addRow(QLabel("アルゴリズム:"), self.coloring_algorithm_combo)
+        self.true_coloring_layout.addLayout(coloring_selection_layout) # Add the form layout to the main QVBoxLayout
+
+        self.coloring_target_combo.currentTextChanged.connect(self._on_coloring_target_changed)
         self.coloring_algorithm_combo.currentTextChanged.connect(self._on_coloring_algorithm_changed)
 
         # カラーリングアルゴリズム固有UI
@@ -354,8 +370,17 @@ class ParameterPanel(QScrollArea):
         カラーリングアルゴリズム選択用コンボボックスに、利用可能なアルゴリズム名を設定します。
         """
         if not self.fractal_controller: return
-        algo_names = self.fractal_controller.get_available_coloring_plugin_names_from_engine()
-        active_algo = self.fractal_controller.get_active_coloring_plugin_name_from_engine()
+
+        selected_target_display_name = self.coloring_target_combo.currentText()
+        target_type = 'divergent' if selected_target_display_name == "発散部" else 'non_divergent'
+        logger.log(f"ParameterPanel._populate_coloring_algorithm_combo: Populating for target_type = {target_type}", level="DEBUG")
+
+        # Assuming get_available_coloring_plugin_names_from_engine can take target_type
+        # And get_active_coloring_plugin_name_from_engine can also take target_type
+        # These are assumptions about FractalController changes.
+        algo_names = self.fractal_controller.get_available_coloring_plugin_names_from_engine(target_type=target_type)
+        active_algo = self.fractal_controller.get_active_coloring_plugin_name_from_engine(target_type=target_type) # This might need adjustment
+
         self.coloring_algorithm_combo.blockSignals(True); self.coloring_algorithm_combo.clear()
         if algo_names:
             self.coloring_algorithm_combo.addItems(algo_names)
@@ -374,8 +399,56 @@ class ParameterPanel(QScrollArea):
             algo_name (str): 選択されたカラーリングアルゴリズムの名前。
         """
         if not self.fractal_controller or not algo_name or algo_name == "N/A": return
-        if algo_name == self.fractal_controller.get_active_coloring_plugin_name_from_engine(): return
-        self.fractal_controller.set_active_coloring_plugin_and_recolor(algo_name)
+
+        selected_target_display_name = self.coloring_target_combo.currentText()
+        target_type = 'divergent' if selected_target_display_name == "発散部" else 'non_divergent'
+
+        # Check if this algo is already active for this target type
+        # Assuming get_active_coloring_plugin_name_from_engine(target_type=target_type) exists
+        if algo_name == self.fractal_controller.get_active_coloring_plugin_name_from_engine(target_type=target_type):
+             logger.log(f"ParameterPanel._on_coloring_algorithm_changed: Algo '{algo_name}' for target '{target_type}' already active. UI update might still be needed if target changed.", level="DEBUG")
+             # If only the algorithm changed, but it's the same as what the engine thinks is active for this type,
+             # an explicit UI update for parameters might be needed if the previous state was for a different target_type.
+             # However, set_active_coloring_plugin_and_recolor should handle this.
+             # self._update_coloring_plugin_specific_ui(algo_name, target_type) # Ensure UI updates
+             # return # Usually we return if it's already active.
+
+        # Assuming set_active_coloring_plugin_and_recolor can take target_type
+        self.fractal_controller.set_active_coloring_plugin_and_recolor(plugin_name=algo_name, target_type=target_type)
+
+
+    @pyqtSlot(str)
+    def _on_coloring_target_changed(self, target_type_display_name: str):
+        """
+        カラーリング対象コンボボックスの選択が変更されたときに呼び出されるスロット。
+        アルゴリズムコンボボックスの内容を更新し、UIとコントローラを同期します。
+        """
+        if not self.fractal_controller: return
+        logger.log(f"ParameterPanel._on_coloring_target_changed: Selected target display name: {target_type_display_name}", level="DEBUG")
+
+        # target_type_internal = 'divergent' if target_type_display_name == "発散部" else 'non_divergent'
+        # logger.log(f"Internal target_type: {target_type_internal}", level="DEBUG")
+
+        # Populate algorithms for the new target type. This will clear and refill the algo combo.
+        self._populate_coloring_algorithm_combo() # This now uses the current selection of coloring_target_combo
+
+        # After populating, the first algorithm (if any) in the combo will be selected.
+        # We need to ensure the controller and UI for this algorithm's parameters are also updated.
+        # Manually trigger _on_coloring_algorithm_changed if there's a valid algorithm selected.
+        current_algo_name = self.coloring_algorithm_combo.currentText()
+        if current_algo_name and current_algo_name != "N/A":
+            logger.log(f"ParameterPanel._on_coloring_target_changed: Manually triggering algorithm change for: {current_algo_name}", level="DEBUG")
+            # _on_coloring_algorithm_changed will handle setting it in controller and updating specific UI.
+            # We call it directly; its own internal checks for whether it's already active might apply.
+            self._on_coloring_algorithm_changed(current_algo_name)
+        else:
+            # No algorithms available for this target type, clear specific UI.
+            logger.log(f"ParameterPanel._on_coloring_target_changed: No algorithms available for this target. Clearing specific UI.", level="DEBUG")
+            self._clear_coloring_plugin_specific_ui()
+            self.coloring_plugin_specific_group.setVisible(False)
+            # Optionally, notify controller that no coloring plugin is active for this target type
+            # self.fractal_controller.set_active_coloring_plugin_and_recolor(plugin_name=None, target_type=target_type_internal)
+
 
     def _clear_coloring_plugin_specific_ui(self):
         self.coloring_plugin_widgets.clear()
@@ -387,7 +460,7 @@ class ParameterPanel(QScrollArea):
             if item.widget(): item.widget().deleteLater()
 
     @pyqtSlot(str)
-    def _update_coloring_plugin_specific_ui(self, algo_name: str):
+    def _update_coloring_plugin_specific_ui(self, algo_name: str, target_type: str | None = None):
         self._clear_coloring_plugin_specific_ui()
         """
         指定されたカラーリングアルゴリズムの固有パラメータUIを構築・更新します。
@@ -395,17 +468,31 @@ class ParameterPanel(QScrollArea):
 
         Args:
             algo_name (str): UIを更新する対象のカラーリングアルゴリズムの名前。
+            target_type (str | None): 対象タイプ ('divergent' or 'non_divergent')。Noneの場合、現在のUI選択を使用。
         """
-        if not self.fractal_controller or not algo_name: self.coloring_plugin_specific_group.setVisible(False); return
-        param_defs = self.fractal_controller.get_coloring_plugin_parameter_definitions_from_engine(algo_name)
-        if not param_defs: self.coloring_plugin_specific_group.setVisible(False); return
+        if target_type is None:
+            selected_target_display_name = self.coloring_target_combo.currentText()
+            target_type = 'divergent' if selected_target_display_name == "発散部" else 'non_divergent'
+
+        logger.log(f"ParameterPanel._update_coloring_plugin_specific_ui for algo: '{algo_name}', target: '{target_type}'", level="DEBUG")
+
+        if not self.fractal_controller or not algo_name or algo_name == "N/A":
+            self.coloring_plugin_specific_group.setVisible(False); return
+
+        # Assuming get_coloring_plugin_parameter_definitions_from_engine can take target_type
+        param_defs = self.fractal_controller.get_coloring_plugin_parameter_definitions_from_engine(algo_name, target_type=target_type)
+        if not param_defs:
+            self.coloring_plugin_specific_group.setVisible(False); return
 
         self.coloring_plugin_specific_group.setVisible(True)
-        self.coloring_plugin_specific_group.setTitle(f"{algo_name} 固有設定")
-        current_vals = self.fractal_controller.get_current_coloring_plugin_parameters_from_engine()
+        target_display_name = "発散部" if target_type == 'divergent' else "非発散部"
+        self.coloring_plugin_specific_group.setTitle(f"{algo_name} ({target_display_name}) 固有設定") # Use display name
+        # Assuming get_current_coloring_plugin_parameters_from_engine can take target_type
+        current_vals = self.fractal_controller.get_current_coloring_plugin_parameters_from_engine(target_type=target_type)
 
         # カラーリングプラグインにプリセットがある場合、プリセットコンボボックスを追加
-        presets = self.fractal_controller.get_plugin_presets(algo_name) # fractal_controller もカラーリングプラグイン用にこれを持っていると仮定
+        # Presets might also need to be target_type aware if they differ
+        presets = self.fractal_controller.get_plugin_presets(algo_name, target_type=target_type)
         if presets:
             preset_combo = QComboBox()
             preset_combo.addItem("カスタム")
@@ -674,10 +761,40 @@ class ParameterPanel(QScrollArea):
         if self.fractal_controller:
             params = self.fractal_controller.get_current_common_parameters()
             if params: self._set_ui_values(params.get('max_iterations',100))
+
+            # Fractal plugin UI
             active_fp_name = self.fractal_controller.get_active_fractal_plugin_name_from_engine()
             if active_fp_name: self._update_fractal_plugin_specific_ui(active_fp_name)
-            active_cp_name = self.fractal_controller.get_active_coloring_plugin_name_from_engine()
-            if active_cp_name: self._update_coloring_plugin_specific_ui(active_cp_name)
+
+            # Coloring plugin UI - Initialize for 'divergent' first
+            self.coloring_target_combo.blockSignals(True)
+            self.coloring_target_combo.setCurrentText("発散部")
+            self.coloring_target_combo.blockSignals(False)
+
+            self._populate_coloring_algorithm_combo() # Populates based on "発散部"
+
+            active_target_type = 'divergent' # Since we just set it
+            # Ensure active_cp_name is fetched for the current target_type
+            active_cp_name = self.fractal_controller.get_active_coloring_plugin_name_from_engine(target_type=active_target_type)
+
+            if active_cp_name and active_cp_name != "N/A":
+                 self.coloring_algorithm_combo.blockSignals(True)
+                 self.coloring_algorithm_combo.setCurrentText(active_cp_name)
+                 self.coloring_algorithm_combo.blockSignals(False)
+                 self._update_coloring_plugin_specific_ui(active_cp_name, target_type=active_target_type)
+            elif self.coloring_algorithm_combo.count() > 0 : # If no specific one active, but list has items
+                first_algo = self.coloring_algorithm_combo.itemText(0)
+                if first_algo and first_algo != "N/A":
+                    self.coloring_algorithm_combo.blockSignals(True)
+                    self.coloring_algorithm_combo.setCurrentText(first_algo)
+                    self.coloring_algorithm_combo.blockSignals(False)
+                    # This will trigger _on_coloring_algorithm_changed if signals were not blocked,
+                    # but since we populate then set, it's better to call update specific UI directly or ensure _on_... is called.
+                    self._update_coloring_plugin_specific_ui(first_algo, target_type=active_target_type)
+                    # Manually set this as active in controller if it wasn't
+                    self.fractal_controller.set_active_coloring_plugin_and_recolor(plugin_name=first_algo, target_type=active_target_type)
+
+
     @pyqtSlot(dict) # 引数として dict を受け取ることを明示
     def update_ui_from_controller_parameters(self, params: dict):
         """
@@ -743,31 +860,77 @@ class ParameterPanel(QScrollArea):
             presets_data (dict): プラグインのプリセットデータ。
         """
         if preset_name == "カスタム" or not self.fractal_controller: return
+
+        selected_target_display_name = self.coloring_target_combo.currentText()
+        target_type = 'divergent' if selected_target_display_name == "発散部" else 'non_divergent'
+
         selected_vals = presets_data.get(preset_name)
         if selected_vals:
-            # プリセットが選択された場合、関連するすべてのパラメータを更新し、最後に一度だけ再描画をトリガーするのが理想。
-            # しかし、set_coloring_plugin_parameter_and_recolor が個別に再描画するため、複数回再描画される可能性がある。
-            # パフォーマンスが問題になる場合は、コントローラーに一括更新メソッドを設けることを検討。
+            active_algo_name = self.coloring_algorithm_combo.currentText() # Should be plugin_name
+            if active_algo_name != plugin_name:
+                logger.log(f"Preset selection for {plugin_name} but current algo is {active_algo_name}. This shouldn't happen.", level="WARNING")
+                return
+
+            # Group parameter changes and do one recolor if possible
+            # For now, using existing method that recolors per parameter
+            all_params_set_for_preset = True
             for p_name, val in selected_vals.items():
                 if p_name in self.coloring_plugin_widgets:
                     widget = self.coloring_plugin_widgets[p_name]
                     widget.blockSignals(True)
                     if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
                         widget.setValue(val)
-                         # プリセット適用時はフォーカス値をクリアまたは更新するべきか検討。
-                         # ここでは一旦、プリセットからの値設定は即時反映とするため、
-                         # _focused_value_store から該当ウィジェットのエントリを削除して、
-                         # 次の編集時に正しく動作するようにする。
                         if widget in self._focused_value_store:
-                            del self._focused_value_store[widget]
+                            del self._focused_value_store[widget] # Clear focus store to prevent false "no change"
                     widget.blockSignals(False)
+                    # Update controller, but ideally without triggering recolor for each param
+                    # This depends on controller's capability. Assuming current one recolors.
+                    self.fractal_controller.set_coloring_plugin_parameter_and_recolor(
+                        param_name=p_name, value=val, target_type=target_type, allow_recolor=False # Hypothetical allow_recolor=False
+                    )
+                else:
+                    all_params_set_for_preset = False
+                    logger.log(f"Widget for preset parameter '{p_name}' not found.", level="WARNING")
 
-                # コントローラーへの通知と再カラーリング
-                # logger.log(f"Preset selected: Setting {p_name} to {val} and recoloring.", "DEBUG")
-                self.fractal_controller.set_coloring_plugin_parameter_and_recolor(p_name, val)
+            if all_params_set_for_preset:
+                 logger.log(f"All preset parameters for '{preset_name}' applied to UI. Triggering single recolor.", level="DEBUG")
+                 self.fractal_controller.trigger_recolor(target_type=target_type) # Hypothetical single recolor trigger
+            else:
+                 logger.log(f"Not all preset parameters applied to UI. Recolor might have happened multiple times or be incomplete.", level="WARNING")
+                 # Fallback: if individual params already recolored, this is just a log. If not, trigger one now.
+                 self.fractal_controller.trigger_recolor(target_type=target_type)
+
 
             # プリセットを適用した後、関連するウィジェットのフォーカス時の値をクリアまたは更新する。
             # これにより、プリセット適用後に値を変更せずにフォーカスアウトしても不要な再描画が走らないようにする。
+
+    @pyqtSlot(str, str)
+    def update_active_coloring_target_and_plugin_from_controller(self, target_type: str, plugin_name: str):
+        """
+        コントローラーからの指示でアクティブなカラーリングターゲットとプラグインを更新します。
+        """
+        logger.log(f"ParameterPanel.update_active_coloring_target_and_plugin_from_controller: target_type='{target_type}', plugin_name='{plugin_name}'", level="DEBUG")
+
+        current_target_display_name = "発散部" if target_type == 'divergent' else "非発散部"
+
+        self.coloring_target_combo.blockSignals(True)
+        if self.coloring_target_combo.currentText() != current_target_display_name:
+            self.coloring_target_combo.setCurrentText(current_target_display_name)
+            # This should trigger _populate_coloring_algorithm_combo if signals were not blocked.
+            # Since they are, call it manually.
+            self._populate_coloring_algorithm_combo()
+        self.coloring_target_combo.blockSignals(False)
+
+        self.coloring_algorithm_combo.blockSignals(True)
+        self.coloring_algorithm_combo.setCurrentText(plugin_name) # _populate should have filled it correctly
+        self.coloring_algorithm_combo.blockSignals(False)
+
+        # Ensure the specific UI for this plugin is shown.
+        # _update_coloring_plugin_specific_ui will use the now-current selections if target_type is not passed.
+        self._update_coloring_plugin_specific_ui(plugin_name, target_type)
+
+
+if __name__ == '__main__':
             # ただし、上記のループ内で個別ウィジェットに対して focused_value_store を操作するのは煩雑なので、
             # プリセット適用後は、関連ウィジェットの editingFinished が発行された際に、
             # original_value が None となり、常に再描画が試みられる（これは許容範囲か）。

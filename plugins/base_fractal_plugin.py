@@ -54,8 +54,10 @@ class FractalPlugin(ABC):
 
         戻り値:
             dict: 計算結果を格納した辞書。最低限以下のキーを含むことを期待:
-                  'iterations': numpy.ndarray (dtype=np.int32) - 各ピクセルのエスケープ回数
-                  他のキーはプラグインやカラーリングアルゴリズムの要求に応じて追加可能 (例: 'last_z_modulus_sq')
+                  'iterations': numpy.ndarray (dtype=np.int32) - 各ピクセルのエスケープ回数/収束判定値
+                  'last_zn_values': numpy.ndarray (dtype=np.complex128) - 各ピクセルの最終Z_n値 (複素数)
+                  他のキーはプラグインやカラーリングアルゴリズムの要求に応じて追加可能
+                  (例: 'last_z_modulus_sq', 'zn_trajectory_real', 'zn_trajectory_imag')
         """
         pass
 
@@ -96,7 +98,11 @@ if __name__ == '__main__':
             print(f"  プラグインパラメータ: {plugin_params}")
             print(f"  画像サイズ: {image_width_px}x{image_height_px}")
             # 期待される次元と型に一致する有効なnumpy配列が返されることを確認してください
-            return np.zeros((image_height_px, image_width_px), dtype=np.int32)
+            # For testing, ensure the dictionary format is returned
+            return {
+                'iterations': np.zeros((image_height_px, image_width_px), dtype=np.int32),
+                'last_zn_values': np.zeros((image_height_px, image_width_px), dtype=np.complex128)
+            }
 
         def get_default_view_parameters(self) -> dict:
             return {'center_real': 0.0, 'center_imag': 0.0, 'width': 4.0}
@@ -117,15 +123,19 @@ if __name__ == '__main__':
     }
     test_plugin_params = {'dummy_param': 1.5}
 
-    result_array = dummy.compute_fractal(
+    result_dict = dummy.compute_fractal(
         common_params=test_common_params,
         plugin_params=test_plugin_params,
         image_width_px=80,
         image_height_px=60
     )
-    print(f"計算結果の形状: {result_array.shape}, dtype: {result_array.dtype}")
-    assert result_array.shape == (60, 80)
-    assert result_array.dtype == np.int32
+    print(f"計算結果の 'iterations' 形状: {result_dict['iterations'].shape}, dtype: {result_dict['iterations'].dtype}")
+    print(f"計算結果の 'last_zn_values' 形状: {result_dict['last_zn_values'].shape}, dtype: {result_dict['last_zn_values'].dtype}")
+    assert result_dict['iterations'].shape == (60, 80)
+    assert result_dict['iterations'].dtype == np.int32
+    assert result_dict['last_zn_values'].shape == (60, 80)
+    assert result_dict['last_zn_values'].dtype == np.complex128
+
 
     print(f"プリセット: {dummy.get_presets()}")
     print("\nDummyPlugin のテストが完了しました。")
