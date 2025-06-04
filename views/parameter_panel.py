@@ -550,10 +550,12 @@ class ParameterPanel(QScrollArea):
             plugin_widgets = self.coloring_plugin_widgets_divergent
             specific_group = self.coloring_plugin_specific_group_divergent
             specific_layout = self.coloring_plugin_specific_layout_divergent
+            logger.log(f"Targeting layout for {target_type}: {type(specific_layout)} - ID: {id(specific_layout)}", level="DEBUG")
         elif target_type == 'non_divergent':
             plugin_widgets = self.coloring_plugin_widgets_non_divergent
             specific_group = self.coloring_plugin_specific_group_non_divergent
             specific_layout = self.coloring_plugin_specific_layout_non_divergent
+            logger.log(f"Targeting layout for {target_type}: {type(specific_layout)} - ID: {id(specific_layout)}", level="DEBUG")
         else:
             logger.log(f"Error: Invalid target_type '{target_type}' in _update_coloring_plugin_specific_ui", level="ERROR")
             return
@@ -618,7 +620,9 @@ class ParameterPanel(QScrollArea):
                 if 'tooltip' in p_def: widget.setToolTip(p_def['tooltip'])
                 if specific_layout:
                     specific_layout.addRow(QLabel(lbl_text + ":"), widget)
-                    logger.log(f"Added widget for '{name}' to layout of {target_type}.", level="DEBUG")
+                    logger.log(f"Added widget for '{name}' to layout for {target_type}. Layout row count: {specific_layout.rowCount()}", level="DEBUG")
+                else:
+                    logger.log(f"ERROR: specific_layout is None when trying to add widget for '{name}' ({target_type})", level="ERROR")
                 widget.valueChanged.connect(partial(self._on_coloring_plugin_parameter_changed, param_name=name, target_type=target_type))
                 if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
                     widget.editingFinished.connect(partial(self._on_coloring_plugin_parameter_editing_finished, param_name=name, target_type=target_type))
