@@ -12,7 +12,7 @@ logger = CustomLogger()
 class FractalController(QObject):
     image_rendered = pyqtSignal(object)
     status_updated = pyqtSignal(str)
-    parameters_updated_externally = pyqtSignal()
+    parameters_updated_externally = pyqtSignal(dict)
     active_fractal_plugin_ui_needs_update = pyqtSignal(str)
     active_coloring_plugin_ui_needs_update = pyqtSignal(str)
     active_color_map_changed_externally = pyqtSignal(str, str)
@@ -107,7 +107,7 @@ class FractalController(QObject):
             self.fractal_engine.set_fractal_plugin_parameter(param_name, value)
 
             # 2. パラメータが外部から変更されたことを通知 (設定保存や他のUI要素の更新のため)
-            self.parameters_updated_externally.emit()
+            self.parameters_updated_externally.emit(self.get_current_common_parameters())
 
             # 3. アクティブなフラクタルプラグインのUIが更新を必要とするかもしれないことを通知
             active_plugin_name = self.get_active_fractal_plugin_name_from_engine()
@@ -122,7 +122,10 @@ class FractalController(QObject):
         if not self.fractal_engine: return
         success = self.fractal_engine.set_active_fractal_plugin(plugin_name)
         if success:
-            self.parameters_updated_externally.emit()
+            # フラクタルプラグインが変更された場合、関連する共通パラメータ (例: プラグインのデフォルトビュー) も
+            # 変更される可能性があるため、現在の共通パラメータをUIに通知する。
+            current_common_params = self.get_current_common_parameters()
+            self.parameters_updated_externally.emit(current_common_params)
             self.active_fractal_plugin_ui_needs_update.emit(plugin_name)
             self.trigger_render(full_recompute=True)
         else:
@@ -301,7 +304,8 @@ class FractalController(QObject):
             max_iterations=cp.get('max_iterations', 100) # パン操作では反復回数は変更しない
             # escape_radius は現在の値を維持 (エンジン側でNoneを適切に処理する場合)
         )
-        self.parameters_updated_externally.emit(); self.trigger_render(full_recompute=True)
+        self.parameters_updated_externally.emit(self.get_current_common_parameters())
+        self.trigger_render(full_recompute=True)
 
     def zoom_fractal_to_point(self, fix_r, fix_i, mfx, mfy, new_w):
         if not self.fractal_engine or self.fractal_engine.image_width_px == 0: return
@@ -316,7 +320,8 @@ class FractalController(QObject):
             width=new_w,
             max_iterations=cp.get('max_iterations', 100) # ズーム操作では反復回数は変更しない
         )
-        self.parameters_updated_externally.emit(); self.trigger_render(full_recompute=True)
+        self.parameters_updated_externally.emit(self.get_current_common_parameters())
+        self.trigger_render(full_recompute=True)
 
     # --- 高解像度エクスポート ---
     def start_high_res_export(self, export_settings: dict):
@@ -369,7 +374,11 @@ class FractalController(QObject):
         )
         if plugin_params and self.fractal_engine.get_active_fractal_plugin():
             for name, value in plugin_params.items(): self.set_fractal_plugin_parameter(name, value)
-        self.parameters_updated_externally.emit()
+
+        # 共通パラメータとプラグイン固有パラメータの変更後、UIに最新の共通パラメータを通知
+        current_common_params = self.get_current_common_parameters()
+        self.parameters_updated_externally.emit(current_common_params)
+
         if plugin_params and self.fractal_engine.get_active_fractal_plugin():
              self.active_fractal_plugin_ui_needs_update.emit(self.fractal_engine.get_active_fractal_plugin().name)
         self.trigger_render(full_recompute=True)
@@ -377,7 +386,7 @@ class FractalController(QObject):
 if __name__ == '__main__':
     # ... (Mock classes and test code - 変更なし) ...
     class MockFractalEngine: # 簡潔にするためにさらに簡略化
-        def __init__(self): self.width=3.0;self.center_real=-0.5;self.center_imag=0.0;self.max_iterations=50;self.escape_radius=2.0;self.image_width_px=100;self.image_height_px=75;self.height=2.25;self.last_fractal_data_cache=None;self.plugin_manager=type('MPM',(),{'get_fractal_plugin':lambda n:type('MFP',(),{'name':n,'get_parameters_definition':lambda:[],'get_default_view_parameters':lambda:{}})(), 'get_coloring_plugin':lambda n:type('MCP',(),{'name':n,'get_parameters_definition':lambda:[]})()})();self.current_fractal_plugin=self.plugin_manager.get_fractal_plugin("TestFP");self.current_coloring_plugin=self.plugin_manager.get_coloring_plugin("TestCP");self.current_fractal_plugin_parameters={};self.current_coloring_plugin_parameters={};self.current_color_pack_name="P1";self.current_color_map_name="M1";self.color_manager=type('MCM',(),{'get_color_map_data':lambda pn,mn:[(0,0,0)]})()
+        def __init__(self): self.width=3.0;self.center_real=-0.5;self.center_imag=0.0;self.max_iterations=50;self.escape_radius=2.0;self.image_width_px=100;self.image_height_px=75;self.height=2.25;self.last_fractal_data_cache=None;self.plugin_manager=type('MPM',(),{'get_fractal_plugin':lambda n:type('MFP',(),{'name':n,'get_parameters_definition':lambda:[],'get_default_view_parameters':lambda:{}})(), 'get_coloring_plugin':lambda n:type('MCP',(),{'name':n,'get_parameters_definition':lambda:[]})()});self.current_fractal_plugin=self.plugin_manager.get_fractal_plugin("TestFP");self.current_coloring_plugin=self.plugin_manager.get_coloring_plugin("TestCP");self.current_fractal_plugin_parameters={};self.current_coloring_plugin_parameters={};self.current_color_pack_name="P1";self.current_color_map_name="M1";self.color_manager=type('MCM',(),{'get_color_map_data':lambda pn,mn:[(0,0,0)]})()
         def get_common_parameters(self): return {'width':self.width,'center_real':self.center_real,'center_imag':self.center_imag,'max_iterations':self.max_iterations,'height':self.height,'escape_radius':self.escape_radius}
         def set_common_parameters(self,cr,ci,w,mi,er=None): self.center_real=cr;self.center_imag=ci;self.width=w;self.max_iterations=mi;self.last_fractal_data_cache=None; self.update_aspect_ratio()
         def get_active_fractal_plugin(self): return self.current_fractal_plugin;
