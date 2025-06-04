@@ -560,20 +560,29 @@ class ParameterPanel(QScrollArea):
 
         if not self.fractal_controller or not algo_name or algo_name == "N/A":
             if specific_group: specific_group.setVisible(False)
+            logger.log(f"No controller, algo_name, or algo_name is N/A. Hiding specific group for {target_type}.", level="DEBUG")
             return
 
         param_defs = self.fractal_controller.get_coloring_plugin_parameter_definitions_from_engine(algo_name, target_type=target_type)
+        logger.log(f"param_defs for '{algo_name}' ({target_type}): {param_defs}", level="DEBUG") # Log param_defs content
+
         if not param_defs:
             if specific_group: specific_group.setVisible(False)
+            logger.log(f"No param_defs found for '{algo_name}' ({target_type}). Hiding specific group.", level="DEBUG")
             return
 
-        if specific_group: specific_group.setVisible(True)
+        if specific_group:
+            specific_group.setVisible(True)
+            logger.log(f"Specific group for {target_type} set to visible for algo '{algo_name}'.", level="DEBUG")
+
         target_display_name = "発散部" if target_type == 'divergent' else "非発散部"
         if specific_group: specific_group.setTitle(f"{algo_name} ({target_display_name}) 固有設定")
         current_vals = self.fractal_controller.get_current_coloring_plugin_parameters_from_engine(target_type=target_type)
+        logger.log(f"Current values for {target_type} specific params: {current_vals}", level="DEBUG")
 
         presets = self.fractal_controller.get_plugin_presets(algo_name, target_type=target_type)
         if presets:
+            logger.log(f"Presets found for '{algo_name}' ({target_type}): {list(presets.keys())}", level="DEBUG")
             preset_combo = QComboBox()
             preset_combo.addItem("カスタム")
             for preset_name in presets.keys(): preset_combo.addItem(preset_name)
@@ -582,22 +591,41 @@ class ParameterPanel(QScrollArea):
             )
             if specific_layout: specific_layout.addRow(QLabel("プリセット:"), preset_combo)
             if plugin_widgets: plugin_widgets['_coloring_preset_combo'] = preset_combo
+        else:
+            logger.log(f"No presets found for '{algo_name}' ({target_type}).", level="DEBUG")
 
+        logger.log(f"Looping through param_defs for '{algo_name}' ({target_type}). Number of defs: {len(param_defs) if param_defs else 0}", level="DEBUG")
         for p_def in param_defs:
-            lbl=p_def.get('label',p_def['name']); name=p_def['name']; type=p_def.get('type','float')
+            lbl_text=p_def.get('label',p_def['name']); name=p_def['name']; type=p_def.get('type','float')
             val=current_vals.get(name, p_def.get('default')); widget=None
+            logger.log(f"Processing p_def: name='{name}', type='{type}', label='{lbl_text}', default='{p_def.get('default')}', current_val_from_engine='{current_vals.get(name)}', final_val_for_widget='{val}'", level="DEBUG")
+
             if type == 'float':
-                widget=QDoubleSpinBox(); widget.setRange(p_def.get('range',(-1e9,1e9))[0], p_def.get('range',(-1e9,1e9))[1]); widget.setValue(val if val is not None else 0.0); widget.setSingleStep(p_def.get('step',0.01)); widget.setDecimals(p_def.get('decimals',3))
+                widget=QDoubleSpinBox()
+                widget.setRange(p_def.get('range',(-1e9,1e9))[0], p_def.get('range',(-1e9,1e9))[1])
+                widget.setValue(val if val is not None else 0.0)
+                widget.setSingleStep(p_def.get('step',0.01))
+                widget.setDecimals(p_def.get('decimals',3))
+                logger.log(f"Created QDoubleSpinBox for '{name}' with value {widget.value()}", level="DEBUG")
             elif type == 'int':
-                widget=QSpinBox(); widget.setRange(p_def.get('range',(-2**31,2**31-1))[0], p_def.get('range',(-2**31,2**31-1))[1]); widget.setValue(val if val is not None else 0); widget.setSingleStep(p_def.get('step',1))
+                widget=QSpinBox()
+                widget.setRange(p_def.get('range',(-2**31,2**31-1))[0], p_def.get('range',(-2**31,2**31-1))[1])
+                widget.setValue(val if val is not None else 0)
+                widget.setSingleStep(p_def.get('step',1))
+                logger.log(f"Created QSpinBox for '{name}' with value {widget.value()}", level="DEBUG")
+
             if widget:
                 if 'tooltip' in p_def: widget.setToolTip(p_def['tooltip'])
-                if specific_layout: specific_layout.addRow(QLabel(lbl + ":"), widget)
+                if specific_layout:
+                    specific_layout.addRow(QLabel(lbl_text + ":"), widget)
+                    logger.log(f"Added widget for '{name}' to layout of {target_type}.", level="DEBUG")
                 widget.valueChanged.connect(partial(self._on_coloring_plugin_parameter_changed, param_name=name, target_type=target_type))
                 if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
                     widget.editingFinished.connect(partial(self._on_coloring_plugin_parameter_editing_finished, param_name=name, target_type=target_type))
                 widget.installEventFilter(self)
                 if plugin_widgets: plugin_widgets[name] = widget
+            else:
+                logger.log(f"Widget not created for p_def: {p_def}", level="WARNING")
 
     def _on_coloring_plugin_parameter_changed(self, value, param_name: str, target_type: str):
         """
