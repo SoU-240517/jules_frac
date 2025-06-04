@@ -577,10 +577,17 @@ class ParameterPanel(QScrollArea):
         共通パラメータ関連のUI要素 (中心座標、幅、反復回数) の編集が完了したときに呼び出されます。
         `parameters_changed_in_ui_signal` を発行し、再描画を試みます。
         """
+        if hasattr(self, 'fractal_combo') and (self.fractal_combo.hasFocus() or self.fractal_combo.view().isVisible()):
+            logger.log("ParameterPanel._on_value_changed_by_ui: Skipping trigger_render because fractal_combo is active.", level="DEBUG")
+            return
+
         iters=self.iter_spinbox.value()
         self.parameters_changed_in_ui_signal.emit(iters)
         if self.fractal_controller: # fractal_controller が存在するか確認
+            logger.log("ParameterPanel._on_value_changed_by_ui: Calling fractal_controller.trigger_render()", level="DEBUG")
             self.fractal_controller.trigger_render() # 強制的に再描画をトリガー
+        else:
+            logger.log("ParameterPanel._on_value_changed_by_ui: fractal_controller is None, cannot trigger render.", level="WARNING")
 
     def load_initial_parameters(self):
         """
