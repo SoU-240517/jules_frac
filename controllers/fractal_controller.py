@@ -227,7 +227,7 @@ class FractalController(QObject):
         return None
     def set_active_color_map_and_recolor(self, pack_name: str, map_name: str):
         if not self.fractal_engine: return
-        success = self.fractal_engine.set_active_color_map(pack_name, map_name)
+        success = self.fractal_engine.set_active_color_map(pack_name, map_name, self.active_coloring_target_type)
         if success: self.active_color_map_changed_externally.emit(pack_name, map_name); self.trigger_recolor()
 
     # --- レンダリング処理 ---
