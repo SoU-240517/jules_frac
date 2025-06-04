@@ -550,15 +550,18 @@ class ParameterPanel(QScrollArea):
             plugin_widgets = self.coloring_plugin_widgets_divergent
             specific_group = self.coloring_plugin_specific_group_divergent
             specific_layout = self.coloring_plugin_specific_layout_divergent
-            logger.log(f"Targeting layout for {target_type}: {type(specific_layout)} - ID: {id(specific_layout)}", level="DEBUG")
         elif target_type == 'non_divergent':
             plugin_widgets = self.coloring_plugin_widgets_non_divergent
             specific_group = self.coloring_plugin_specific_group_non_divergent
             specific_layout = self.coloring_plugin_specific_layout_non_divergent
-            logger.log(f"Targeting layout for {target_type}: {type(specific_layout)} - ID: {id(specific_layout)}", level="DEBUG")
         else:
             logger.log(f"Error: Invalid target_type '{target_type}' in _update_coloring_plugin_specific_ui", level="ERROR")
             return
+
+        if specific_layout is not None:
+            logger.log(f"Targeting layout for {target_type}: {type(specific_layout).__name__} - ID: {id(specific_layout)}", level="DEBUG")
+        else:
+            logger.log(f"Targeting layout for {target_type}: specific_layout is None", level="WARNING")
 
         if not self.fractal_controller or not algo_name or algo_name == "N/A":
             if specific_group: specific_group.setVisible(False)
