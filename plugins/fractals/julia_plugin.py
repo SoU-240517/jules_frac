@@ -59,7 +59,8 @@ class JuliaPlugin(FractalPlugin):
                 'range': (-2.0, 2.0),
                 'step': 1e-6,  # ステップサイズをより細かく
                 'decimals': 7, # 表示する小数点以下の桁数を指定
-                'tooltip': 'Julia定数Cの実部'
+                'tooltip': 'Julia定数Cの実部',
+                'hide_spin_buttons': True
             },
             {
                 'name': 'c_imag',
@@ -69,7 +70,8 @@ class JuliaPlugin(FractalPlugin):
                 'range': (-2.0, 2.0),
                 'step': 1e-6,  # ステップサイズをより細かく
                 'decimals': 7, # 表示する小数点以下の桁数を指定
-                'tooltip': 'Julia定数Cの虚部'
+                'tooltip': 'Julia定数Cの虚部',
+                'hide_spin_buttons': True
             }
         ]
 

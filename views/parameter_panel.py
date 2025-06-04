@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QScrollArea, QWidget, QVBoxLayout, QGroupBox, QFormLayout,
     QLabel, QSpinBox, QDoubleSpinBox, QSlider, QComboBox, QPushButton,
-    QListWidget, QListWidgetItem
+    QListWidget, QListWidgetItem, QAbstractSpinBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QLinearGradient, QIcon
@@ -78,6 +78,7 @@ class ParameterPanel(QScrollArea):
         common_params_group = QGroupBox("共通描画設定")
         self.common_params_layout = QFormLayout()
         self.iter_spinbox = QSpinBox(); self.iter_spinbox.setRange(10,100000)
+        self.iter_spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.iter_slider = QSlider(Qt.Orientation.Horizontal); self.iter_slider.setRange(10,10000)
         self.common_params_layout.addRow(QLabel("最大反復回数:"), self.iter_spinbox)
         self.common_params_layout.addRow(self.iter_slider)
@@ -136,6 +137,9 @@ class ParameterPanel(QScrollArea):
         # 共通パラメータシグナルの接続
         self.iter_spinbox.valueChanged.connect(self._on_iter_spinbox_changed)
         self.iter_slider.valueChanged.connect(self._on_iter_slider_changed)
+        # 再描画をトリガーするシグナル接続
+        self.iter_spinbox.editingFinished.connect(self._on_value_changed_by_ui)
+        self.iter_slider.sliderReleased.connect(self._on_value_changed_by_ui)
 
     def _create_colormap_thumbnail(self, colors: list[tuple[int,int,int]], thumb_width: int = 96, thumb_height: int = 18) -> QPixmap:
         """
@@ -242,29 +246,73 @@ class ParameterPanel(QScrollArea):
                 current_plugin_val = current_vals.get(name, p_def.get('default'))
                 widget.setValue(current_plugin_val if current_plugin_val is not None else 0.0) # (3) 最後に値を設定
 
+                if p_def.get('hide_spin_buttons', False):
+                    widget.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+
             elif type == 'int':
                 widget = QSpinBox(); widget.setRange(p_def.get('range',(-2**31,2**31-1))[0], p_def.get('range',(-2**31,2**31-1))[1]); widget.setValue(current_vals.get(name, p_def.get('default')) if current_vals.get(name, p_def.get('default')) is not None else 0); widget.setSingleStep(p_def.get('step',1))
             if widget:
                 if 'tooltip' in p_def: widget.setToolTip(p_def['tooltip'])
                 self.plugin_specific_layout.addRow(QLabel(lbl + ":"), widget)
-                widget.valueChanged.connect(partial(self._on_fractal_plugin_parameter_changed, param_name=name))
                 self.plugin_widgets[name] = widget
+                # 値変更シグナルを接続 (debounceのためvalueChangedではなく、より汎用的なeditingFinishedを使用するケースも検討)
+                if isinstance(widget, (QDoubleSpinBox, QSpinBox)):
+                    # 既存の valueChanged シグナル接続
+                    widget.valueChanged.connect(partial(self._on_fractal_plugin_parameter_changed, param_name=name))
+                    # 新規: editingFinished シグナルを接続 (Enterキー押下またはフォーカスアウト)
+                    widget.editingFinished.connect(partial(self._on_plugin_parameter_editing_finished, param_name=name))
+                # 他のウィジェットタイプの場合のシグナル接続はここに記述
 
     def _on_fractal_plugin_parameter_changed(self, value, param_name: str):
         """
-        フラクタルプラグイン固有パラメータのUI要素の値が変更されたときに呼び出されるスロット。
-        コントローラーにパラメータの変更を通知します。
+        フラクタルプラグイン固有パラメータがUIで変更されたときに呼び出されるスロット。
+        コントローラーにパラメータの更新を通知します。
 
         Args:
-            value (any): 変更後の値。QDoubleSpinBox.valueChanged や QSpinBox.valueChanged から直接渡されます。
+            value: 変更後の値。
             param_name (str): 変更されたパラメータの名前。
         """
         if not self.fractal_controller: return
-        # シグナルから渡された 'value' (新しい値) を直接使用
-        self.fractal_controller.set_fractal_plugin_parameter_and_update(param_name, value)
-        # プラグインにプリセットコンボボックスが存在し、それが実際にQComboBoxインスタンスである場合のみ処理
-        if '_preset_combo' in self.plugin_widgets and isinstance(self.plugin_widgets['_preset_combo'], QComboBox):
-            self.plugin_widgets['_preset_combo'].blockSignals(True); self.plugin_widgets['_preset_combo'].setCurrentText("カスタム"); self.plugin_widgets['_preset_combo'].blockSignals(False)
+        self.fractal_controller.set_fractal_plugin_parameter(param_name, value)
+        # ここでは再描画をトリガーしない。editingFinishedで対応。
+
+    @pyqtSlot() # param_name を受け取るために slot デコレーターを調整する必要があるかもしれません。partialで対応済み。
+    def _on_plugin_parameter_editing_finished(self, param_name: str):
+        """
+        フラクタルプラグイン固有パラメータの入力フィールドで編集が完了した
+        (Enterキー押下またはフォーカスアウト) ときに呼び出されるスロット。
+        パラメータを更新し、再描画をトリガーします。
+        """
+        if not self.fractal_controller: return
+
+        widget = self.plugin_widgets.get(param_name)
+        if widget:
+            value = None
+            if isinstance(widget, QDoubleSpinBox):
+                value = widget.value()
+            elif isinstance(widget, QSpinBox):
+                value = widget.value()
+            # 他のウィジェットタイプもここに追加可能
+
+            if value is not None:
+                # self.fractal_controller.update_fractal_plugin_parameter(param_name, value) # _on_fractal_plugin_parameter_changed が valueChanged で既に更新しているため、ここでは不要かもしれない
+                # ただし、ユーザーが値を変更せずにEnterを押したりフォーカスを外したりした場合を考慮すると、
+                # ここでも更新をかけるか、あるいは valueChanged が常に editingFinished の前に発火することを保証する必要がある。
+                # QSpinBox/QDoubleSpinBox の場合、valueChanged は値が実際に変更されたときにのみ発火し、
+                # editingFinished は値の変更有無にかかわらずフォーカス喪失やEnterで発火する。
+                # 安全のため、ここでも値を読み取って更新をかけるのが良いかもしれない。
+                # しかし、valueChanged と editingFinished の両方で update_fractal_plugin_parameter を呼ぶと二重呼び出しになる。
+                # editingFinished のみで更新し、valueChanged はUI内部の即時反映（スライダーなどとの連動）に留めるのが良いかもしれない。
+                # 今回の要件は「Enterまたはフォーカス移動で描画」なので、描画トリガーはここで行う。
+                # パラメータ更新は valueChanged で既に行われていると仮定する。
+                # もし valueChanged が発火しないケース (例: 値を変更せずEnter) を考慮するなら、
+                # ここで self.fractal_controller.update_fractal_plugin_parameter(param_name, value) を呼ぶ。
+                # ただし、現状の _on_fractal_plugin_parameter_changed は再描画をトリガーしないので、
+                # ここで再描画をトリガーするのは適切。
+                pass # パラメータ更新は valueChanged で行われると期待
+
+        # 常に再描画を試みる (パラメータが実際に変更されていなくても、ユーザーのアクションに対応するため)
+        self.fractal_controller.trigger_render()
 
     def _populate_coloring_algorithm_combo(self):
         """
@@ -490,19 +538,24 @@ class ParameterPanel(QScrollArea):
         self.color_pack_combo.blockSignals(False); self.color_map_listwidget.blockSignals(False)
 
     def _on_iter_spinbox_changed(self, value):
-        """最大反復回数スピンボックスの値が変更されたときにスライダーを更新し、共通パラメータ変更シグナルを発行します。"""
-        self.iter_slider.setValue(value); self._on_value_changed_by_ui()
+        """最大反復回数スピンボックスの値が変更されたときにスライダーを更新します。"""
+        self.iter_slider.setValue(value)
+        # self._on_value_changed_by_ui() # ここでは再描画をトリガーしない
     def _on_iter_slider_changed(self, value):
-        """最大反復回数スライダーの値が変更されたときにスピンボックスを更新し、共通パラメータ変更シグナルを発行します。"""
-        if self.iter_spinbox.value() != value: self.iter_spinbox.setValue(value)
-        else: self._on_value_changed_by_ui()
+        """最大反復回数スライダーの値が変更されたときにスピンボックスを更新します。"""
+        if self.iter_spinbox.value() != value:
+            self.iter_spinbox.setValue(value)
+        # else: self._on_value_changed_by_ui() # ここでは再描画をトリガーしない
     def _on_value_changed_by_ui(self):
         """
-        共通パラメータ関連のUI要素 (中心座標、幅、反復回数) のいずれかが変更されたときに呼び出されます。
-        `parameters_changed_in_ui_signal` を発行します。
+        共通パラメータ関連のUI要素 (中心座標、幅、反復回数) の編集が完了したときに呼び出されます。
+        `parameters_changed_in_ui_signal` を発行し、再描画を試みます。
         """
         iters=self.iter_spinbox.value()
         self.parameters_changed_in_ui_signal.emit(iters)
+        if self.fractal_controller: # fractal_controller が存在するか確認
+            self.fractal_controller.trigger_render() # 強制的に再描画をトリガー
+
     def load_initial_parameters(self):
         """
         コントローラーから初期パラメータを取得し、UIに設定します。
