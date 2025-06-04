@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QLabel, QSpinBox, QDoubleSpinBox, QSlider, QComboBox, QPushButton,
     QListWidget, QListWidgetItem, QAbstractSpinBox
 )
-from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize
+from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize, QTimer # Added QTimer
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QLinearGradient, QIcon
 from functools import partial
 
@@ -200,9 +200,24 @@ class ParameterPanel(QScrollArea):
         Args:
             plugin_name (str): 選択されたフラクタルプラグインの名前。
         """
-        if not self.fractal_controller or not plugin_name or plugin_name == "プラグインなし": return
+        logger.log(f"ParameterPanel._on_fractal_type_changed: Called.", level="DEBUG")
+        logger.log(f"ParameterPanel._on_fractal_type_changed: plugin_name = {plugin_name}", level="DEBUG")
+        if hasattr(self, 'fractal_combo'):
+            logger.log(f"ParameterPanel._on_fractal_type_changed: fractal_combo.isEnabled() = {self.fractal_combo.isEnabled()}", level="DEBUG")
+            logger.log(f"ParameterPanel._on_fractal_type_changed: fractal_combo.isVisible() = {self.fractal_combo.isVisible()}", level="DEBUG")
+            logger.log(f"ParameterPanel._on_fractal_type_changed: fractal_combo.hasFocus() = {self.fractal_combo.hasFocus()}", level="DEBUG")
+            logger.log(f"ParameterPanel._on_fractal_type_changed: fractal_combo.currentText() = {self.fractal_combo.currentText()}", level="DEBUG")
+            logger.log(f"ParameterPanel._on_fractal_type_changed: fractal_combo.count() = {self.fractal_combo.count()}", level="DEBUG")
+        else:
+            logger.log("ParameterPanel._on_fractal_type_changed: self.fractal_combo does not exist.", level="WARNING")
+
+        if not self.fractal_controller or not plugin_name or plugin_name == "プラグインなし":
+            logger.log(f"ParameterPanel._on_fractal_type_changed: Exiting early. Controller: {self.fractal_controller}, Plugin Name: {plugin_name}", level="DEBUG")
+            return
         current_engine_plugin = self.fractal_controller.get_active_fractal_plugin_name_from_engine()
-        if plugin_name == current_engine_plugin: return
+        if plugin_name == current_engine_plugin:
+            logger.log(f"ParameterPanel._on_fractal_type_changed: Exiting early. Plugin '{plugin_name}' is already active.", level="DEBUG")
+            return
         self.fractal_controller.set_active_fractal_plugin_and_redraw(plugin_name)
 
     def _clear_fractal_plugin_specific_ui(self):
@@ -603,8 +618,18 @@ class ParameterPanel(QScrollArea):
         レンダリング状態が変更されたときに呼び出されるスロット。
         フラクタルタイプ選択コンボボックスの有効/無効を切り替えます。
         """
-        if hasattr(self, 'fractal_combo'):
-            self.fractal_combo.setEnabled(not is_rendering)
+        logger.log(f"ParameterPanel._on_rendering_state_changed: Received is_rendering = {is_rendering}", level="DEBUG")
+
+        def _update_ui():
+            if hasattr(self, 'fractal_combo'):
+                logger.log(f"ParameterPanel._on_rendering_state_changed (_update_ui): Setting fractal_combo.setEnabled({not is_rendering}) (before). Current state: {self.fractal_combo.isEnabled()}", level="DEBUG")
+                self.fractal_combo.setEnabled(not is_rendering)
+                logger.log(f"ParameterPanel._on_rendering_state_changed (_update_ui): fractal_combo.isEnabled() is now {self.fractal_combo.isEnabled()} (after).", level="DEBUG")
+            else:
+                logger.log("ParameterPanel._on_rendering_state_changed (_update_ui): self.fractal_combo does not exist.", level="WARNING")
+
+        QTimer.singleShot(0, _update_ui)
+        logger.log(f"ParameterPanel._on_rendering_state_changed: Scheduled _update_ui with QTimer.singleShot", level="DEBUG")
 
 if __name__ == '__main__':
     from logger.custom_logger import CustomLogger
