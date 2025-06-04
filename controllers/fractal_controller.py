@@ -263,14 +263,35 @@ class FractalController(QObject):
 
     # --- Pan and Zoom (略 - 変更なし) ---
     def pan_fractal(self, dr, di):
-        cp = self.get_current_engine_parameters(); nc_r=cp['center_real']-dr; nc_i=cp['center_imag']-di
-        self.update_common_fractal_parameters(nc_r, nc_i, cp['width'], cp['max_iterations'])
+        if not self.fractal_engine: return
+        cp = self.fractal_engine.get_common_parameters()
+        if not cp: return
+
+        nc_r = cp.get('center_real', 0.0) - dr
+        nc_i = cp.get('center_imag', 0.0) - di
+
+        self.fractal_engine.set_common_parameters(
+            center_real=nc_r,
+            center_imag=nc_i,
+            width=cp.get('width', self.initial_width),
+            max_iterations=cp.get('max_iterations', 100) # パン操作では反復回数は変更しない
+            # escape_radius は現在の値を維持 (エンジン側でNoneを適切に処理する場合)
+        )
         self.parameters_updated_externally.emit(); self.trigger_render(full_recompute=True)
+
     def zoom_fractal_to_point(self, fix_r, fix_i, mfx, mfy, new_w):
         if not self.fractal_engine or self.fractal_engine.image_width_px == 0: return
+        cp = self.fractal_engine.get_common_parameters()
+        if not cp: return
+
         asp = self.fractal_engine.image_height_px / self.fractal_engine.image_width_px; new_h = new_w*asp
         nc_r = fix_r-(mfx-0.5)*new_w; nc_i = fix_i+(mfy-0.5)*new_h
-        self.update_common_fractal_parameters(nc_r, nc_i, new_w, self.fractal_engine.max_iterations)
+        self.fractal_engine.set_common_parameters(
+            center_real=nc_r,
+            center_imag=nc_i,
+            width=new_w,
+            max_iterations=cp.get('max_iterations', 100) # ズーム操作では反復回数は変更しない
+        )
         self.parameters_updated_externally.emit(); self.trigger_render(full_recompute=True)
 
     # --- 高解像度エクスポート ---
@@ -314,8 +335,14 @@ class FractalController(QObject):
     # Programmatic parameter changes (略 - 変更なし)
     def handle_programmatic_parameter_change(self, cr, ci, w, iters=None, plugin_params=None):
         if not self.fractal_engine: return
-        current_iters = self.fractal_engine.max_iterations if iters is None else iters
-        self.update_common_fractal_parameters(cr, ci, w, current_iters)
+        cp = self.fractal_engine.get_common_parameters()
+        current_iters = cp.get('max_iterations', 100) if iters is None else iters
+        self.fractal_engine.set_common_parameters(
+            center_real=cr,
+            center_imag=ci,
+            width=w,
+            max_iterations=current_iters
+        )
         if plugin_params and self.fractal_engine.get_active_fractal_plugin():
             for name, value in plugin_params.items(): self.set_fractal_plugin_parameter(name, value)
         self.parameters_updated_externally.emit()
@@ -326,7 +353,7 @@ class FractalController(QObject):
 if __name__ == '__main__':
     # ... (Mock classes and test code - 変更なし) ...
     class MockFractalEngine: # 簡潔にするためにさらに簡略化
-        def __init__(self): self.width=3.0;self.center_real=-0.5;self.center_imag=0.0;self.max_iterations=50;self.escape_radius=2.0;self.image_width_px=100;self.image_height_px=75;self.height=2.625;self.last_fractal_data_cache=None;self.plugin_manager=type('MPM',(),{'get_fractal_plugin':lambda n:type('MFP',(),{'name':n,'get_parameters_definition':lambda:[],'get_default_view_parameters':lambda:{}})(), 'get_coloring_plugin':lambda n:type('MCP',(),{'name':n,'get_parameters_definition':lambda:[]})()})();self.current_fractal_plugin=self.plugin_manager.get_fractal_plugin("TestFP");self.current_coloring_plugin=self.plugin_manager.get_coloring_plugin("TestCP");self.current_fractal_plugin_parameters={};self.current_coloring_plugin_parameters={};self.current_color_pack_name="P1";self.current_color_map_name="M1";self.color_manager=type('MCM',(),{'get_color_map_data':lambda pn,mn:[(0,0,0)]})()
+        def __init__(self): self.width=3.0;self.center_real=-0.5;self.center_imag=0.0;self.max_iterations=50;self.escape_radius=2.0;self.image_width_px=100;self.image_height_px=75;self.height=2.25;self.last_fractal_data_cache=None;self.plugin_manager=type('MPM',(),{'get_fractal_plugin':lambda n:type('MFP',(),{'name':n,'get_parameters_definition':lambda:[],'get_default_view_parameters':lambda:{}})(), 'get_coloring_plugin':lambda n:type('MCP',(),{'name':n,'get_parameters_definition':lambda:[]})()})();self.current_fractal_plugin=self.plugin_manager.get_fractal_plugin("TestFP");self.current_coloring_plugin=self.plugin_manager.get_coloring_plugin("TestCP");self.current_fractal_plugin_parameters={};self.current_coloring_plugin_parameters={};self.current_color_pack_name="P1";self.current_color_map_name="M1";self.color_manager=type('MCM',(),{'get_color_map_data':lambda pn,mn:[(0,0,0)]})()
         def get_common_parameters(self): return {'width':self.width,'center_real':self.center_real,'center_imag':self.center_imag,'max_iterations':self.max_iterations,'height':self.height,'escape_radius':self.escape_radius}
         def set_common_parameters(self,cr,ci,w,mi,er=None): self.center_real=cr;self.center_imag=ci;self.width=w;self.max_iterations=mi;self.last_fractal_data_cache=None; self.update_aspect_ratio()
         def get_active_fractal_plugin(self): return self.current_fractal_plugin;
@@ -354,7 +381,7 @@ if __name__ == '__main__':
         def generate_image_for_output(self, **kwargs): import numpy as np; return np.zeros((kwargs['output_height'],kwargs['output_width'],4),dtype=np.uint8)
     class MockMainWindow: render_area = type('MRA',(),{'width':lambda:100, 'height':lambda:100})()
     mock_engine = MockFractalEngine(); controller = FractalController(mock_engine); controller.set_main_window(MockMainWindow())
-    logger.log("\nコントローラーテスト（フルモックエンジン使用）...", level="INFO"); controller.update_common_fractal_parameters(-0.7,0.3,2.0,150)
+    logger.log("\nコントローラーテスト（フルモックエンジン使用）...", level="INFO"); controller.handle_programmatic_parameter_change(cr=-0.7,ci=0.3,w=2.0,iters=150)
     controller.trigger_render(); controller.trigger_recolor()
     # logger.log(f"ステータス: {controller.last_status}") # controllerにlast_statusが保存されていない場合、printでのアクセスは難しいかもしれません
     controller.start_high_res_export({'width':200,'height':150,'iterations':300,'antialiasing_factor':2, 'antialiasing': '2x2 SSAA'}) # generate_image_for_output 用にアンチエイリアス文字列を追加

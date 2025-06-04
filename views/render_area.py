@@ -171,7 +171,7 @@ class RenderArea(QLabel):
                 return
 
             delta_real = (delta_qpoint.x() / self.width()) * fractal_width_complex
-            delta_imag = (-delta_qpoint.y() / self.height()) * fractal_height_complex
+            delta_imag = (delta_qpoint.y() / self.height()) * fractal_height_complex
 
             self.fractal_controller.pan_fractal(delta_real, delta_imag)
 
