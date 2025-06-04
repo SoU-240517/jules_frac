@@ -203,8 +203,13 @@ class ParameterPanel(QScrollArea):
         Args:
             plugin_name (str): 選択されたフラクタルプラグインの名前。
         """
-        logger.log(f"ParameterPanel._on_fractal_type_changed: Called.", level="DEBUG")
-        logger.log(f"ParameterPanel._on_fractal_type_changed: plugin_name = {plugin_name}", level="DEBUG")
+        logger.log(f"ParameterPanel._on_fractal_type_changed: Called with plugin_name = {plugin_name}", level="DEBUG")
+
+        if self.fractal_controller and hasattr(self.fractal_controller, 'is_rendering') and self.fractal_controller.is_rendering:
+            logger.log("ParameterPanel._on_fractal_type_changed: Fractal type change blocked, rendering in progress.", level="DEBUG")
+            return
+
+        # Detailed logs about combo box state
         if hasattr(self, 'fractal_combo'):
             logger.log(f"ParameterPanel._on_fractal_type_changed: fractal_combo.isEnabled() = {self.fractal_combo.isEnabled()}", level="DEBUG")
             logger.log(f"ParameterPanel._on_fractal_type_changed: fractal_combo.isVisible() = {self.fractal_combo.isVisible()}", level="DEBUG")
@@ -212,15 +217,17 @@ class ParameterPanel(QScrollArea):
             logger.log(f"ParameterPanel._on_fractal_type_changed: fractal_combo.currentText() = {self.fractal_combo.currentText()}", level="DEBUG")
             logger.log(f"ParameterPanel._on_fractal_type_changed: fractal_combo.count() = {self.fractal_combo.count()}", level="DEBUG")
         else:
-            logger.log("ParameterPanel._on_fractal_type_changed: self.fractal_combo does not exist.", level="WARNING")
+            logger.log("ParameterPanel._on_fractal_type_changed: self.fractal_combo does not exist (for detailed logging).", level="WARNING")
 
         if not self.fractal_controller or not plugin_name or plugin_name == "プラグインなし":
-            logger.log(f"ParameterPanel._on_fractal_type_changed: Exiting early. Controller: {self.fractal_controller}, Plugin Name: {plugin_name}", level="DEBUG")
+            logger.log(f"ParameterPanel._on_fractal_type_changed: No controller, no plugin_name ('{plugin_name}'), or 'No plugin' selected. Returning.", level="DEBUG")
             return
         current_engine_plugin = self.fractal_controller.get_active_fractal_plugin_name_from_engine()
         if plugin_name == current_engine_plugin:
-            logger.log(f"ParameterPanel._on_fractal_type_changed: Exiting early. Plugin '{plugin_name}' is already active.", level="DEBUG")
+            logger.log(f"ParameterPanel._on_fractal_type_changed: Selected plugin '{plugin_name}' is already active. Returning.", level="DEBUG")
             return
+
+        logger.log(f"ParameterPanel._on_fractal_type_changed: Calling controller to set active fractal plugin: {plugin_name}", level="DEBUG")
         self.fractal_controller.set_active_fractal_plugin_and_redraw(plugin_name)
 
     def _clear_fractal_plugin_specific_ui(self):
