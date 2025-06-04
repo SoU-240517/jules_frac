@@ -45,7 +45,8 @@ class FractalEngine:
         self.plugin_manager = PluginManager(
             project_root_path=project_root_path,
             fractal_plugin_folder_path=fractal_plugin_folder,
-            coloring_plugin_folder_path=coloring_plugin_folder
+            divergent_coloring_plugin_folder_path="plugins/coloring/divergent", # Changed
+            non_divergent_coloring_plugin_folder_path="plugins/coloring/non_divergent" # Changed
         )
         # ColorManagerもプロジェクトルートからの相対パスで初期化するのが望ましいです
         self.color_manager = ColorManager(color_packs_dir=str(project_root_path / color_pack_folder))
