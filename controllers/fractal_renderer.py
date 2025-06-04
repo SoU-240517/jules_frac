@@ -10,6 +10,9 @@ class FractalRendererSignals(QObject):
     rendering_finished = pyqtSignal(object, float, float)  # Rendered image data, computation time, coloring time
     rendering_failed = pyqtSignal(str)  # Error message
 
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
 
 class FractalRenderer(QRunnable):
     def __init__(self, fractal_engine: FractalEngine, image_width_px: int, image_height_px: int, full_recompute: bool):
