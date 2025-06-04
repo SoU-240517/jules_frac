@@ -10,6 +10,9 @@ class FractalRendererSignals(QObject):
     rendering_finished = pyqtSignal(object, float, float)  # Rendered image data, computation time, coloring time
     rendering_failed = pyqtSignal(str)  # Error message
 
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
 
 class FractalRenderer(QRunnable):
     def __init__(self, fractal_engine: FractalEngine, image_width_px: int, image_height_px: int, full_recompute: bool):
@@ -58,8 +61,14 @@ class FractalRenderer(QRunnable):
                 return
 
             self.logger.log(f"FractalRenderer: Rendering finished. Compute: {compute_time_ms:.1f}ms, Color: {coloring_time_ms:.1f}ms", level="INFO")
-            self.signals.rendering_finished.emit(colored_image, compute_time_ms, coloring_time_ms)
+            try:
+                self.signals.rendering_finished.emit(colored_image, compute_time_ms, coloring_time_ms)
+            except RuntimeError as e_emit_finished:
+                self.logger.log(f"FractalRenderer: Error emitting rendering_finished: {e_emit_finished}", level="ERROR")
 
-        except Exception as e:
-            self.logger.log(f"FractalRenderer: Error during rendering: {e}", level="ERROR", exc_info=True)
-            self.signals.rendering_failed.emit(f"レンダリング中にエラーが発生しました: {e}")
+        except Exception as e_outer:
+            self.logger.log(f"FractalRenderer: Error during rendering: {e_outer}", level="ERROR", exc_info=True)
+            try:
+                self.signals.rendering_failed.emit(f"レンダリング中にエラーが発生しました: {e_outer}")
+            except RuntimeError as e_emit_failed_outer:
+                self.logger.log(f"FractalRenderer: Error emitting rendering_failed: {e_emit_failed_outer}", level="ERROR")

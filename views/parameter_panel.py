@@ -3,9 +3,12 @@ from PyQt6.QtWidgets import (
     QLabel, QSpinBox, QDoubleSpinBox, QSlider, QComboBox, QPushButton,
     QListWidget, QListWidgetItem, QAbstractSpinBox
 )
-from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize
+from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize, QTimer # Added QTimer
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QLinearGradient, QIcon
 from functools import partial
+from logger.custom_logger import CustomLogger # Ensure this is present
+
+logger = CustomLogger() # Add this line
 
 class ParameterPanel(QScrollArea):
     """
@@ -51,6 +54,7 @@ class ParameterPanel(QScrollArea):
             self.fractal_controller.active_fractal_plugin_ui_needs_update.connect(self._update_fractal_plugin_specific_ui)
             self.fractal_controller.active_coloring_plugin_ui_needs_update.connect(self._update_coloring_plugin_specific_ui)
             self.fractal_controller.active_color_map_changed_externally.connect(self._update_color_selection_from_controller)
+            # self.fractal_controller.rendering_state_changed.connect(self._on_rendering_state_changed) # This line is moved to MainWindow
         else:
             # コントローラーが利用できない場合のフォールバックUI設定
             self._set_ui_values(100)
@@ -199,9 +203,31 @@ class ParameterPanel(QScrollArea):
         Args:
             plugin_name (str): 選択されたフラクタルプラグインの名前。
         """
-        if not self.fractal_controller or not plugin_name or plugin_name == "プラグインなし": return
+        logger.log(f"ParameterPanel._on_fractal_type_changed: Called with plugin_name = {plugin_name}", level="DEBUG")
+
+        if self.fractal_controller and hasattr(self.fractal_controller, 'is_rendering') and self.fractal_controller.is_rendering:
+            logger.log("ParameterPanel._on_fractal_type_changed: Fractal type change blocked, rendering in progress.", level="DEBUG")
+            return
+
+        # Detailed logs about combo box state
+        if hasattr(self, 'fractal_combo'):
+            logger.log(f"ParameterPanel._on_fractal_type_changed: fractal_combo.isEnabled() = {self.fractal_combo.isEnabled()}", level="DEBUG")
+            logger.log(f"ParameterPanel._on_fractal_type_changed: fractal_combo.isVisible() = {self.fractal_combo.isVisible()}", level="DEBUG")
+            logger.log(f"ParameterPanel._on_fractal_type_changed: fractal_combo.hasFocus() = {self.fractal_combo.hasFocus()}", level="DEBUG")
+            logger.log(f"ParameterPanel._on_fractal_type_changed: fractal_combo.currentText() = {self.fractal_combo.currentText()}", level="DEBUG")
+            logger.log(f"ParameterPanel._on_fractal_type_changed: fractal_combo.count() = {self.fractal_combo.count()}", level="DEBUG")
+        else:
+            logger.log("ParameterPanel._on_fractal_type_changed: self.fractal_combo does not exist (for detailed logging).", level="WARNING")
+
+        if not self.fractal_controller or not plugin_name or plugin_name == "プラグインなし":
+            logger.log(f"ParameterPanel._on_fractal_type_changed: No controller, no plugin_name ('{plugin_name}'), or 'No plugin' selected. Returning.", level="DEBUG")
+            return
         current_engine_plugin = self.fractal_controller.get_active_fractal_plugin_name_from_engine()
-        if plugin_name == current_engine_plugin: return
+        if plugin_name == current_engine_plugin:
+            logger.log(f"ParameterPanel._on_fractal_type_changed: Selected plugin '{plugin_name}' is already active. Returning.", level="DEBUG")
+            return
+
+        logger.log(f"ParameterPanel._on_fractal_type_changed: Calling controller to set active fractal plugin: {plugin_name}", level="DEBUG")
         self.fractal_controller.set_active_fractal_plugin_and_redraw(plugin_name)
 
     def _clear_fractal_plugin_specific_ui(self):
@@ -551,10 +577,17 @@ class ParameterPanel(QScrollArea):
         共通パラメータ関連のUI要素 (中心座標、幅、反復回数) の編集が完了したときに呼び出されます。
         `parameters_changed_in_ui_signal` を発行し、再描画を試みます。
         """
+        if hasattr(self, 'fractal_combo') and (self.fractal_combo.hasFocus() or self.fractal_combo.view().isVisible()):
+            logger.log("ParameterPanel._on_value_changed_by_ui: Skipping trigger_render because fractal_combo is active.", level="DEBUG")
+            return
+
         iters=self.iter_spinbox.value()
         self.parameters_changed_in_ui_signal.emit(iters)
         if self.fractal_controller: # fractal_controller が存在するか確認
+            logger.log("ParameterPanel._on_value_changed_by_ui: Calling fractal_controller.trigger_render()", level="DEBUG")
             self.fractal_controller.trigger_render() # 強制的に再描画をトリガー
+        else:
+            logger.log("ParameterPanel._on_value_changed_by_ui: fractal_controller is None, cannot trigger render.", level="WARNING")
 
     def load_initial_parameters(self):
         """
@@ -595,6 +628,25 @@ class ParameterPanel(QScrollArea):
             dict: 'max_iterations' をキーとする辞書。
         """
         return {"max_iterations":self.iter_spinbox.value()}
+
+    @pyqtSlot(bool)
+    def _on_rendering_state_changed(self, is_rendering: bool):
+        """
+        レンダリング状態が変更されたときに呼び出されるスロット。
+        フラクタルタイプ選択コンボボックスの有効/無効を切り替えます。
+        """
+        logger.log(f"ParameterPanel._on_rendering_state_changed: Received is_rendering = {is_rendering}", level="DEBUG")
+
+        def _update_ui():
+            if hasattr(self, 'fractal_combo'):
+                logger.log(f"ParameterPanel._on_rendering_state_changed (_update_ui): Setting fractal_combo.setEnabled({not is_rendering}) (before). Current state: {self.fractal_combo.isEnabled()}", level="DEBUG")
+                self.fractal_combo.setEnabled(not is_rendering)
+                logger.log(f"ParameterPanel._on_rendering_state_changed (_update_ui): fractal_combo.isEnabled() is now {self.fractal_combo.isEnabled()} (after).", level="DEBUG")
+            else:
+                logger.log("ParameterPanel._on_rendering_state_changed (_update_ui): self.fractal_combo does not exist.", level="WARNING")
+
+        QTimer.singleShot(0, _update_ui)
+        logger.log(f"ParameterPanel._on_rendering_state_changed: Scheduled _update_ui with QTimer.singleShot", level="DEBUG")
 
 if __name__ == '__main__':
     from logger.custom_logger import CustomLogger

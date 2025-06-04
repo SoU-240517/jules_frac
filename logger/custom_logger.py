@@ -1,6 +1,8 @@
 import time
 import inspect
 from pathlib import Path
+import sys # Added for exc_info fallback
+import traceback # Added for exc_info
 # SettingsManagerのインポートは _initialize_singleton_attrs メソッド内で行い、循環インポートを避けます。
 
 class CustomLogger:
@@ -120,7 +122,7 @@ class CustomLogger:
         """ロガーの有効/無効状態を設定します。"""
         CustomLogger._is_enabled = enabled
 
-    def log(self, message, level="INFO"):
+    def log(self, message, level="INFO", exc_info=None): # New signature
         """指定されたレベルでログメッセージを記録します。"""
         # 初期化中のロギング呼び出しをチェック (循環依存を避けるため)
         if hasattr(CustomLogger, '_initializing') and CustomLogger._initializing:
@@ -185,9 +187,31 @@ class CustomLogger:
             try:
                 with open(CustomLogger._log_file_path, "a", encoding="utf-8") as f:
                     f.write(log_message_file + "\n")
+                    if exc_info:
+                        # If exc_info is True, format_exc() gets current exception.
+                        # If exc_info is an exception tuple, format_exception(*exc_info) should be used.
+                        # For simplicity with typical logging usage, assume exc_info=True is the primary use case here.
+                        if exc_info is True:
+                            traceback_str = traceback.format_exc()
+                            if traceback_str and traceback_str != "None\n": # format_exc returns "None\n" if no exception
+                                f.write(traceback_str)
+                        elif isinstance(exc_info, tuple):
+                            traceback_str = "".join(traceback.format_exception(*exc_info))
+                            if traceback_str:
+                                f.write(traceback_str)
+                        # else: exc_info might be an exception instance, could format that too if needed.
             except Exception as e:
                 # ファイル書き込みエラーはコンソールに出力 (無限ループを避けるため、ここではlog()を呼び出さない)
                 print(f"[CRITICAL] CustomLogger: ログファイルへの書き込みに失敗しました: {CustomLogger._log_file_path}, Error: {e}", flush=True)
+
+        # Console output for exc_info (after main message, similar to file logging)
+        if exc_info:
+            # This will print to stderr by default if exc_info is True or an exception tuple.
+            if exc_info is True:
+                traceback.print_exc() # Prints to sys.stderr
+            elif isinstance(exc_info, tuple):
+                 traceback.print_exception(*exc_info) # Prints to sys.stderr
+            # else: could handle exception instance directly if needed
 
 
 if __name__ == '__main__':

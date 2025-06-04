@@ -1,4 +1,5 @@
 import time
+import traceback # Add this if not present
 from export.image_exporter import ImageExporter # ExporterSignals は ImageExporter 内部で使用されます
 # FractalEngine がインポートされている場合、型が正しく指定されていると仮定しますが、このファイルでは渡されるだけなので必須ではありません。
 # from src.app.models.fractal_engine import FractalEngine # FractalEngineモデルのインポート (型ヒント用)
@@ -16,6 +17,7 @@ class FractalController(QObject):
     active_coloring_plugin_ui_needs_update = pyqtSignal(str)
     active_color_map_changed_externally = pyqtSignal(str, str)
     rendering_task_started = pyqtSignal() # New signal
+    rendering_state_changed = pyqtSignal(bool) # True if rendering started, False if finished/failed
 
     # 高解像度エクスポート処理用のシグナル
     export_started = pyqtSignal()
@@ -30,6 +32,7 @@ class FractalController(QObject):
         self.last_coloring_time_ms = 0.0
         self.initial_width = self.fractal_engine.width if self.fractal_engine else 3.0
         self.logger = CustomLogger() # Add logger instance
+        self.is_rendering = False
 
         self.current_exporter: ImageExporter | None = None
         self.thread_pool = QThreadPool.globalInstance()
@@ -184,6 +187,9 @@ class FractalController(QObject):
 
     # --- レンダリング処理 ---
     def trigger_render(self, image_width_px=None, image_height_px=None, full_recompute: bool = True):
+        # Add this logging line
+        self.logger.log(f"FractalController.trigger_render: Called from: {traceback.format_stack()[-2].strip()}", level="DEBUG")
+
         if not self.fractal_engine:
             self.status_updated.emit("エラー: フラクタルエンジン未設定")
             return
@@ -219,23 +225,41 @@ class FractalController(QObject):
 
     @pyqtSlot()
     def _on_renderer_started(self):
-        self.logger.log("FractalController: Renderer task started signal received.", level="DEBUG") # Uses self.logger
+        self.logger.log("FractalController._on_renderer_started: Received signal.", level="DEBUG")
+        self.logger.log("FractalController._on_renderer_started: Setting self.is_rendering = True (before).", level="DEBUG")
+        self.is_rendering = True
+        self.logger.log(f"FractalController._on_renderer_started: self.is_rendering = {self.is_rendering} (after).", level="DEBUG")
         self.rendering_task_started.emit()
+        self.logger.log("FractalController._on_renderer_started: Emitting self.rendering_state_changed.emit(True) (before).", level="DEBUG")
+        self.rendering_state_changed.emit(True)
+        self.logger.log("FractalController._on_renderer_started: Emitted self.rendering_state_changed.emit(True) (after).", level="DEBUG")
 
     @pyqtSlot(object, float, float)
     def _on_renderer_finished(self, colored_image, compute_time_ms, coloring_time_ms):
-        self.logger.log(f"FractalController: Renderer task finished. Compute: {compute_time_ms:.1f}ms, Color: {coloring_time_ms:.1f}ms", level="INFO") # Uses self.logger
+        self.logger.log(f"FractalController._on_renderer_finished: Renderer task finished. Compute: {compute_time_ms:.1f}ms, Color: {coloring_time_ms:.1f}ms", level="INFO")
         self.last_compute_time_ms = compute_time_ms
         self.last_coloring_time_ms = coloring_time_ms
         self.image_rendered.emit(colored_image)
         self.update_status_display() # Generate and emit final status message
         self.current_renderer_task = None
+        self.logger.log("FractalController._on_renderer_finished: Setting self.is_rendering = False (before).", level="DEBUG")
+        self.is_rendering = False
+        self.logger.log(f"FractalController._on_renderer_finished: self.is_rendering = {self.is_rendering} (after).", level="DEBUG")
+        self.logger.log("FractalController._on_renderer_finished: Emitting self.rendering_state_changed.emit(False) (before).", level="DEBUG")
+        self.rendering_state_changed.emit(False)
+        self.logger.log("FractalController._on_renderer_finished: Emitted self.rendering_state_changed.emit(False) (after).", level="DEBUG")
 
     @pyqtSlot(str)
     def _on_renderer_failed(self, error_message):
-        self.logger.log(f"FractalController: Renderer task failed: {error_message}", level="ERROR") # Uses self.logger
+        self.logger.log(f"FractalController._on_renderer_failed: Renderer task failed: {error_message}", level="ERROR")
         self.status_updated.emit(f"描画エラー: {error_message}")
         self.current_renderer_task = None
+        self.logger.log("FractalController._on_renderer_failed: Setting self.is_rendering = False (before).", level="DEBUG")
+        self.is_rendering = False
+        self.logger.log(f"FractalController._on_renderer_failed: self.is_rendering = {self.is_rendering} (after).", level="DEBUG")
+        self.logger.log("FractalController._on_renderer_failed: Emitting self.rendering_state_changed.emit(False) (before).", level="DEBUG")
+        self.rendering_state_changed.emit(False)
+        self.logger.log("FractalController._on_renderer_failed: Emitted self.rendering_state_changed.emit(False) (after).", level="DEBUG")
 
     def trigger_recolor(self):
         self.trigger_render(full_recompute=False)
