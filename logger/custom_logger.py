@@ -63,39 +63,49 @@ class CustomLogger:
         # SettingsManager をここでインポートして、モジュールレベルでの循環インポートのリスクを軽減します。
         from utils.settings_manager import SettingsManager
 
-        # デフォルト値を設定してから、設定ファイルからの値で上書きを試みます。
+        # クラス属性として基本的なデフォルト値を設定。これらは設定ファイルから読み込めない場合の最終フォールバック。
         # これにより、SettingsManagerの初期化中にロギングが発生しても、基本的なロギング状態が保証されます。
         CustomLogger._current_level_int = CustomLogger.LOG_LEVELS.get("INFO", 20)
         CustomLogger._is_enabled = True
-        # 現在の作業ディレクトリとの曖昧さを避けるために、ログファイルに絶対パスを使用します。
         CustomLogger._log_file_path = Path("/tmp/app.log") # デフォルトのログファイルパス
 
         try:
             # SettingsManager のインスタンス化時にロギングが発生する可能性があるため、
             # _initializing フラグが CustomLogger.log() でチェックされることが重要です。
             settings_manager = SettingsManager(settings_filename="base_settings.json", _is_for_logger_init=True) # SettingsManager は自身のロガーを使用する可能性があります
-            logging_config = settings_manager.get_logging_settings()
 
+            # SettingsManagerから "logging" 設定を取得するためのデフォルト値を定義
+            # このデフォルト値は、settings_manager.get_setting の第2引数として使用される
+            default_config_for_sm = {
+                "level": "INFO",
+                "enabled": True,
+                "file": str(CustomLogger._log_file_path) # 初期デフォルトのファイルパス
+            }
+            # settings_manager.get_setting を使用して "logging" セクションを取得
+            logging_config = settings_manager.get_setting("logging", default_config_for_sm)
+
+            # logging_config (辞書) から各値を取得。存在しない場合はフォールバック値を使用。
             level_to_set_str = logging_config.get("level", "INFO").upper()
-            enabled_bool = logging_config.get("enabled", True)
-            # SettingsManager が相対パスを提供する場合、絶対パスになるか適切に処理されることを確認してください。
-            # 現時点では、設定で絶対パスが提供されていない場合は、上記で設定された絶対パスを優先します。
-            # 提供されているパスが相対パスであっても、問題が発生する可能性があります。
-            # ここでは、settings_manager が相対パスまたは絶対パスの 'file' を提供していると仮定します。
-            # 相対パスの場合は、アプリの実行場所を基準とした相対パスになります。
-            log_file_from_settings = logging_config.get("file")
+            enabled_setting = logging_config.get("enabled", True)
+
+            # enabled 設定の型をboolに正規化 (JSONでは文字列で "true"/"false" が来る可能性も考慮)
+            if isinstance(enabled_setting, str):
+                current_enabled_bool = enabled_setting.lower() == "true"
+            elif isinstance(enabled_setting, bool):
+                current_enabled_bool = enabled_setting
+            else: # 不明な型やNoneの場合はデフォルト True
+                current_enabled_bool = True
+
+            log_file_from_settings = logging_config.get("file") # 設定ファイル内のキーを "file" と想定
 
             CustomLogger._current_level_int = CustomLogger.LOG_LEVELS.get(level_to_set_str, CustomLogger.LOG_LEVELS["INFO"])
-            CustomLogger._is_enabled = enabled_bool
+            CustomLogger._is_enabled = current_enabled_bool
 
             if log_file_from_settings:
-                # 設定でパスが指定されている場合は、それを使用してください。指定されていない場合は、絶対パスにすることを検討してください。
-                # 簡潔にするため、今のところはそのまま使用します。問題が解決しない場合は、絶対パスにしてください。
                 CustomLogger._log_file_path = Path(log_file_from_settings)
-            # それ以外の場合は、デフォルトの /tmp/app.log が残ります。
 
-            # ログディレクトリが存在することを確認する
-            if CustomLogger._log_file_path.parent:
+            # ログファイルパスがNoneでなく、親ディレクトリが存在する場合に作成
+            if CustomLogger._log_file_path and CustomLogger._log_file_path.parent:
                  CustomLogger._log_file_path.parent.mkdir(parents=True, exist_ok=True)
 
         except Exception as e:
@@ -104,8 +114,10 @@ class CustomLogger:
             print(f"[CRITICAL] CustomLogger: 設定からのロガー初期化に失敗しました: {e}. デフォルト設定 (INFO, Enabled, /tmp/app.log) を使用します。", flush=True)
             CustomLogger._current_level_int = CustomLogger.LOG_LEVELS.get("INFO", 20)
             CustomLogger._is_enabled = True
-            CustomLogger._log_file_path = Path("/tmp/app.log") # 絶対パスへのフォールバック
-            if CustomLogger._log_file_path.parent:
+            # _log_file_path は try 前にデフォルトが設定されているが、念のため再設定とディレクトリ作成
+            if CustomLogger._log_file_path is None: # 通常は発生しない
+                CustomLogger._log_file_path = Path("/tmp/app.log")
+            if CustomLogger._log_file_path and CustomLogger._log_file_path.parent:
                  CustomLogger._log_file_path.parent.mkdir(parents=True, exist_ok=True)
 
 

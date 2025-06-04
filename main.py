@@ -11,8 +11,9 @@ from PyQt6.QtWidgets import QApplication
 from views.main_window import MainWindow
 from models.fractal_engine import FractalEngine
 from controllers.fractal_controller import FractalController
-from utils.settings_manager import SettingsManager
+from utils.settings_manager import SettingsManager # SettingsManager クラスをインポート
 from PyQt6.QtCore import Qt
+
 from logger.custom_logger import CustomLogger
 
 logger = CustomLogger()
