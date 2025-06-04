@@ -939,6 +939,3 @@ if __name__ == '__main__':
             # より丁寧には、プリセット適用時に値を _focused_value_store にも能動的にセットすることが考えられる。
             # 今回は、上記のループ内でウィジェットごとに focused_value_store をクリアする対応は一旦コメントアウトしておく。
             # -> widget.setValue の後に focused_value_store から削除するように修正。
-
-if __name__ == '__main__':
-    pass
