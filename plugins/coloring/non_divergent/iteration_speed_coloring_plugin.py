@@ -17,7 +17,7 @@ logger = CustomLogger()
 def _apply_iteration_speed_coloring_jit(
     iterations: np.ndarray,
     max_iterations: int,
-    img_array_rgb: np.ndarray, # Pass only the RGB part (HxWx3)
+    img_array_rgb: np.ndarray, # RGB部分（HxWx3）のみを渡す
     color_map_array: np.ndarray | None, # NumPy array for color map, or None
     use_color_map: bool
 ) -> None:
