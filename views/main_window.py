@@ -8,19 +8,26 @@ from .render_area import RenderArea
 from .parameter_panel import ParameterPanel
 from .high_res_dialog import HighResOutputDialog
 from PyQt6.QtCore import Qt, pyqtSlot, QTimer
-# SettingsManager を型ヒントのためにインポート (コンストラクタ引数には厳密には不要)
-# from src.app.utils.settings_manager import SettingsManager (コメントアウト)
 from .status_bar_animator import StatusBarAnimator
 from logger.custom_logger import CustomLogger
 
 logger = CustomLogger()
 
 class MainWindow(QMainWindow):
-    def __init__(self, fractal_controller, settings_manager): # settings_manager を追加
+    """
+    アプリケーションのメインウィンドウ。
+
+    フラクタル画像の表示エリア、パラメータ設定パネル、メニューバー、ステータスバーを管理します。
+    FractalController と連携し、ユーザー操作に応じたフラクタル計算のトリガー、
+    高解像度出力ダイアログの表示、および各種状態の更新を行います。
+    """
+    def __init__(self, fractal_controller, settings_manager):
+        """MainWindow を初期化します。
+        """
         super().__init__()
         self.fractal_controller = fractal_controller
         self.settings_manager = settings_manager # settings_manager を保存
-        self.logger = CustomLogger() # Add logger instance
+        self.logger = CustomLogger() # ロガーインスタンスを追加
 
         self.setWindowTitle("高機能フラクタル描画アプリケーション")
         self.resize(1400, 800)
@@ -47,6 +54,9 @@ class MainWindow(QMainWindow):
         self._initial_render_attempts = 0
 
     def _create_actions(self):
+        """
+        メニューバーやツールバーで使用する QAction インスタンスを作成します。
+        """
         self.export_action = QAction("高解像度出力...", self)
         self.export_action.setShortcut("Ctrl+E")
         # self.export_action.triggered.connect(self._open_high_res_dialog) # 接続は _connect_controller_signals またはメニュー内で直接行うように移動
@@ -58,6 +68,9 @@ class MainWindow(QMainWindow):
 
 
     def _create_menu_bar(self): # 一貫性のために _create_menus から名前変更
+        """
+        メインウィンドウのメニューバーを作成し、アクションを配置します。
+        """
         menu_bar = self.menuBar()
         # ファイルメニュー
         file_menu = menu_bar.addMenu("&ファイル")
@@ -73,6 +86,10 @@ class MainWindow(QMainWindow):
 
 
     def _connect_controller_signals(self):
+        """
+        FractalController からのシグナルを、このウィンドウ内の適切なスロットや
+        子ウィジェットのメソッドに接続します。
+        """
         if self.fractal_controller:
             # フラクタル描画とパラメータ更新
             if hasattr(self.render_area, 'update_image'):
@@ -102,7 +119,7 @@ class MainWindow(QMainWindow):
                 self.fractal_controller.active_color_map_changed_externally.connect(
                     self.parameter_panel._update_color_selection_from_controller)
 
-            # New signal for rendering task start
+            # レンダリングタスク開始の新しいシグナル
             if hasattr(self.fractal_controller, 'rendering_task_started'):
                 self.fractal_controller.rendering_task_started.connect(self._on_rendering_task_started)
             else:
@@ -126,17 +143,32 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot()
     def _on_rendering_task_started(self):
+        """
+        コントローラーからレンダリングタスク開始のシグナルを受信したときに呼び出されます。
+        ステータスバーのアニメーションを開始します。
+        """
         self.logger.log("MainWindow: Received rendering_task_started. Starting animation.", level="DEBUG")
         self.status_bar_animator.start_animation()
 
     def update_status_bar(self, message: str):
+        """
+        ステータスバーのメッセージを更新します。
+        アニメーションが実行中の場合は停止し、指定されたメッセージで上書きします。
+
+        Args:
+            message (str): ステータスバーに表示する新しいメッセージ。
+        """
         if self.status_bar_animator and self.status_bar_animator.is_running:
             self.logger.log(f"MainWindow: update_status_bar called with message '{message}'. Stopping animation.", level="DEBUG")
             self.status_bar_animator.stop_animation(final_message=message)
-            return # Animator sets the message
+            return # アニメーターがメッセージを設定します
         if self.status_bar: self.status_bar.showMessage(message)
 
     def _setup_central_widget(self):
+        """
+        メインウィンドウの中央ウィジェットとして QSplitter を設定し、
+        RenderArea と ParameterPanel を配置します。
+        """
         splitter = QSplitter(Qt.Orientation.Horizontal, self)
         self.render_area = RenderArea(self, fractal_controller=self.fractal_controller)
         splitter.addWidget(self.render_area)
@@ -146,7 +178,17 @@ class MainWindow(QMainWindow):
         initial_width = self.width()
         splitter.setSizes([int(initial_width * 0.7), int(initial_width * 0.3)])
 
-    def on_ui_parameters_changed(self, center_real, center_imag, width, max_iterations): # 変更なし
+    def on_ui_parameters_changed(self, center_real, center_imag, width, max_iterations):
+        """
+        ParameterPanel で共通パラメータが変更されたときに呼び出されるスロット。
+        FractalController にパラメータの更新を通知します。
+
+        Args:
+            center_real (float): 複素平面の中心の実部。
+            center_imag (float): 複素平面の中心の虚部。
+            width (float): 複素平面の表示幅。
+            max_iterations (int): 最大反復回数。
+        """
         if self.fractal_controller:
             self.fractal_controller.update_common_fractal_parameters(center_real, center_imag, width, max_iterations)
         else:
@@ -154,6 +196,10 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot()
     def _open_high_res_dialog(self):
+        """
+        高解像度出力設定ダイアログを開きます。
+        現在のフラクタルパラメータとビュー設定をダイアログに渡します。
+        """
         if not self.fractal_controller:
             QMessageBox.warning(self, "エラー", "コントローラーが利用できません。")
             return
@@ -221,6 +267,10 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot()
     def _on_export_started(self):
+        """
+        高解像度エクスポートが開始されたときに呼び出されるスロット。
+        プログレスダイアログを表示し、エクスポートアクションを無効化します。
+        """
         if self.progress_dialog: self.progress_dialog.cancel()
         self.progress_dialog = QProgressDialog("高解像度画像を生成中...", "キャンセル", 0, 100, self)
         self.progress_dialog.setWindowTitle("エクスポート処理中")
@@ -234,14 +284,25 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(int)
     def _on_export_progress_updated(self, value: int):
+        """
+        高解像度エクスポートの進捗が更新されたときに呼び出されるスロット。
+        プログレスダイアログの値を更新します。
+
+        Args:
+            value (int): 新しい進捗値 (0-100)。
+        """
         if self.progress_dialog: self.progress_dialog.setValue(value)
 
     @pyqtSlot(bool, str)
     def _on_export_process_finished(self, success: bool, message: str):
+        """
+        高解像度エクスポート処理が完了したときに呼び出されるスロット。
+        プログレスダイアログを閉じ、結果をユーザーに通知し、エクスポートアクションを再度有効化します。
+        """
         logger.log(f"エクスポート処理が完了しました。成功: {success}, メッセージ: {message}", level="INFO")
         if self.status_bar_animator and self.status_bar_animator.is_running:
             self.logger.log("MainWindow: Export finished, ensuring render animation is stopped.", level="DEBUG")
-            self.status_bar_animator.stop_animation() # Stop without setting a message, export message will take precedence
+            self.status_bar_animator.stop_animation() # メッセージを設定せずに停止すると、エクスポートメッセージが優先されます
 
         if self.progress_dialog:
             self.progress_dialog.close()
@@ -256,7 +317,10 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot()
     def trigger_render_from_panel(self):
-        """ParameterPanelの現在のパラメータとRenderAreaのサイズを使用してレンダリングをトリガーします。"""
+        """
+        ParameterPanel の「描画実行」ボタンがクリックされたときに呼び出されるスロット。
+        現在のUIパラメータと RenderArea のサイズを使用してレンダリングをトリガーします。
+        """
         if not self.fractal_controller:
             logger.log("FractalController が利用できません。", level="ERROR")
             return
@@ -292,7 +356,13 @@ class MainWindow(QMainWindow):
         logger.log(f"描画をトリガーしました (要求解像度: {render_width}x{render_height}).", level="DEBUG")
 
     def showEvent(self, event):
-        """ウィンドウが表示されたときに呼び出されます。"""
+        """
+        ウィンドウが表示されたときに呼び出されるイベントハンドラ。
+        初回表示時に、UIが安定した後に一度だけ初期レンダリングを実行します。
+
+        Args:
+            event (QShowEvent): イベントオブジェクト。
+        """
         super().showEvent(event)
         # UIが安定するのを待つために短い遅延の後、初回描画を一度だけ実行します。
         if not self._initial_render_done:
@@ -301,7 +371,10 @@ class MainWindow(QMainWindow):
             QTimer.singleShot(100, self._perform_initial_render)
 
     def _perform_initial_render(self):
-        """条件が満たされた場合に初回レンダリングの実行を試みます。"""
+        """
+        ウィンドウの初回表示時にフラクタル画像の初期レンダリングを実行します。
+        RenderArea のサイズが確定し、必要なコンポーネントが初期化されていることを確認してから実行します。
+        """
         if self._initial_render_done:
             return
 

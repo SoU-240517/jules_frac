@@ -1,23 +1,37 @@
 import numpy as np
-import time
-import traceback # トレースバック情報を取得するためにインポート
+import traceback
 from pathlib import Path
 
 from plugins.plugin_manager import PluginManager
 from plugins.base_fractal_plugin import FractalPlugin
 from plugins.base_coloring_plugin import ColoringAlgorithmPlugin
 from coloring.color_manager import ColorManager
-# from PIL import Image # Pillowをリサイズに使用する場合 (このバージョンでは未使用)
 from logger.custom_logger import CustomLogger
 
 logger = CustomLogger()
 
 class FractalEngine:
+    """
+    フラクタル画像の計算、カラーリング、および関連パラメータ管理を行うコアエンジン。
+
+    プラグインシステムを介して様々なフラクタルアルゴリズムとカラーリング手法をサポートし、
+    高解像度画像の出力機能も提供します。
+    """
     def __init__(self, project_root_path: Path, image_width_px=800, image_height_px=600,
                  fractal_plugin_folder="plugins/fractals",  # project_root_pathからの相対パス
-                 coloring_plugin_folder="plugins/coloring", # project_root_pathからの相対パス
-                 color_pack_folder="plugins/colorpacks"):   # project_root_pathからの相対パス
+                 coloring_plugin_folder="plugins/coloring", # 同上
+                 color_pack_folder="plugins/colorpacks"):   # 同上
+        """
+        FractalEngineを初期化します。
 
+        Args:
+            project_root_path (Path): プロジェクトのルートディレクトリへのパス。プラグインやカラーパックの読み込みに使用されます。
+            image_width_px (int): プレビュー表示用のデフォルト画像幅 (ピクセル単位)。
+            image_height_px (int): プレビュー表示用のデフォルト画像高さ (ピクセル単位)。
+            fractal_plugin_folder (str): `project_root_path` からのフラクタルプラグインフォルダへの相対パス。
+            coloring_plugin_folder (str): `project_root_path` からのカラーリングプラグインフォルダへの相対パス。
+            color_pack_folder (str): `project_root_path` からのカラーパックフォルダへの相対パス。
+        """
         self.max_iterations = 100
         self.center_real = -0.5
         self.center_imag = 0.0
@@ -47,6 +61,10 @@ class FractalEngine:
         self._initialize_default_plugins_and_map()
 
     def _initialize_default_plugins_and_map(self):
+        """
+        利用可能なプラグインとカラーマップから、デフォルトのものを選択して初期設定します。
+        MandelbrotやGrayscaleなど、一般的なものが優先的に選択されます。
+        """
         available_fractal_plugins = self.get_available_fractal_plugin_names()
         if available_fractal_plugins:
             default_fractal = "Mandelbrot"
@@ -71,22 +89,51 @@ class FractalEngine:
         else: logger.log("カラーパックが見つかりません。", level="WARNING")
 
     def update_image_size(self, image_width_px, image_height_px):
+        """
+        プレビュー画像のピクセルサイズを更新し、アスペクト比を再計算します。
+
+        Args:
+            image_width_px (int): 新しい画像幅 (ピクセル単位)。
+            image_height_px (int): 新しい画像高さ (ピクセル単位)。
+        """
         self.image_width_px = image_width_px if image_width_px > 0 else self.image_width_px
         self.image_height_px = image_height_px if image_height_px > 0 else self.image_height_px
         self.update_aspect_ratio()
 
     def update_aspect_ratio(self):
+        """
+        現在の画像ピクセルサイズに基づいて、複素平面上の表示領域の高さを更新します。
+        複素平面上の幅 (`self.width`) は変更しません。
+        """
         if self.image_width_px > 0 and self.image_height_px > 0 :
             self.height = (self.width * self.image_height_px) / self.image_width_px
         else: self.height = self.width
 
     def set_common_parameters(self, center_real, center_imag, width, max_iterations, escape_radius=None):
+        """
+        フラクタル計算の共通パラメータを設定します。
+
+        Args:
+            center_real (float): 複素平面上の中心点のReal部。
+            center_imag (float): 複素平面上の中心点のImaginary部。
+            width (float): 複素平面上の表示領域の幅。高さはアスペクト比から自動計算されます。
+            max_iterations (int): 最大反復回数。
+            escape_radius (float, optional): 発散判定の半径。Noneの場合は現在の値を維持します。
+        """
         self.center_real=center_real; self.center_imag=center_imag; self.width=width; self.max_iterations=max_iterations
         if escape_radius is not None: self.escape_radius = escape_radius
         self.update_aspect_ratio()
         self.last_fractal_data_cache = None # キャッシュを無効化
 
     def get_common_parameters(self) -> dict:
+        """
+        現在のフラクタル計算の共通パラメータを取得します。
+
+        Returns:
+            dict: 以下のキーを含む辞書:
+                  'center_real', 'center_imag', 'width', 'height',
+                  'max_iterations', 'escape_radius'
+        """
         return {'center_real': self.center_real, 'center_imag': self.center_imag,
                 'width': self.width, 'height': self.height,
                 'max_iterations': self.max_iterations, 'escape_radius': self.escape_radius}
@@ -94,6 +141,16 @@ class FractalEngine:
     def set_active_fractal_plugin(self, plugin_name: str) -> bool:
         plugin = self.plugin_manager.get_fractal_plugin(plugin_name)
         if plugin:
+            """
+            指定された名前のフラクタルプラグインをアクティブにします。
+            成功した場合、プラグインのデフォルトビューパラメータをエンジンに適用し、
+            プラグイン固有のパラメータをデフォルト値で初期化します。
+
+            Args:
+                plugin_name (str): アクティブにするフラクタルプラグインの名前。
+            Returns:
+                bool: プラグインの設定に成功した場合はTrue、そうでない場合はFalse。
+            """
             self.current_fractal_plugin = plugin
             defaults = plugin.get_default_view_parameters()
             self.center_real = defaults.get('center_real', self.center_real)
@@ -108,16 +165,50 @@ class FractalEngine:
             return True
         return False
 
-    def get_active_fractal_plugin(self) -> FractalPlugin | None: return self.current_fractal_plugin
-    def get_available_fractal_plugin_names(self) -> list[str]: return [p.name for p in self.plugin_manager.get_available_fractal_plugins()]
-    def get_current_fractal_plugin_parameter_definitions(self) -> list: return self.current_fractal_plugin.get_parameters_definition() if self.current_fractal_plugin else []
+    def get_active_fractal_plugin(self) -> FractalPlugin | None:
+        """現在アクティブなフラクタルプラグインのインスタンスを返します。"""
+        return self.current_fractal_plugin
+
+    def get_available_fractal_plugin_names(self) -> list[str]:
+        """利用可能なすべてのフラクタルプラグインの名前のリストを返します。"""
+        return [p.name for p in self.plugin_manager.get_available_fractal_plugins()]
+
+    def get_current_fractal_plugin_parameter_definitions(self) -> list:
+        """
+        現在アクティブなフラクタルプラグインのパラメータ定義リストを返します。
+        各定義は、名前、型、デフォルト値などを含む辞書です。
+        アクティブなプラグインがない場合は空のリストを返します。
+        """
+        return self.current_fractal_plugin.get_parameters_definition() if self.current_fractal_plugin else []
+
     def set_fractal_plugin_parameter(self, name: str, value: any):
+        """
+        現在アクティブなフラクタルプラグインの指定されたパラメータ値を設定します。
+
+        Args:
+            name (str): 設定するパラメータの名前。
+            value (any): 設定する値。
+        """
         if self.current_fractal_plugin and name in self.current_fractal_plugin_parameters:
             self.current_fractal_plugin_parameters[name] = value
             self.last_fractal_data_cache = None
-    def get_fractal_plugin_parameters(self) -> dict: return self.current_fractal_plugin_parameters.copy()
+
+    def get_fractal_plugin_parameters(self) -> dict:
+        """
+        現在アクティブなフラクタルプラグインのパラメータとその現在の値の辞書を返します。
+        """
+        return self.current_fractal_plugin_parameters.copy()
 
     def set_active_coloring_plugin(self, plugin_name: str) -> bool:
+        """
+        指定された名前のカラーリングプラグインをアクティブにします。
+        成功した場合、プラグイン固有のパラメータをデフォルト値で初期化します。
+
+        Args:
+            plugin_name (str): アクティブにするカラーリングプラグインの名前。
+        Returns:
+            bool: プラグインの設定に成功した場合はTrue、そうでない場合はFalse。
+        """
         plugin = self.plugin_manager.get_coloring_plugin(plugin_name)
         if plugin:
             self.current_coloring_plugin = plugin
@@ -127,15 +218,44 @@ class FractalEngine:
             return True
         return False
 
-    def get_active_coloring_plugin(self) -> ColoringAlgorithmPlugin | None: return self.current_coloring_plugin
-    def get_available_coloring_plugin_names(self) -> list[str]: return [p.name for p in self.plugin_manager.get_available_coloring_plugins()]
-    def get_current_coloring_plugin_parameter_definitions(self) -> list: return self.current_coloring_plugin.get_parameters_definition() if self.current_coloring_plugin else []
+    def get_active_coloring_plugin(self) -> ColoringAlgorithmPlugin | None:
+        """現在アクティブなカラーリングプラグインのインスタンスを返します。"""
+        return self.current_coloring_plugin
+
+    def get_available_coloring_plugin_names(self) -> list[str]:
+        """利用可能なすべてのカラーリングプラグインの名前のリストを返します。"""
+        return [p.name for p in self.plugin_manager.get_available_coloring_plugins()]
+
+    def get_current_coloring_plugin_parameter_definitions(self) -> list:
+        """
+        現在アクティブなカラーリングプラグインのパラメータ定義リストを返します。
+        各定義は、名前、型、デフォルト値などを含む辞書です。
+        アクティブなプラグインがない場合は空のリストを返します。
+        """
+        return self.current_coloring_plugin.get_parameters_definition() if self.current_coloring_plugin else []
+
     def set_coloring_plugin_parameter(self, name: str, value: any):
+        """
+        現在アクティブなカラーリングプラグインの指定されたパラメータ値を設定します。
+
+        Args:
+            name (str): 設定するパラメータの名前。
+            value (any): 設定する値。
+        """
         if self.current_coloring_plugin and name in self.current_coloring_plugin_parameters:
             self.current_coloring_plugin_parameters[name] = value
     def get_coloring_plugin_parameters(self) -> dict: return self.current_coloring_plugin_parameters.copy()
 
     def set_active_color_map(self, pack_name: str, map_name: str) -> bool:
+        """
+        指定されたカラーパックとマップ名でアクティブなカラーマップを設定します。
+
+        Args:
+            pack_name (str): カラーパックの名前。
+            map_name (str): カラーマップの名前。
+        Returns:
+            bool: カラーマップの設定に成功した場合はTrue、そうでない場合はFalse。
+        """
         map_data = self.color_manager.get_color_map_data(pack_name, map_name)
         if map_data:
             self.current_color_pack_name = pack_name
@@ -143,10 +263,37 @@ class FractalEngine:
             return True
         return False
     def get_available_color_pack_names(self) -> list[str]: return self.color_manager.get_available_color_pack_names()
-    def get_available_color_map_names_in_pack(self, pack: str) -> list[str]: return self.color_manager.get_color_maps_in_pack(pack)
-    def get_current_color_map_selection(self) -> tuple[str | None, str | None]: return self.current_color_pack_name, self.current_color_map_name
+
+    def get_available_color_map_names_in_pack(self, pack_name: str) -> list[str]:
+        """
+        指定されたカラーパック内の利用可能なカラーマップ名のリストを返します。
+
+        Args:
+            pack_name (str): カラーパックの名前。
+        Returns:
+            list[str]: カラーマップ名のリスト。
+        """
+        return self.color_manager.get_color_maps_in_pack(pack_name)
+
+    def get_current_color_map_selection(self) -> tuple[str | None, str | None]:
+        """
+        現在選択されているカラーパック名とカラーマップ名をタプルで返します。
+        選択されていない場合はNoneが含まれることがあります。
+
+        Returns:
+            tuple[str | None, str | None]: (カラーパック名, カラーマップ名)
+        """
+        return self.current_color_pack_name, self.current_color_map_name
 
     def compute_current_fractal(self) -> dict | None:
+        """
+        現在アクティブなフラクタルプラグインとパラメータを使用してフラクタルデータを計算します。
+        計算結果は内部キャッシュ (`last_fractal_data_cache`) にも保存されます。
+
+        Returns:
+            dict | None: 計算されたフラクタルデータ (通常 'iterations', 'last_values' を含む辞書)。
+                         計算に失敗した場合はNone。
+        """
         if not self.current_fractal_plugin: return None
         common_params = self.get_common_parameters()
         try:
@@ -161,6 +308,18 @@ class FractalEngine:
             return None
 
     def apply_coloring(self, fractal_data_override: dict | None = None) -> np.ndarray | None:
+        """
+        指定されたフラクタルデータ (またはキャッシュされたデータ) に、
+        現在アクティブなカラーリングプラグインとカラーマップを適用します。
+
+        Args:
+            fractal_data_override (dict | None, optional):
+                カラーリングに使用するフラクタルデータ。Noneの場合、最後に計算された
+                `last_fractal_data_cache` を使用します。
+        Returns:
+            np.ndarray | None: RGBA形式 (高さ x 幅 x 4) のカラーリングされた画像データ (uint8)。
+                               カラーリングに失敗した場合はNone、またはエラーを示す赤い画像。
+        """
         data_to_color = fractal_data_override if fractal_data_override is not None else self.last_fractal_data_cache
         if not self.current_coloring_plugin or data_to_color is None: return None
         color_map_list = []
@@ -184,6 +343,14 @@ class FractalEngine:
             return err_img
 
     def _get_antialiasing_factor(self, antialiasing_level_str: str) -> int:
+        """
+        アンチエイリアスレベルの文字列から、スーパーサンプリングの係数を返します。
+
+        Args:
+            antialiasing_level_str (str): "なし", "2x2 SSAA", "3x3 SSAA", "4x4 SSAA" のいずれか。
+        Returns:
+            int: スーパーサンプリング係数 (1, 2, 3, または 4)。
+        """
         if antialiasing_level_str == "2x2 SSAA": return 2
         if antialiasing_level_str == "3x3 SSAA": return 3
         if antialiasing_level_str == "4x4 SSAA": return 4
@@ -199,7 +366,30 @@ class FractalEngine:
                                   color_map_name_override: str | None = None,
                                   antialiasing_level: str = "なし"
                                   ) -> np.ndarray | None:
+        """
+        指定されたパラメータで高解像度のフラクタル画像を生成します。
 
+        このメソッドは、現在のエンジンの状態を一時的に上書きする形で、
+        特定の出力解像度、フラクタルパラメータ、カラーリング設定で画像を生成します。
+        スーパーサンプリングアンチエイリアス (SSAA) もサポートします。
+
+        Args:
+            output_width (int): 出力画像の幅 (ピクセル単位)。
+            output_height (int): 出力画像の高さ (ピクセル単位)。
+            common_params_override (dict): `get_common_parameters` で返される形式の共通パラメータ。
+                                         エンジンの現在の設定を上書きします。
+            fractal_plugin_name_override (str | None): 使用するフラクタルプラグインの名前。Noneの場合、現在のプラグイン。
+            fractal_plugin_params_override (dict | None): フラクタルプラグイン固有のパラメータ。Noneの場合、現在のパラメータまたはデフォルト。
+            coloring_algo_name_override (str | None): 使用するカラーリングアルゴリズムの名前。Noneの場合、現在のアルゴリズム。
+            coloring_algo_params_override (dict | None): カラーリングアルゴリズム固有のパラメータ。Noneの場合、現在のパラメータまたはデフォルト。
+            color_pack_name_override (str | None): 使用するカラーパックの名前。Noneの場合、現在のカラーパック。
+            color_map_name_override (str | None): 使用するカラーマップの名前。Noneの場合、現在のカラーマップ。
+            antialiasing_level (str): アンチエイリアスレベル。"なし", "2x2 SSAA", "3x3 SSAA", "4x4 SSAA"。
+
+        Returns:
+            np.ndarray | None: 生成されたRGBA画像 (高さ x 幅 x 4, uint8)。
+                               エラーが発生した場合はNone。
+        """
         logger.log(f"高解像度出力開始 - ターゲット: {output_width}x{output_height}, AA: {antialiasing_level}", level="INFO")
 
         # 1. パラメータ準備

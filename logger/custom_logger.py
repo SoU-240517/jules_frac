@@ -36,7 +36,6 @@ class CustomLogger:
     def __new__(cls, *args, **kwargs):
         """シングルトンインスタンスを作成または返します。初回作成時に初期化を行います。"""
         if not cls._instance:
-            # print("DEBUG: CustomLogger __new__ - Creating new instance")
             cls._initializing = True # 初期化開始のフラグを設定
             instance = super(CustomLogger, cls).__new__(cls)
 
@@ -51,7 +50,6 @@ class CustomLogger:
 
             cls._instance = instance
             cls._initializing = False # 初期化終了のフラグを解除
-            # print(f"DEBUG: CustomLogger __new__ - Instance created. Level: {cls._current_level_int}, Enabled: {cls._is_enabled}, File: {cls._log_file_path}")
         return cls._instance
 
     def _initialize_singleton_attrs(self):
@@ -60,7 +58,6 @@ class CustomLogger:
         SettingsManagerから設定を読み込み、適用します。
         このメソッドは __new__ から一度だけ、最初のインスタンス作成時に呼び出されます。
         """
-        # print("DEBUG: CustomLogger _initialize_singleton_attrs called")
         # SettingsManager をここでインポートして、モジュールレベルでの循環インポートのリスクを軽減します。
         from utils.settings_manager import SettingsManager
 
@@ -68,8 +65,8 @@ class CustomLogger:
         # これにより、SettingsManagerの初期化中にロギングが発生しても、基本的なロギング状態が保証されます。
         CustomLogger._current_level_int = CustomLogger.LOG_LEVELS.get("INFO", 20)
         CustomLogger._is_enabled = True
-        # Use an absolute path for the log file to avoid ambiguity with current working directory
-        CustomLogger._log_file_path = Path("/tmp/app.log") # Default log file path
+        # 現在の作業ディレクトリとの曖昧さを避けるために、ログファイルに絶対パスを使用します。
+        CustomLogger._log_file_path = Path("/tmp/app.log") # デフォルトのログファイルパス
 
         try:
             # SettingsManager のインスタンス化時にロギングが発生する可能性があるため、
@@ -79,54 +76,49 @@ class CustomLogger:
 
             level_to_set_str = logging_config.get("level", "INFO").upper()
             enabled_bool = logging_config.get("enabled", True)
-            # SettingsManager might provide a relative path, ensure it becomes absolute or handle appropriately.
-            # For now, we'll prioritize the absolute path set above if settings don't provide one,
-            # or if the provided one is relative, it might still be an issue.
-            # Let's assume settings_manager provides 'file' which could be relative or absolute.
-            # If relative, it will be relative to where the app is run.
+            # SettingsManager が相対パスを提供する場合、絶対パスになるか適切に処理されることを確認してください。
+            # 現時点では、設定で絶対パスが提供されていない場合は、上記で設定された絶対パスを優先します。
+            # 提供されているパスが相対パスであっても、問題が発生する可能性があります。
+            # ここでは、settings_manager が相対パスまたは絶対パスの 'file' を提供していると仮定します。
+            # 相対パスの場合は、アプリの実行場所を基準とした相対パスになります。
             log_file_from_settings = logging_config.get("file")
 
             CustomLogger._current_level_int = CustomLogger.LOG_LEVELS.get(level_to_set_str, CustomLogger.LOG_LEVELS["INFO"])
             CustomLogger._is_enabled = enabled_bool
 
             if log_file_from_settings:
-                # If settings provide a path, use it. Consider making it absolute if it's not.
-                # For simplicity, we'll use it as is for now. If issues persist, make it absolute.
+                # 設定でパスが指定されている場合は、それを使用してください。指定されていない場合は、絶対パスにすることを検討してください。
+                # 簡潔にするため、今のところはそのまま使用します。問題が解決しない場合は、絶対パスにしてください。
                 CustomLogger._log_file_path = Path(log_file_from_settings)
-            # else, the default /tmp/app.log remains.
+            # それ以外の場合は、デフォルトの /tmp/app.log が残ります。
 
-            # Ensure log directory exists
+            # ログディレクトリが存在することを確認する
             if CustomLogger._log_file_path.parent:
                  CustomLogger._log_file_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # print(f"DEBUG: CustomLogger _initialize_singleton_attrs - Settings loaded: Level={level_to_set_str}({CustomLogger._current_level_int}), Enabled={enabled_bool}, File={CustomLogger._log_file_path}")
         except Exception as e:
             # 初期化中にエラーが発生した場合のフォールバック (標準エラーに出力検討)
             # この段階ではカスタムロガーが完全には利用できない可能性があるため、printを使用します。
             print(f"[CRITICAL] CustomLogger: 設定からのロガー初期化に失敗しました: {e}. デフォルト設定 (INFO, Enabled, /tmp/app.log) を使用します。", flush=True)
             CustomLogger._current_level_int = CustomLogger.LOG_LEVELS.get("INFO", 20)
             CustomLogger._is_enabled = True
-            CustomLogger._log_file_path = Path("/tmp/app.log") # Fallback to absolute path
+            CustomLogger._log_file_path = Path("/tmp/app.log") # 絶対パスへのフォールバック
             if CustomLogger._log_file_path.parent:
                  CustomLogger._log_file_path.parent.mkdir(parents=True, exist_ok=True)
 
 
     def set_level(self, level_name_or_int):
         """ロガーの現在のログレベルを設定します。"""
-        # print(f"DEBUG: CustomLogger set_level called with: {level_name_or_int}")
         if isinstance(level_name_or_int, str):
             CustomLogger._current_level_int = CustomLogger.LOG_LEVELS.get(level_name_or_int.upper(), CustomLogger.LOG_LEVELS["INFO"])
         elif isinstance(level_name_or_int, int):
             CustomLogger._current_level_int = level_name_or_int
         else:
             CustomLogger._current_level_int = CustomLogger.LOG_LEVELS["INFO"]
-        # print(f"DEBUG: Log level set to: {CustomLogger._current_level_int}")
 
     def set_enabled(self, enabled: bool):
         """ロガーの有効/無効状態を設定します。"""
-        # print(f"DEBUG: CustomLogger set_enabled called with: {enabled}")
         CustomLogger._is_enabled = enabled
-        # print(f"DEBUG: Logger enabled state set to: {CustomLogger._is_enabled}")
 
     def log(self, message, level="INFO"):
         """指定されたレベルでログメッセージを記録します。"""

@@ -1,9 +1,9 @@
 import sys
-from pathlib import Path # 設定用にパス操作を行うためのモジュール
+from pathlib import Path
 
 # プロジェクトのルートディレクトリ（'src'の親）をsys.pathに追加
-# これにより、'src' ディレクトリからの相対インポートや、'src.app...' のような絶対インポートが可能になる
-_project_root = Path(__file__).resolve().parent # 'jules_frac' ディレクトリをプロジェクトルートとする
+# これにより、'jules_frac' ディレクトリからの相対インポートや、そのサブディレクトリからのインポートが可能になる
+_project_root = Path(__file__).resolve().parent # このスクリプトがあるディレクトリをプロジェクトルートとする
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
@@ -11,8 +11,8 @@ from PyQt6.QtWidgets import QApplication
 from views.main_window import MainWindow
 from models.fractal_engine import FractalEngine
 from controllers.fractal_controller import FractalController
-from utils.settings_manager import SettingsManager # SettingsManagerのインポート
-from PyQt6.QtCore import Qt, QTimer # QTimer をインポート
+from utils.settings_manager import SettingsManager
+from PyQt6.QtCore import Qt
 from logger.custom_logger import CustomLogger
 
 logger = CustomLogger()
@@ -25,24 +25,20 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
 
-    # 設定マネージャーの初期化（ファイル名は任意）
-    # アプリケーション名や組織名を使って標準的な場所に保存することも検討（QStandardPaths推奨）
-    settings_file_name = "base_settings.json" # プロジェクトルートからの相対パス
-    # テスト用に書き込み可能な場所（例：ユーザーのホームやアプリデータディレクトリ）に配置することを推奨
-    # SettingsManager自体はユーザーのホーム/.fractalapp/に保存しようとする
-    settings_file_path = _project_root / settings_file_name
+    settings_file_name = "base_settings.json" # 設定ファイル名
+    settings_file_path = _project_root / settings_file_name # SettingsManager で使用するための絶対パス
     settings_manager = SettingsManager(settings_filename=str(settings_file_path))
 
     # --- ロガー設定のロードと適用 ---
-    # CustomLogger はシングルトンなので、モジュールレベルの `logger` インスタンスが更新されます。
+    # CustomLogger はシングルトンなので、モジュールレベルの `logger` インスタンスは SettingsManager の初期化時にデフォルトで作成されます。
     # CustomLogger の初期化時には、SettingsManager から設定を読み込もうとしますが、
     # その時点ではSettingsManagerが完全に初期化されていない可能性があるため、デフォルト値で起動します。
     # ここで、完全に初期化されたSettingsManagerから設定を明示的に適用します。
     log_config = settings_manager.get_logging_settings()
-    log_level_to_set = log_config.get("level", "INFO") # get_logging_settingsがデフォルトを提供しますが、念のため
-    log_enabled_to_set = log_config.get("enabled", True) # 同上
+    log_level_to_set = log_config.get("level", "INFO")
+    log_enabled_to_set = log_config.get("enabled", True)
 
-    logger.set_level(log_level_to_set)
+    logger.set_level(log_level_to_set) # 設定ファイルから読み込んだレベルを適用
     logger.set_enabled(log_enabled_to_set)
     # 実際にDEBUGレベルでログが出力されるかは、ファイル内の設定とここでの設定によります。
     logger.log(f"ロガー設定を適用しました。レベル: {log_level_to_set}, 有効: {log_enabled_to_set}", level="DEBUG")
@@ -50,10 +46,10 @@ if __name__ == '__main__':
 
     # モデル・コントローラーの作成
     # FractalEngineにプロジェクトルートパスを渡す
-    fractal_engine = FractalEngine(project_root_path=_project_root)
+    fractal_engine = FractalEngine(project_root_path=_project_root) # プラグイン読み込みのためにプロジェクトルートを渡す
     fractal_controller = FractalController(fractal_engine)
 
-    # ダークテーマのスタイルシート（変更なし）
+    # ダークテーマのスタイルシート
     app.setStyleSheet("""
         QWidget {
             background-color: #2e2e2e;
@@ -66,11 +62,11 @@ if __name__ == '__main__':
         QMenuBar {
             background-color: #3c3c3c;
         }
-        QMenuBar::item {
+        QMenuBar::item { /* メニュー項目の通常状態 */
             background-color: #3c3c3c;
             color: #e0e0e0;
         }
-        QMenuBar::item::selected { /* ホバー時 */
+        QMenuBar::item::selected { /* メニュー項目のホバー時 */
             background-color: #505050;
         }
         QMenuBar::item::pressed { /* クリック時 */
@@ -81,7 +77,7 @@ if __name__ == '__main__':
             border: 1px solid #505050;
             color: #e0e0e0;
         }
-        QMenu::item::selected {
+        QMenu::item::selected { /* サブメニュー項目のホバー時 */
             background-color: #505050;
             color: #ffffff;
         }
@@ -91,10 +87,10 @@ if __name__ == '__main__':
             padding: 5px;
             min-width: 70px;
         }
-        QPushButton:hover {
+        QPushButton:hover { /* ボタンのホバー時 */
             background-color: #606060;
         }
-        QPushButton:pressed {
+        QPushButton:pressed { /* ボタンのクリック時 */
             background-color: #404040;
         }
         QScrollArea {
@@ -103,7 +99,7 @@ if __name__ == '__main__':
         QLabel {
             color: #e0e0e0;
         }
-        QSplitter::handle {
+        QSplitter::handle { /* スプリッターのハンドル */
             background-color: #3c3c3c;
             border: 1px solid #505050;
         }

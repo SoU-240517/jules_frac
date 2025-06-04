@@ -19,7 +19,20 @@ from logger.custom_logger import CustomLogger
 logger = CustomLogger()
 
 class RenderArea(QLabel):
+    """
+    フラクタル画像を表示し、ユーザーインタラクション (パン、ズーム) を処理するウィジェット。
+
+    QLabel を継承し、NumPy 配列として提供される画像データを表示します。
+    マウスイベントを処理して、フラクタルコントローラーを介した画像のナビゲーションを可能にします。
+    """
     def __init__(self, parent=None, fractal_controller=None):
+        """
+        RenderArea を初期化します。
+
+        Args:
+            parent (QWidget, optional): 親ウィジェット。 Defaults to None.
+            fractal_controller (FractalController, optional): フラクタル計算とナビゲーションを処理するコントローラー。 Defaults to None.
+        """
         super().__init__(parent)
         self.fractal_controller = fractal_controller
 
@@ -33,11 +46,21 @@ class RenderArea(QLabel):
         self.setMouseTracking(True)
 
     def set_default_background(self):
+        """
+        画像がロードされていない場合に表示されるデフォルトの背景テキストとスタイルを設定します。
+        """
         self.setText("フラクタル画像がここに表示されます。\nパラメータを設定し描画処理を開始してください。")
         self.setStyleSheet("background-color: #333333; color: #AAAAAA; border: 1px solid #454545; padding: 10px;")
         self.setWordWrap(True)
 
     def update_image(self, image_data_np):
+        """
+        表示する画像を NumPy 配列から更新します。
+
+        Args:
+            image_data_np (np.ndarray | None): RGBA 形式 (高さ x 幅 x 4) の画像データ。
+                                               None または空のデータの場合、デフォルトの背景が表示されます。
+        """
         if image_data_np is None or image_data_np.size == 0:
             # print("RenderArea: 画像データを受信しませんでした。デフォルトの背景を表示します。")
             # 画像データが受信されなかった場合はデフォルト背景を表示
@@ -76,6 +99,10 @@ class RenderArea(QLabel):
             self.clear()
 
     def _display_scaled_pixmap(self):
+        """
+        現在の `_original_pixmap` をウィジェットのサイズに合わせてスケーリングし、表示します。
+        アスペクト比は維持されます。
+        """
         if self._original_pixmap and not self._original_pixmap.isNull():
             scaled_pixmap = self._original_pixmap.scaled(
                 self.size(),
@@ -88,11 +115,23 @@ class RenderArea(QLabel):
             self.set_default_background()
 
     def resizeEvent(self, event):
+        """
+        ウィジェットがリサイズされたときに呼び出されます。
+        表示されている画像を新しいサイズに合わせて再スケーリングします。
+
+        Args:
+            event (QResizeEvent): リサイズイベントオブジェクト。
+        """
         super().resizeEvent(event)
         if self._original_pixmap and not self._original_pixmap.isNull():
             self._display_scaled_pixmap()
 
     def mousePressEvent(self, event):
+        """
+        マウスボタンが押されたときに呼び出されます。左ボタンでパン操作を開始します。
+        Args:
+            event (QMouseEvent): マウスプレスイベントオブジェクト。
+        """
         if event.button() == Qt.MouseButton.LeftButton and self.fractal_controller:
             if self.pixmap() and not self.pixmap().isNull():
                 self.panning = True
@@ -103,6 +142,13 @@ class RenderArea(QLabel):
         event.ignore()
 
     def mouseMoveEvent(self, event):
+        """
+        マウスが移動したときに呼び出されます。
+        パン操作中は画像の中心を移動し、そうでない場合はカーソル形状を更新します。
+
+        Args:
+            event (QMouseEvent): マウスムーブイベントオブジェクト。
+        """
         if self.panning and (event.buttons() & Qt.MouseButton.LeftButton) and self.fractal_controller:
             if self.last_mouse_pos is None:
                 self.last_mouse_pos = event.position()
@@ -141,6 +187,13 @@ class RenderArea(QLabel):
             event.ignore()
 
     def mouseReleaseEvent(self, event):
+        """
+        マウスボタンが離されたときに呼び出されます。
+        左ボタンが離された場合、パン操作を終了します。
+
+        Args:
+            event (QMouseEvent): マウスリリースイベントオブジェクト。
+        """
         if event.button() == Qt.MouseButton.LeftButton and self.panning:
             self.panning = False
             if self.pixmap() and not self.pixmap().isNull() and self.fractal_controller:
@@ -152,6 +205,13 @@ class RenderArea(QLabel):
             event.ignore()
 
     def wheelEvent(self, event):
+        """
+        マウスホイールが回転したときに呼び出されます。
+        画像のズームイン・ズームアウトを行います。ズームの中心はマウスカーソルの位置です。
+
+        Args:
+            event (QWheelEvent): ホイールイベントオブジェクト。
+        """
         if not self.fractal_controller or (self.pixmap() and self.pixmap().isNull()):
             event.ignore()
             return
