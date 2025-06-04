@@ -320,7 +320,8 @@ class FractalController(QObject):
         # Get active coloring plugin based on the controller's active_coloring_target_type
         active_cp = self.fractal_engine.get_active_coloring_plugin(target_type=self.active_coloring_target_type)
 
-        cpk_name, cm_name = self.fractal_engine.get_current_color_map_selection()
+        # Fetch color pack and map name based on the active target type
+        cpk_name, cm_name = self.fractal_engine.get_current_color_map_selection(target_type=self.active_coloring_target_type)
 
         if not active_fp: # active_cp can be None if no plugin for that target type
             self.status_updated.emit("フラクタルプラグイン未設定.")
