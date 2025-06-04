@@ -6,6 +6,9 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize, QTimer # Added QTimer
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QLinearGradient, QIcon
 from functools import partial
+from logger.custom_logger import CustomLogger # Ensure this is present
+
+logger = CustomLogger() # Add this line
 
 class ParameterPanel(QScrollArea):
     """
