@@ -12,7 +12,7 @@ from views.main_window import MainWindow
 from models.fractal_engine import FractalEngine
 from controllers.fractal_controller import FractalController
 from utils.settings_manager import SettingsManager # SettingsManagerのインポート
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer # QTimer をインポート
 from logger.custom_logger import CustomLogger
 
 logger = CustomLogger()

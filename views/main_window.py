@@ -10,6 +10,7 @@ from .high_res_dialog import HighResOutputDialog
 from PyQt6.QtCore import Qt, pyqtSlot, QTimer
 # SettingsManager を型ヒントのためにインポート (コンストラクタ引数には厳密には不要)
 # from src.app.utils.settings_manager import SettingsManager (コメントアウト)
+from .status_bar_animator import StatusBarAnimator
 from logger.custom_logger import CustomLogger
 
 logger = CustomLogger()
@@ -19,6 +20,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.fractal_controller = fractal_controller
         self.settings_manager = settings_manager # settings_manager を保存
+        self.logger = CustomLogger() # Add logger instance
 
         self.setWindowTitle("高機能フラクタル描画アプリケーション")
         self.resize(1400, 800)
@@ -34,6 +36,7 @@ class MainWindow(QMainWindow):
         self._create_actions()
         self._create_menu_bar() # メニューを作成しアクションを追加
         self.status_bar = self.statusBar() # ステータスバーを取得
+        self.status_bar_animator = StatusBarAnimator(self.status_bar, self)
         self.status_bar.showMessage("準備完了")
 
         self._setup_central_widget() # RenderArea と ParameterPanel をセットアップ
@@ -99,6 +102,12 @@ class MainWindow(QMainWindow):
                 self.fractal_controller.active_color_map_changed_externally.connect(
                     self.parameter_panel._update_color_selection_from_controller)
 
+            # New signal for rendering task start
+            if hasattr(self.fractal_controller, 'rendering_task_started'):
+                self.fractal_controller.rendering_task_started.connect(self._on_rendering_task_started)
+            else:
+                logger.log("FractalController に rendering_task_started シグナルが存在しません。", level="WARNING")
+
             # 高解像度エクスポートシグナル
             self.fractal_controller.export_started.connect(self._on_export_started)
             self.fractal_controller.export_progress_updated.connect(self._on_export_progress_updated)
@@ -115,8 +124,16 @@ class MainWindow(QMainWindow):
         else:
             logger.log("シグナル接続に FractalController が利用できません。", level="WARNING")
 
+    @pyqtSlot()
+    def _on_rendering_task_started(self):
+        self.logger.log("MainWindow: Received rendering_task_started. Starting animation.", level="DEBUG")
+        self.status_bar_animator.start_animation()
 
-    def update_status_bar(self, message: str): # 変更なし
+    def update_status_bar(self, message: str):
+        if self.status_bar_animator and self.status_bar_animator.is_running:
+            self.logger.log(f"MainWindow: update_status_bar called with message '{message}'. Stopping animation.", level="DEBUG")
+            self.status_bar_animator.stop_animation(final_message=message)
+            return # Animator sets the message
         if self.status_bar: self.status_bar.showMessage(message)
 
     def _setup_central_widget(self):
@@ -222,6 +239,10 @@ class MainWindow(QMainWindow):
     @pyqtSlot(bool, str)
     def _on_export_process_finished(self, success: bool, message: str):
         logger.log(f"エクスポート処理が完了しました。成功: {success}, メッセージ: {message}", level="INFO")
+        if self.status_bar_animator and self.status_bar_animator.is_running:
+            self.logger.log("MainWindow: Export finished, ensuring render animation is stopped.", level="DEBUG")
+            self.status_bar_animator.stop_animation() # Stop without setting a message, export message will take precedence
+
         if self.progress_dialog:
             self.progress_dialog.close()
             self.progress_dialog = None

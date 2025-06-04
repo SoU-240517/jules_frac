@@ -2,6 +2,7 @@ import time
 from export.image_exporter import ImageExporter # ExporterSignals は ImageExporter 内部で使用されます
 # FractalEngine がインポートされている場合、型が正しく指定されていると仮定しますが、このファイルでは渡されるだけなので必須ではありません。
 # from src.app.models.fractal_engine import FractalEngine # FractalEngineモデルのインポート (型ヒント用)
+from .fractal_renderer import FractalRenderer
 from PyQt6.QtCore import QObject, pyqtSignal, QThreadPool, pyqtSlot
 from logger.custom_logger import CustomLogger
 
@@ -14,6 +15,7 @@ class FractalController(QObject):
     active_fractal_plugin_ui_needs_update = pyqtSignal(str)
     active_coloring_plugin_ui_needs_update = pyqtSignal(str)
     active_color_map_changed_externally = pyqtSignal(str, str)
+    rendering_task_started = pyqtSignal() # New signal
 
     # 高解像度エクスポート処理用のシグナル
     export_started = pyqtSignal()
@@ -27,9 +29,11 @@ class FractalController(QObject):
         self.last_compute_time_ms = 0.0
         self.last_coloring_time_ms = 0.0
         self.initial_width = self.fractal_engine.width if self.fractal_engine else 3.0
+        self.logger = CustomLogger() # Add logger instance
 
         self.current_exporter: ImageExporter | None = None
         self.thread_pool = QThreadPool.globalInstance()
+        self.current_renderer_task: FractalRenderer | None = None
         # オプション: 必要に応じて同時エクスポート数を制限します。例: self.thread_pool.setMaxThreadCount(1)
 
     def set_main_window(self, main_window):
@@ -161,38 +165,59 @@ class FractalController(QObject):
         if success: self.active_color_map_changed_externally.emit(pack_name, map_name); self.trigger_recolor()
 
     # --- レンダリング処理 ---
-    def trigger_render(self, image_width_px=None, image_height_px=None, full_recompute:bool = True):
-        if not self.fractal_engine: self.status_updated.emit("エラー: フラクタルエンジン未設定"); return
+    def trigger_render(self, image_width_px=None, image_height_px=None, full_recompute: bool = True):
+        if not self.fractal_engine:
+            self.status_updated.emit("エラー: フラクタルエンジン未設定")
+            return
 
-        # --- 一時的なデバッグコード：エスケープ半径を大きくしてみる ---
-        # self.fractal_engine.escape_radius = 50.0 # 例えば50に設定
-        # self.fractal_engine.set_common_parameters(self.fractal_engine.center_real, self.fractal_engine.center_imag, self.fractal_engine.width, self.fractal_engine.max_iterations, self.fractal_engine.escape_radius)
-        # print(f"DEBUG: Temporarily set escape_radius to {self.fractal_engine.escape_radius}")
-        # --- デバッグコードここまで ---
+        if self.current_renderer_task is not None and not self.thread_pool.waitForDone(10): # Check active task with timeout
+            self.logger.log("FractalController: Previous rendering task still active. Not starting a new one.", level="WARNING") # Uses self.logger
+            self.status_updated.emit("前の描画処理がまだ実行中です。")
+            return
 
-        active_fp_name = self.get_active_fractal_plugin_name_from_engine() or "N/A"
-        active_cp_name = self.get_active_coloring_plugin_name_from_engine() or "N/A"
-        self.status_updated.emit(f"処理中 ({active_fp_name} / {active_cp_name})...")
-        if image_width_px is not None: self.fractal_engine.image_width_px = image_width_px
-        if image_height_px is not None: self.fractal_engine.image_height_px = image_height_px
-        if image_width_px is not None or image_height_px is not None : self.fractal_engine.update_aspect_ratio()
-        if self.fractal_engine.image_width_px <= 0 or self.fractal_engine.image_height_px <= 0:
-            self.status_updated.emit("エラー: 画像サイズ不正"); return
-        fractal_data = None
-        if full_recompute:
-            start_t = time.perf_counter()
-            fractal_data = self.fractal_engine.compute_current_fractal()
-            self.last_compute_time_ms = (time.perf_counter() - start_t) * 1000
-            if fractal_data is None: self.status_updated.emit("エラー: 計算失敗"); return
-        else:
-            fractal_data = self.fractal_engine.last_fractal_data_cache
-            if fractal_data is None: self.status_updated.emit("エラー: キャッシュデータなし"); self.trigger_render(full_recompute=True); return # No cache, do full render
-            self.last_compute_time_ms = 0.0 # キャッシュなし、フルレンダリングを実行
-        start_t = time.perf_counter()
-        colored_image = self.fractal_engine.apply_coloring(fractal_data_override=fractal_data)
-        self.last_coloring_time_ms = (time.perf_counter() - start_t) * 1000
-        if colored_image is None: self.status_updated.emit("エラー: カラーリング失敗"); return
-        self.image_rendered.emit(colored_image); self.update_status_display()
+        self.status_updated.emit(f"描画準備中...") # Initial brief message
+
+        render_width = image_width_px if image_width_px is not None else self.fractal_engine.image_width_px
+        render_height = image_height_px if image_height_px is not None else self.fractal_engine.image_height_px
+
+        if render_width <= 0 or render_height <= 0:
+            self.status_updated.emit("エラー: 画像サイズ不正")
+            self.logger.log(f"FractalController: Invalid image size for render: {render_width}x{render_height}", level="ERROR") # Uses self.logger
+            return
+
+        self.current_renderer_task = FractalRenderer(
+            self.fractal_engine,
+            render_width,
+            render_height,
+            full_recompute
+        )
+
+        self.current_renderer_task.signals.rendering_started.connect(self._on_renderer_started)
+        self.current_renderer_task.signals.rendering_finished.connect(self._on_renderer_finished)
+        self.current_renderer_task.signals.rendering_failed.connect(self._on_renderer_failed)
+
+        self.thread_pool.start(self.current_renderer_task)
+        self.logger.log(f"FractalController: Queued FractalRenderer for {render_width}x{render_height}, full_recompute={full_recompute}", level="INFO") # Uses self.logger
+
+    @pyqtSlot()
+    def _on_renderer_started(self):
+        self.logger.log("FractalController: Renderer task started signal received.", level="DEBUG") # Uses self.logger
+        self.rendering_task_started.emit()
+
+    @pyqtSlot(object, float, float)
+    def _on_renderer_finished(self, colored_image, compute_time_ms, coloring_time_ms):
+        self.logger.log(f"FractalController: Renderer task finished. Compute: {compute_time_ms:.1f}ms, Color: {coloring_time_ms:.1f}ms", level="INFO") # Uses self.logger
+        self.last_compute_time_ms = compute_time_ms
+        self.last_coloring_time_ms = coloring_time_ms
+        self.image_rendered.emit(colored_image)
+        self.update_status_display() # Generate and emit final status message
+        self.current_renderer_task = None
+
+    @pyqtSlot(str)
+    def _on_renderer_failed(self, error_message):
+        self.logger.log(f"FractalController: Renderer task failed: {error_message}", level="ERROR") # Uses self.logger
+        self.status_updated.emit(f"描画エラー: {error_message}")
+        self.current_renderer_task = None
 
     def trigger_recolor(self):
         self.trigger_render(full_recompute=False)
