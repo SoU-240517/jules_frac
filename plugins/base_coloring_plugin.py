@@ -12,6 +12,16 @@ class ColoringAlgorithmPlugin(ABC):
         """カラーリングアルゴリズムの表示名 (例: "標準エスケープ", "スムーズ")。"""
         pass
 
+    @property
+    def target_type(self) -> str:
+        """
+        このカラーリングプラグインが処理対象とするデータの種類を示します。
+        'divergent': 発散部のデータ (例: マンデルブロ集合の外部)
+        'non_divergent': 非発散部のデータ (例: ジュリア集合の内部)
+        デフォルトは 'divergent' です。
+        """
+        return 'divergent'
+
     @abstractmethod
     def get_parameters_definition(self) -> list:
         """
@@ -105,6 +115,8 @@ if __name__ == '__main__':
     print("DummyColoringPlugin のテスト中...")
     dummy_plugin = DummyColoringPlugin()
     print(f"カラーリングプラグイン名: {dummy_plugin.name}")
+    print(f"ターゲットタイプ: {dummy_plugin.target_type}") # Check the new property
+    assert dummy_plugin.target_type == 'divergent' # Verify default value
     print(f"パラメータ定義: {dummy_plugin.get_parameters_definition()}")
 
     # テスト用データ作成

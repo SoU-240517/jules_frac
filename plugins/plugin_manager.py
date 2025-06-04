@@ -20,21 +20,27 @@ class PluginManager:
     def __init__(self,
                  project_root_path: Path,
                  fractal_plugin_folder_path: str = "plugins/fractals", # project_root_path からの相対パス
-                 coloring_plugin_folder_path: str = "plugins/coloring"): # project_root_path からの相対パス
+                 divergent_coloring_plugin_folder_path: str = "plugins/coloring/divergent", # project_root_path からの相対パス
+                 non_divergent_coloring_plugin_folder_path: str = "plugins/coloring/non_divergent"): # project_root_path からの相対パス
         """
         PluginManager を初期化します。
-        `fractal_plugin_folder_path` および `coloring_plugin_folder_path` は `project_root_path` からの相対パスです。
+        `fractal_plugin_folder_path`, `divergent_coloring_plugin_folder_path`,
+        および `non_divergent_coloring_plugin_folder_path` は `project_root_path` からの相対パスです。
         """
         self.project_root = project_root_path
         self.fractal_plugin_folder = (self.project_root / fractal_plugin_folder_path).resolve()
         self.fractal_plugins: dict[str, FractalPlugin] = {}
-        self.coloring_plugin_folder = (self.project_root / coloring_plugin_folder_path).resolve()
-        self.coloring_plugins: dict[str, ColoringAlgorithmPlugin] = {}
+        self.divergent_coloring_plugin_folder = (self.project_root / divergent_coloring_plugin_folder_path).resolve()
+        self.non_divergent_coloring_plugin_folder = (self.project_root / non_divergent_coloring_plugin_folder_path).resolve()
+        self.coloring_plugins: dict[str, ColoringAlgorithmPlugin] = {} # 単一の辞書で管理
         self.load_all_plugins()
 
     def load_all_plugins(self):
         """すべての種類のプラグインを読み込みます。"""
         logger.log("全プラグイン読込中...", level="INFO")
+        self.fractal_plugins.clear()
+        self.coloring_plugins.clear()
+
         self._load_plugins_from_folder(
             self.fractal_plugin_folder,
             self.fractal_plugins,
@@ -42,19 +48,26 @@ class PluginManager:
             "Fractal"
         )
         self._load_plugins_from_folder(
-            self.coloring_plugin_folder,
-            self.coloring_plugins,
+            self.divergent_coloring_plugin_folder,
+            self.coloring_plugins, #同じ辞書に追加
             ColoringAlgorithmPlugin,
-            "Coloring Algorithm"
+            "Divergent Coloring Algorithm"
+        )
+        self._load_plugins_from_folder(
+            self.non_divergent_coloring_plugin_folder,
+            self.coloring_plugins, #同じ辞書に追加
+            ColoringAlgorithmPlugin,
+            "Non-Divergent Coloring Algorithm"
         )
 
     def _load_plugins_from_folder(self, folder_path: Path, target_dict: dict, base_class: type, plugin_type_name: str):
         """
         指定された folder_path から特定の base_class のプラグインを target_dict に読み込みます。
+        このメソッドは呼び出し側で target_dict.clear() を行うことを想定しています。
         """
-        target_dict.clear()
+        # target_dict.clear() # 呼び出し側 (load_all_plugins) でクリアするよう変更
 
-        logger.log(f"{plugin_type_name} プラグインを読込中...", level="INFO")
+        logger.log(f"{plugin_type_name} プラグインを '{folder_path}' から読込中...", level="INFO")
 
         if not folder_path.is_dir():
             logger.log(f"{plugin_type_name} プラグインフォルダが見つかりません: {folder_path}", level="ERROR")
@@ -113,11 +126,28 @@ class PluginManager:
         return self.fractal_plugins.get(name)
 
     # カラーリングアルゴリズムプラグイン固有のメソッド
-    def get_available_coloring_plugins(self) -> list[ColoringAlgorithmPlugin]:
-        return list(self.coloring_plugins.values())
+    def get_available_coloring_plugins(self, target_type: str | None = None) -> list[ColoringAlgorithmPlugin]:
+        """
+        利用可能なカラーリングプラグインのリストを返します。
+        target_type が指定された場合、そのタイプに一致するプラグインのみを返します。
+        """
+        plugins = list(self.coloring_plugins.values())
+        if target_type:
+            return [p for p in plugins if p.target_type == target_type]
+        return plugins
 
-    def get_coloring_plugin(self, name: str) -> ColoringAlgorithmPlugin | None:
-        return self.coloring_plugins.get(name)
+    def get_coloring_plugin(self, name: str, target_type: str | None = None) -> ColoringAlgorithmPlugin | None:
+        """
+        指定された名前のカラーリングプラグインを取得します。
+        target_type が指定された場合、プラグインのタイプも一致する必要があります。
+        """
+        plugin = self.coloring_plugins.get(name)
+        if plugin and target_type:
+            if plugin.target_type == target_type:
+                return plugin
+            else:
+                return None # 名前は一致したが、タイプが異なる
+        return plugin
 
     def reload_all_plugins(self):
         logger.log("すべてのプラグインを再読み込み中...", level="INFO")
@@ -145,6 +175,8 @@ class FractalPlugin(ABC):
     @property
     @abstractmethod
     def name(self) -> str: pass
+    @property
+    def target_type(self) -> str: return 'divergent' # Add target_type to mock
     @abstractmethod
     def get_parameters_definition(self) -> list: pass
     @abstractmethod
@@ -190,49 +222,95 @@ class TestMandel(FractalPlugin):
     with open(test_fractal_dir / "test_mandel_plugin.py", "w", encoding="utf-8") as f:
         f.write(dummy_mandel_content)
 
-    test_coloring_dir = Path("temp_coloring_plugins_delete_me")
-    test_coloring_dir.mkdir(exist_ok=True)
-    dummy_gray_content = f"""
+    # Divergent Coloring Plugins
+    test_divergent_coloring_dir = Path("temp_divergent_coloring_plugins_delete_me")
+    test_divergent_coloring_dir.mkdir(exist_ok=True)
+    dummy_gray_divergent_content = f"""
 from {temp_base_dir.name}.base_coloring_plugin import ColoringAlgorithmPlugin # 調整済みインポート
 import numpy as np
-class TestGray(ColoringAlgorithmPlugin):
+class TestGrayDivergent(ColoringAlgorithmPlugin):
     @property
-    def name(self): return "TestGrayscale"
+    def name(self): return "TestGrayscaleDivergent"
+    # target_type will use default 'divergent'
     def get_parameters_definition(self): return []
     def apply_coloring(self,fd,cfp,ap,cm): return np.zeros((fd['iterations'].shape[0],fd['iterations'].shape[1],4),dtype=np.uint8)
 """
-    with open(test_coloring_dir / "test_gray_plugin.py", "w", encoding="utf-8") as f:
-        f.write(dummy_gray_content)
+    with open(test_divergent_coloring_dir / "test_gray_divergent_plugin.py", "w", encoding="utf-8") as f:
+        f.write(dummy_gray_divergent_content)
 
-    logger.log(f"  一時プラグインディレクトリを作成しました: {test_fractal_dir.resolve()}, {test_coloring_dir.resolve()}", level="INFO")
+    # Non-Divergent Coloring Plugins
+    test_non_divergent_coloring_dir = Path("temp_non_divergent_coloring_plugins_delete_me")
+    test_non_divergent_coloring_dir.mkdir(exist_ok=True)
+    dummy_color_non_divergent_content = f"""
+from {temp_base_dir.name}.base_coloring_plugin import ColoringAlgorithmPlugin # 調整済みインポート
+import numpy as np
+class TestColorNonDivergent(ColoringAlgorithmPlugin):
+    @property
+    def name(self): return "TestColorNonDivergent"
+    @property
+    def target_type(self): return 'non_divergent' # Override target_type
+    def get_parameters_definition(self): return []
+    def apply_coloring(self,fd,cfp,ap,cm): return np.zeros((fd['iterations'].shape[0],fd['iterations'].shape[1],4),dtype=np.uint8)
+"""
+    with open(test_non_divergent_coloring_dir / "test_color_non_divergent_plugin.py", "w", encoding="utf-8") as f:
+        f.write(dummy_color_non_divergent_content)
+
+    logger.log(f"  一時プラグインディレクトリを作成しました: {test_fractal_dir.resolve()}, {test_divergent_coloring_dir.resolve()}, {test_non_divergent_coloring_dir.resolve()}", level="INFO")
 
     # スタンドアロンテストの場合、project_root は現在のディレクトリであり、
     # プラグインフォルダパスはこれに対する相対パスです。
     manager = PluginManager(
         project_root_path=Path.cwd(), # テストは CWD が一時ディレクトリの作成場所であることを前提としています
-        fractal_plugin_folder_path=test_fractal_dir.name, # CWD からの相対パス文字列として渡します
-        coloring_plugin_folder_path=test_coloring_dir.name # CWD からの相対パス文字列として渡します
+        fractal_plugin_folder_path=test_fractal_dir.name,
+        divergent_coloring_plugin_folder_path=test_divergent_coloring_dir.name,
+        non_divergent_coloring_plugin_folder_path=test_non_divergent_coloring_dir.name
     )
 
     logger.log("\n利用可能なフラクタルプラグイン:", level="INFO")
     for p in manager.get_available_fractal_plugins(): logger.log(f"  - {p.name}", level="INFO")
     assert manager.get_fractal_plugin("TestMandelbrot") is not None, "TestMandelbrot が読み込まれていません"
 
-    logger.log("\n利用可能なカラーリングプラグイン:", level="INFO")
-    for p in manager.get_available_coloring_plugins(): logger.log(f"  - {p.name}", level="INFO")
-    assert manager.get_coloring_plugin("TestGrayscale") is not None, "TestGrayscale が読み込まれていません"
+    logger.log("\n利用可能なカラーリングプラグイン (すべて):", level="INFO")
+    all_coloring_plugins = manager.get_available_coloring_plugins()
+    for p in all_coloring_plugins: logger.log(f"  - {p.name} (type: {p.target_type})", level="INFO")
+    assert len(all_coloring_plugins) == 2, "すべてのカラーリングプラグインが読み込まれていません"
+    assert manager.get_coloring_plugin("TestGrayscaleDivergent") is not None
+    assert manager.get_coloring_plugin("TestColorNonDivergent") is not None
+
+    logger.log("\n利用可能なカラーリングプラグイン (divergent のみ):", level="INFO")
+    divergent_plugins = manager.get_available_coloring_plugins(target_type='divergent')
+    for p in divergent_plugins: logger.log(f"  - {p.name} (type: {p.target_type})", level="INFO")
+    assert len(divergent_plugins) == 1, "Divergent プラグインのフィルタリングが正しくありません"
+    assert divergent_plugins[0].name == "TestGrayscaleDivergent"
+
+    logger.log("\n利用可能なカラーリングプラグイン (non_divergent のみ):", level="INFO")
+    non_divergent_plugins = manager.get_available_coloring_plugins(target_type='non_divergent')
+    for p in non_divergent_plugins: logger.log(f"  - {p.name} (type: {p.target_type})", level="INFO")
+    assert len(non_divergent_plugins) == 1, "Non-Divergent プラグインのフィルタリングが正しくありません"
+    assert non_divergent_plugins[0].name == "TestColorNonDivergent"
+
+    logger.log("\n特定のカラーリングプラグイン取得テスト:", level="INFO")
+    assert manager.get_coloring_plugin("TestGrayscaleDivergent", target_type='divergent') is not None, "Divergent プラグインを type指定で取得できませんでした"
+    assert manager.get_coloring_plugin("TestGrayscaleDivergent", target_type='non_divergent') is None, "Divergent プラグインを誤ったtype指定で取得してしまいました"
+    assert manager.get_coloring_plugin("TestColorNonDivergent", target_type='non_divergent') is not None, "Non-Divergent プラグインを type指定で取得できませんでした"
+    assert manager.get_coloring_plugin("TestColorNonDivergent", target_type='divergent') is None, "Non-Divergent プラグインを誤ったtype指定で取得してしまいました"
+    assert manager.get_coloring_plugin("NonExistentPlugin") is None, "存在しないプラグインを取得してしまいました"
+
 
     logger.log("\nプラグイン再読み込みテスト...", level="INFO")
     manager.reload_all_plugins()
     assert manager.get_fractal_plugin("TestMandelbrot") is not None, "再読み込み後 TestMandelbrot が読み込まれていません"
-    assert manager.get_coloring_plugin("TestGrayscale") is not None, "再読み込み後 TestGrayscale が読み込まれていません"
+    assert manager.get_coloring_plugin("TestGrayscaleDivergent", target_type='divergent') is not None, "再読み込み後 TestGrayscaleDivergent が読み込まれていません"
+    assert manager.get_coloring_plugin("TestColorNonDivergent", target_type='non_divergent') is not None, "再読み込み後 TestColorNonDivergent が読み込まれていません"
+    assert len(manager.get_available_coloring_plugins()) == 2, "再読み込み後、すべてのカラーリングプラグイン数が正しくありません"
     logger.log("プラグインが正常に再読み込みされました。", level="INFO")
 
     # 一時ディレクトリとファイルをクリーンアップします
     import shutil
     try:
         shutil.rmtree(test_fractal_dir)
-        shutil.rmtree(test_coloring_dir)
+        shutil.rmtree(test_divergent_coloring_dir)
+        shutil.rmtree(test_non_divergent_coloring_dir)
         shutil.rmtree(temp_base_dir)
         # sys.path.pop(0) # sys.path から temp_base_dir を削除します
         logger.log("\n一時テストディレクトリとファイルをクリーンアップしました。", level="INFO")

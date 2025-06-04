@@ -15,18 +15,19 @@ def _calculate_mandelbrot_point_jit(c_real, c_imag, max_iters, escape_radius_sq)
         z_imag_sq = z_imag * z_imag
         mod_sq = z_real_sq + z_imag_sq
         if mod_sq > escape_radius_sq:
-            return i, mod_sq # 発散時に反復回数と|Z|^2を返す
+            return i, z_real, z_imag # Return iterations, last z_real, last z_imag
 
         new_z_imag = 2.0 * z_real * z_imag + c_imag
         z_real = z_real_sq - z_imag_sq + c_real
         z_imag = new_z_imag
-    # 収束したか最大反復回数に達した場合は、|Z|^2に0.0を返す (または必要に応じて別の指標)
-    return max_iters, 0.0
+    # Converged or reached max_iters
+    return max_iters, z_real, z_imag
 
     # @jit(nopython=True, cache=True, parallel=True) # Numba JITを一時的に無効化
 def _compute_mandelbrot_grid_jit(width_px, height_px, min_x, max_x, min_y, max_y, max_iters, escape_radius_sq):
     iter_result = np.empty((height_px, width_px), dtype=np.int32)
-    mod_sq_result = np.empty((height_px, width_px), dtype=np.float64) # |Z|^2用
+    last_z_real_result = np.empty((height_px, width_px), dtype=np.float64)
+    last_z_imag_result = np.empty((height_px, width_px), dtype=np.float64)
 
     pixel_width_complex = (max_x - min_x) / width_px
     pixel_height_complex = (max_y - min_y) / height_px
@@ -35,10 +36,11 @@ def _compute_mandelbrot_grid_jit(width_px, height_px, min_x, max_x, min_y, max_y
         c_imag = min_y + y_idx * pixel_height_complex
         for x_idx in range(width_px):
             c_real = min_x + x_idx * pixel_width_complex
-            iter_val, mod_sq_val = _calculate_mandelbrot_point_jit(c_real, c_imag, max_iters, escape_radius_sq)
+            iter_val, last_zr, last_zi = _calculate_mandelbrot_point_jit(c_real, c_imag, max_iters, escape_radius_sq)
             iter_result[y_idx, x_idx] = iter_val
-            mod_sq_result[y_idx, x_idx] = mod_sq_val
-    return iter_result, mod_sq_result
+            last_z_real_result[y_idx, x_idx] = last_zr
+            last_z_imag_result[y_idx, x_idx] = last_zi
+    return iter_result, last_z_real_result, last_z_imag_result
 
 
 class MandelbrotPlugin(FractalPlugin):
@@ -74,14 +76,16 @@ class MandelbrotPlugin(FractalPlugin):
               f"複素領域: 実数部 ({min_x:.4f} から {max_x:.4f}), 虚数部 ({min_y:.4f} から {max_y:.4f}), "
               f"最大反復回数: {max_iterations}", level="DEBUG")
 
-        iter_array, mod_sq_array = _compute_mandelbrot_grid_jit(
+        iter_array, last_z_real_array, last_z_imag_array = _compute_mandelbrot_grid_jit(
             image_width_px, image_height_px,
             min_x, max_x, min_y, max_y,
             max_iterations, escape_radius_sq
         )
 
-        logger.log(f"計算完了。反復回数配列形状: {iter_array.shape}, ModSq形状: {mod_sq_array.shape}", level="DEBUG")
-        return {'iterations': iter_array, 'last_z_modulus_sq': mod_sq_array}
+        last_zn_values_complex = last_z_real_array + 1j * last_z_imag_array
+
+        logger.log(f"計算完了。反復回数配列形状: {iter_array.shape}, last_zn_values形状: {last_zn_values_complex.shape}", level="DEBUG")
+        return {'iterations': iter_array, 'last_zn_values': last_zn_values_complex}
 
 if __name__ == '__main__':
     plugin = MandelbrotPlugin()
@@ -105,17 +109,17 @@ if __name__ == '__main__':
     fractal_result_data = plugin.compute_fractal(test_common_params, test_plugin_params, img_width_test, img_height_test)
 
     iter_result_array = fractal_result_data['iterations']
-    mod_sq_result_array = fractal_result_data['last_z_modulus_sq']
+    last_zn_values_array = fractal_result_data['last_zn_values']
 
     logger.log(f"  反復回数配列形状: {iter_result_array.shape}, dtype: {iter_result_array.dtype}", level="DEBUG")
-    logger.log(f"  |Z|^2 配列形状: {mod_sq_result_array.shape}, dtype: {mod_sq_result_array.dtype}", level="DEBUG")
+    logger.log(f"  last_zn_values 配列形状: {last_zn_values_array.shape}, dtype: {last_zn_values_array.dtype}", level="DEBUG")
 
     center_y, center_x = img_height_test // 2, img_width_test // 2
     if iter_result_array[center_y, center_x] == test_common_params['max_iterations']:
         logger.log(f"  中心点の反復回数チェック: 成功 (値: {iter_result_array[center_y, center_x]})", level="INFO")
-        logger.log(f"  中心点の|Z|^2値: {mod_sq_result_array[center_y, center_x]}", level="DEBUG")
+        logger.log(f"  中心点のlast_zn値: {last_zn_values_array[center_y, center_x]}", level="DEBUG")
     else:
-        logger.log(f"  中心点の反復回数チェック: 失敗または最大反復回数ではない (値: {iter_result_array[center_y, center_x]})", level="WARNING")
+        logger.log(f"  中心点の反復回数チェック: 失敗または最大反復回数ではない (値: {iter_result_array[center_y, center_x]}), last_zn: {last_zn_values_array[center_y, center_x]}", level="WARNING")
 
     try:
         import matplotlib.pyplot as plt

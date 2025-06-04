@@ -45,17 +45,27 @@ class FractalEngine:
         self.plugin_manager = PluginManager(
             project_root_path=project_root_path,
             fractal_plugin_folder_path=fractal_plugin_folder,
-            coloring_plugin_folder_path=coloring_plugin_folder
+            divergent_coloring_plugin_folder_path="plugins/coloring/divergent", # Changed
+            non_divergent_coloring_plugin_folder_path="plugins/coloring/non_divergent" # Changed
         )
         # ColorManagerもプロジェクトルートからの相対パスで初期化するのが望ましいです
         self.color_manager = ColorManager(color_packs_dir=str(project_root_path / color_pack_folder))
 
         self.current_fractal_plugin: FractalPlugin | None = None
         self.current_fractal_plugin_parameters: dict = {}
-        self.current_coloring_plugin: ColoringAlgorithmPlugin | None = None
-        self.current_coloring_plugin_parameters: dict = {}
-        self.current_color_pack_name: str | None = None
-        self.current_color_map_name: str | None = None
+
+        self.active_coloring_target_type: str = 'divergent' # Default active target
+
+        self.current_coloring_plugin_divergent: ColoringAlgorithmPlugin | None = None
+        self.current_coloring_plugin_parameters_divergent: dict = {}
+        self.current_color_pack_name_divergent: str | None = None
+        self.current_color_map_name_divergent: str | None = None
+
+        self.current_coloring_plugin_non_divergent: ColoringAlgorithmPlugin | None = None
+        self.current_coloring_plugin_parameters_non_divergent: dict = {}
+        self.current_color_pack_name_non_divergent: str | None = None
+        self.current_color_map_name_non_divergent: str | None = None
+
         self.last_fractal_data_cache: dict | None = None
 
         self._initialize_default_plugins_and_map()
@@ -64,7 +74,9 @@ class FractalEngine:
         """
         利用可能なプラグインとカラーマップから、デフォルトのものを選択して初期設定します。
         MandelbrotやGrayscaleなど、一般的なものが優先的に選択されます。
+        DivergentとNon-Divergentの両方のカラーリングコンテキストを初期化します。
         """
+        # Fractal Plugin
         available_fractal_plugins = self.get_available_fractal_plugin_names()
         if available_fractal_plugins:
             default_fractal = "Mandelbrot"
@@ -72,21 +84,48 @@ class FractalEngine:
             else: self.set_active_fractal_plugin(available_fractal_plugins[0])
         else: logger.log("フラクタルプラグインが見つかりません。", level="WARNING")
 
-        available_coloring_plugins = self.get_available_coloring_plugin_names()
-        if available_coloring_plugins:
-            default_coloring = "グレースケール (標準)"
-            if default_coloring in available_coloring_plugins: self.set_active_coloring_plugin(default_coloring)
-            elif "スムーズカラー" in available_coloring_plugins: self.set_active_coloring_plugin("スムーズカラー")
-            elif available_coloring_plugins: self.set_active_coloring_plugin(available_coloring_plugins[0])
-        else: logger.log("カラーリングプラグインが見つかりません。", level="WARNING")
+        # Divergent Coloring Plugin
+        available_div_plugins = self.get_available_coloring_plugin_names(target_type='divergent')
+        if available_div_plugins:
+            default_div_coloring = "グレースケール (標準)" # Assuming this is a divergent plugin
+            if default_div_coloring in available_div_plugins:
+                self.set_active_coloring_plugin(default_div_coloring, target_type='divergent')
+            elif "スムーズカラー" in available_div_plugins: # Assuming this is divergent
+                 self.set_active_coloring_plugin("スムーズカラー", target_type='divergent')
+            else:
+                self.set_active_coloring_plugin(available_div_plugins[0], target_type='divergent')
+        else:
+            logger.log("発散部カラーリングプラグインが見つかりません。", level="WARNING")
 
+        # Non-Divergent Coloring Plugin
+        available_nondiv_plugins = self.get_available_coloring_plugin_names(target_type='non_divergent')
+        if available_nondiv_plugins:
+            default_nondiv_coloring = "反復収束速度" # Assuming this is non-divergent
+            if default_nondiv_coloring in available_nondiv_plugins:
+                self.set_active_coloring_plugin(default_nondiv_coloring, target_type='non_divergent')
+            elif "複素ポテンシャル" in available_nondiv_plugins: # Assuming this is non-divergent
+                 self.set_active_coloring_plugin("複素ポテンシャル", target_type='non_divergent')
+            else:
+                self.set_active_coloring_plugin(available_nondiv_plugins[0], target_type='non_divergent')
+        else:
+            logger.log("非発散部カラーリングプラグインが見つかりません。", level="WARNING")
+
+        # Default Color Map (shared for now, or could be specific)
+        # For simplicity, let's use one set of color map controls that applies to the *active* target type.
+        # Or, we initialize both to the same default map. Let's initialize both.
         available_color_packs = self.get_available_color_pack_names()
         if available_color_packs:
             pack_to_try = "デフォルト"
             if pack_to_try not in available_color_packs: pack_to_try = available_color_packs[0]
             maps_in_pack = self.get_available_color_map_names_in_pack(pack_to_try)
-            if maps_in_pack: self.set_active_color_map(pack_to_try, maps_in_pack[0])
+            if maps_in_pack:
+                self.set_active_color_map(pack_to_try, maps_in_pack[0], target_type='divergent')
+                self.set_active_color_map(pack_to_try, maps_in_pack[0], target_type='non_divergent')
         else: logger.log("カラーパックが見つかりません。", level="WARNING")
+
+        # Set the overall active target type (already defaults to 'divergent')
+        # self.active_coloring_target_type = 'divergent'
+
 
     def update_image_size(self, image_width_px, image_height_px):
         """
@@ -199,69 +238,104 @@ class FractalEngine:
         """
         return self.current_fractal_plugin_parameters.copy()
 
-    def set_active_coloring_plugin(self, plugin_name: str) -> bool:
+    def set_active_coloring_plugin(self, plugin_name: str, target_type: str) -> bool:
         """
-        指定された名前のカラーリングプラグインをアクティブにします。
-        成功した場合、プラグイン固有のパラメータをデフォルト値で初期化します。
+        指定されたターゲットタイプに対して、指定された名前のカラーリングプラグインをアクティブにします。
+        成功した場合、そのターゲットタイプ用のプラグイン固有パラメータをデフォルト値で初期化します。
 
         Args:
             plugin_name (str): アクティブにするカラーリングプラグインの名前。
+            target_type (str): 'divergent' または 'non_divergent'。
         Returns:
             bool: プラグインの設定に成功した場合はTrue、そうでない場合はFalse。
         """
-        plugin = self.plugin_manager.get_coloring_plugin(plugin_name)
-        if plugin:
-            self.current_coloring_plugin = plugin
-            self.current_coloring_plugin_parameters.clear()
+        plugin = self.plugin_manager.get_coloring_plugin(plugin_name, target_type=target_type)
+        if not plugin:
+            logger.log(f"プラグイン '{plugin_name}' (target: {target_type}) が見つかりません。", level="WARNING")
+            return False
+
+        if target_type == 'divergent':
+            self.current_coloring_plugin_divergent = plugin
+            self.current_coloring_plugin_parameters_divergent.clear()
             for p_def in plugin.get_parameters_definition():
-                self.current_coloring_plugin_parameters[p_def['name']] = p_def['default']
+                self.current_coloring_plugin_parameters_divergent[p_def['name']] = p_def['default']
+            logger.log(f"発散部用アクティブカラーリングプラグインを '{plugin_name}' に設定しました。", level="INFO")
             return True
-        return False
+        elif target_type == 'non_divergent':
+            self.current_coloring_plugin_non_divergent = plugin
+            self.current_coloring_plugin_parameters_non_divergent.clear()
+            for p_def in plugin.get_parameters_definition():
+                self.current_coloring_plugin_parameters_non_divergent[p_def['name']] = p_def['default']
+            logger.log(f"非発散部用アクティブカラーリングプラグインを '{plugin_name}' に設定しました。", level="INFO")
+            return True
+        else:
+            logger.log(f"set_active_coloring_plugin のための無効なターゲットタイプ '{target_type}'", level="WARNING")
+            return False
 
-    def get_active_coloring_plugin(self) -> ColoringAlgorithmPlugin | None:
-        """現在アクティブなカラーリングプラグインのインスタンスを返します。"""
-        return self.current_coloring_plugin
+    def get_active_coloring_plugin(self, target_type: str) -> ColoringAlgorithmPlugin | None:
+        if target_type == 'divergent':
+            return self.current_coloring_plugin_divergent
+        elif target_type == 'non_divergent':
+            return self.current_coloring_plugin_non_divergent
+        logger.log(f"無効なターゲットタイプ '{target_type}' が指定されました。", level="WARNING")
+        return None
 
-    def get_available_coloring_plugin_names(self) -> list[str]:
-        """利用可能なすべてのカラーリングプラグインの名前のリストを返します。"""
-        return [p.name for p in self.plugin_manager.get_available_coloring_plugins()]
+    def get_available_coloring_plugin_names(self, target_type: str) -> list[str]:
+        """指定されたターゲットタイプで利用可能なカラーリングプラグインの名前のリストを返します。"""
+        return [p.name for p in self.plugin_manager.get_available_coloring_plugins(target_type=target_type)]
 
-    def get_current_coloring_plugin_parameter_definitions(self) -> list:
+    def get_current_coloring_plugin_parameter_definitions(self, target_type: str) -> list: # Added target_type
         """
-        現在アクティブなカラーリングプラグインのパラメータ定義リストを返します。
-        各定義は、名前、型、デフォルト値などを含む辞書です。
-        アクティブなプラグインがない場合は空のリストを返します。
+        指定されたターゲットタイプでアクティブなカラーリングプラグインのパラメータ定義リストを返します。
         """
-        return self.current_coloring_plugin.get_parameters_definition() if self.current_coloring_plugin else []
+        plugin = self.get_active_coloring_plugin(target_type)
+        return plugin.get_parameters_definition() if plugin else []
 
-    def set_coloring_plugin_parameter(self, name: str, value: any):
+    def set_coloring_plugin_parameter(self, name: str, value: any, target_type: str): # Added target_type
         """
-        現在アクティブなカラーリングプラグインの指定されたパラメータ値を設定します。
-
-        Args:
-            name (str): 設定するパラメータの名前。
-            value (any): 設定する値。
+        指定されたターゲットタイプのアクティブなカラーリングプラグインのパラメータ値を設定します。
         """
-        if self.current_coloring_plugin and name in self.current_coloring_plugin_parameters:
-            self.current_coloring_plugin_parameters[name] = value
-    def get_coloring_plugin_parameters(self) -> dict: return self.current_coloring_plugin_parameters.copy()
+        params_dict = None
+        plugin = None
+        if target_type == 'divergent':
+            params_dict = self.current_coloring_plugin_parameters_divergent
+            plugin = self.current_coloring_plugin_divergent
+        elif target_type == 'non_divergent':
+            params_dict = self.current_coloring_plugin_parameters_non_divergent
+            plugin = self.current_coloring_plugin_non_divergent
 
-    def set_active_color_map(self, pack_name: str, map_name: str) -> bool:
+        if plugin and params_dict is not None and name in params_dict:
+            params_dict[name] = value
+        else:
+            logger.log(f"パラメータ '{name}' をターゲットタイプ '{target_type}' に設定できませんでした。", level="WARNING")
+
+    def get_coloring_plugin_parameters(self, target_type: str) -> dict: # Added target_type
+        if target_type == 'divergent':
+            return self.current_coloring_plugin_parameters_divergent.copy()
+        elif target_type == 'non_divergent':
+            return self.current_coloring_plugin_parameters_non_divergent.copy()
+        logger.log(f"無効なターゲットタイプ '{target_type}' が指定されました。", level="WARNING")
+        return {}
+
+    def set_active_color_map(self, pack_name: str, map_name: str, target_type: str) -> bool: # Added target_type
         """
-        指定されたカラーパックとマップ名でアクティブなカラーマップを設定します。
-
-        Args:
-            pack_name (str): カラーパックの名前。
-            map_name (str): カラーマップの名前。
-        Returns:
-            bool: カラーマップの設定に成功した場合はTrue、そうでない場合はFalse。
+        指定されたターゲットタイプのアクティブなカラーマップを設定します。
         """
         map_data = self.color_manager.get_color_map_data(pack_name, map_name)
         if map_data:
-            self.current_color_pack_name = pack_name
-            self.current_color_map_name = map_name
-            return True
+            if target_type == 'divergent':
+                self.current_color_pack_name_divergent = pack_name
+                self.current_color_map_name_divergent = map_name
+                return True
+            elif target_type == 'non_divergent':
+                self.current_color_pack_name_non_divergent = pack_name
+                self.current_color_map_name_non_divergent = map_name
+                return True
+            else:
+                logger.log(f"カラーマップ設定のための無効なターゲットタイプ '{target_type}'", level="WARNING")
+                return False
         return False
+
     def get_available_color_pack_names(self) -> list[str]: return self.color_manager.get_available_color_pack_names()
 
     def get_available_color_map_names_in_pack(self, pack_name: str) -> list[str]:
@@ -275,15 +349,16 @@ class FractalEngine:
         """
         return self.color_manager.get_color_maps_in_pack(pack_name)
 
-    def get_current_color_map_selection(self) -> tuple[str | None, str | None]:
+    def get_current_color_map_selection(self, target_type: str) -> tuple[str | None, str | None]: # Added target_type
         """
-        現在選択されているカラーパック名とカラーマップ名をタプルで返します。
-        選択されていない場合はNoneが含まれることがあります。
-
-        Returns:
-            tuple[str | None, str | None]: (カラーパック名, カラーマップ名)
+        指定されたターゲットタイプで現在選択されているカラーパック名とカラーマップ名をタプルで返します。
         """
-        return self.current_color_pack_name, self.current_color_map_name
+        if target_type == 'divergent':
+            return self.current_color_pack_name_divergent, self.current_color_map_name_divergent
+        elif target_type == 'non_divergent':
+            return self.current_color_pack_name_non_divergent, self.current_color_map_name_non_divergent
+        logger.log(f"カラーマップ選択取得のための無効なターゲットタイプ '{target_type}'", level="WARNING")
+        return None, None
 
     def compute_current_fractal(self) -> dict | None:
         """
@@ -307,12 +382,13 @@ class FractalEngine:
             self.last_fractal_data_cache = None
             return None
 
-    def apply_coloring(self, fractal_data_override: dict | None = None) -> np.ndarray | None:
+    def apply_coloring(self, target_type: str, fractal_data_override: dict | None = None) -> np.ndarray | None:
         """
-        指定されたフラクタルデータ (またはキャッシュされたデータ) に、
-        現在アクティブなカラーリングプラグインとカラーマップを適用します。
+        指定されたフラクタルデータ（またはキャッシュされたデータ）に、
+        指定されたターゲットタイプのアクティブなカラーリングプラグインとカラーマップを適用します。
 
         Args:
+            target_type (str): 'divergent' または 'non_divergent'。
             fractal_data_override (dict | None, optional):
                 カラーリングに使用するフラクタルデータ。Noneの場合、最後に計算された
                 `last_fractal_data_cache` を使用します。
@@ -321,18 +397,35 @@ class FractalEngine:
                                カラーリングに失敗した場合はNone、またはエラーを示す赤い画像。
         """
         data_to_color = fractal_data_override if fractal_data_override is not None else self.last_fractal_data_cache
-        if not self.current_coloring_plugin or data_to_color is None: return None
+
+        active_plugin = self.get_active_coloring_plugin(target_type)
+        plugin_params = self.get_coloring_plugin_parameters(target_type)
+        pack_name, map_name = self.get_current_color_map_selection(target_type)
+
+        if not active_plugin or data_to_color is None:
+            logger.log(f"apply_coloring ({target_type}) 中止: プラグイン ({active_plugin is not None}) またはデータ ({data_to_color is not None}) がありません。", level="WARNING")
+            return None
+
         color_map_list = []
-        if self.current_color_pack_name and self.current_color_map_name:
-            color_map_list = self.color_manager.get_color_map_data(self.current_color_pack_name, self.current_color_map_name)
-        if not color_map_list : color_map_list = [(i,i,i) for i in range(0,256,16)] # 単純なフォールバックグレースケール
+        if pack_name and map_name:
+            color_map_list = self.color_manager.get_color_map_data(pack_name, map_name)
+        if not color_map_list : color_map_list = [(i,i,i) for i in range(0,256,16)] # 単純なフォールバック
 
         common_fp = self.get_common_parameters()
-        common_fp['image_width_px'] = data_to_color.get('iterations', np.empty((0,0))).shape[1]
-        common_fp['image_height_px'] = data_to_color.get('iterations', np.empty((0,0))).shape[0]
+        # Ensure image dimensions in common_fp match the data being colored
+        iterations_array = data_to_color.get('iterations')
+        if iterations_array is not None and iterations_array.ndim == 2:
+            common_fp['image_height_px'] = iterations_array.shape[0]
+            common_fp['image_width_px'] = iterations_array.shape[1]
+        else: # Fallback or if iterations is missing/malformed
+            common_fp['image_height_px'] = self.image_height_px
+            common_fp['image_width_px'] = self.image_width_px
+            logger.log("apply_coloring: iterations_array が見つからないか、無効な形状です。デフォルトの画像サイズを使用します。", level="WARNING")
+
+
         try:
-            return self.current_coloring_plugin.apply_coloring(
-                data_to_color, common_fp, self.current_coloring_plugin_parameters, color_map_list
+            return active_plugin.apply_coloring(
+                data_to_color, common_fp, plugin_params, color_map_list
             )
         except Exception as e:
             logger.log(f"カラーリング中のエラー: {e}", level="ERROR")
@@ -407,22 +500,47 @@ class FractalEngine:
             final_fractal_plugin_params.update(self.current_fractal_plugin_parameters) # 現在の設定をベースとして使用
         if fractal_plugin_params_override: final_fractal_plugin_params.update(fractal_plugin_params_override)
 
-        # カラーリングプラグインとそのパラメータを決定
-        active_coloring_plugin = self.plugin_manager.get_coloring_plugin(coloring_algo_name_override) if coloring_algo_name_override else self.current_coloring_plugin
-        if not active_coloring_plugin: logger.log("出力失敗、カラーリングプラグインが解決できませんでした。", level="ERROR"); return None
+        # カラーリングプラグインとそのパラメータを決定 (アクティブターゲットタイプを考慮)
+        # generate_image_for_output は単一のカラーリング設定セットを取る。
+        # どのターゲットタイプを使用するかを決定する必要がある。コントローラの current active target type を使う。
+        # このメソッドはコントローラからは呼ばれず、エクスポータから直接呼ばれるため、
+        # self.active_coloring_target_type を信頼する。
+        active_target_type_for_output = self.active_coloring_target_type
+
+        final_coloring_plugin_name_to_use = coloring_algo_name_override
+        if final_coloring_plugin_name_to_use is None:
+            active_plugin_for_target = self.get_active_coloring_plugin(active_target_type_for_output)
+            if active_plugin_for_target:
+                final_coloring_plugin_name_to_use = active_plugin_for_target.name
+
+        active_coloring_plugin = None
+        if final_coloring_plugin_name_to_use:
+            active_coloring_plugin = self.plugin_manager.get_coloring_plugin(final_coloring_plugin_name_to_use, target_type=active_target_type_for_output)
+
+        if not active_coloring_plugin:
+            logger.log(f"出力失敗、カラーリングプラグイン '{final_coloring_plugin_name_to_use}' (target: {active_target_type_for_output}) が解決できませんでした。", level="ERROR")
+            return None
 
         final_coloring_algo_params = {}
         base_coloring_param_defs = active_coloring_plugin.get_parameters_definition()
-        for p_def in base_coloring_param_defs: final_coloring_algo_params[p_def['name']] = p_def['default']
-        if self.current_coloring_plugin and active_coloring_plugin.name == self.current_coloring_plugin.name:
-             final_coloring_algo_params.update(self.current_coloring_plugin_parameters)
-        if coloring_algo_params_override: final_coloring_algo_params.update(coloring_algo_params_override)
+        for p_def in base_coloring_param_defs:
+            final_coloring_algo_params[p_def['name']] = p_def['default']
 
-        # カラーマップを決定
-        pack_name = color_pack_name_override if color_pack_name_override else self.current_color_pack_name
-        map_name = color_map_name_override if color_map_name_override else self.current_color_map_name
+        current_engine_cp_params = self.get_coloring_plugin_parameters(active_target_type_for_output)
+        # Check if the plugin for override is the same as the one active for the target type
+        active_plugin_for_current_target = self.get_active_coloring_plugin(active_target_type_for_output)
+        if active_plugin_for_current_target and active_coloring_plugin.name == active_plugin_for_current_target.name :
+             final_coloring_algo_params.update(current_engine_cp_params) # Start with current params if same plugin
+        if coloring_algo_params_override: # Then apply specific overrides
+            final_coloring_algo_params.update(coloring_algo_params_override)
+
+
+        # カラーマップを決定 (正しいターゲットタイプ用)
+        current_pack_name_for_target, current_map_name_for_target = self.get_current_color_map_selection(active_target_type_for_output)
+        pack_name = color_pack_name_override if color_pack_name_override else current_pack_name_for_target
+        map_name = color_map_name_override if color_map_name_override else current_map_name_for_target
         final_color_map_data = self.color_manager.get_color_map_data(pack_name, map_name) if pack_name and map_name else []
-        if not final_color_map_data: final_color_map_data = [(i,i,i) for i in range(0,256,16)] # フォールバック
+        if not final_color_map_data: final_color_map_data = [(i,i,i) for i in range(0,256,16)]
 
         # 2. スーパーサンプリング解像度
         aa_factor = self._get_antialiasing_factor(antialiasing_level)
@@ -513,5 +631,98 @@ if __name__ == '__main__':
             # plt.imshow(output_image); plt.show()
         else:
             logger.log("  高解像度画像の生成に失敗しました。", level="ERROR")
+
+    # TODO: Add save_settings and load_settings tests here once implemented
+
+    # --- Save/Load Settings ---
+    def save_settings(self) -> dict:
+        """現在のエンジンの設定を辞書としてシリアライズします。"""
+        settings = {
+            "common_parameters": self.get_common_parameters(),
+            "active_fractal_plugin_name": self.current_fractal_plugin.name if self.current_fractal_plugin else None,
+            "fractal_plugin_parameters": self.current_fractal_plugin_parameters,
+
+            "active_coloring_target_type": self.active_coloring_target_type,
+
+            "coloring_plugin_divergent_name": self.current_coloring_plugin_divergent.name if self.current_coloring_plugin_divergent else None,
+            "coloring_plugin_divergent_params": self.current_coloring_plugin_parameters_divergent,
+            "color_pack_divergent_name": self.current_color_pack_name_divergent,
+            "color_map_divergent_name": self.current_color_map_name_divergent,
+
+            "coloring_plugin_non_divergent_name": self.current_coloring_plugin_non_divergent.name if self.current_coloring_plugin_non_divergent else None,
+            "coloring_plugin_non_divergent_params": self.current_coloring_plugin_parameters_non_divergent,
+            "color_pack_non_divergent_name": self.current_color_pack_name_non_divergent,
+            "color_map_non_divergent_name": self.current_color_map_name_non_divergent,
+
+            # image size is part of common_parameters if needed, or can be saved separately
+            "image_width_px": self.image_width_px,
+            "image_height_px": self.image_height_px,
+        }
+        logger.log("設定を保存しました。", level="DEBUG")
+        return settings
+
+    def load_settings(self, settings: dict):
+        """辞書からエンジンの設定を復元します。"""
+        try:
+            cp = settings.get("common_parameters")
+            if cp:
+                self.set_common_parameters(
+                    center_real=cp.get('center_real', -0.5),
+                    center_imag=cp.get('center_imag', 0.0),
+                    width=cp.get('width', 3.0),
+                    max_iterations=cp.get('max_iterations', 100),
+                    escape_radius=cp.get('escape_radius', 2.0)
+                )
+
+            fp_name = settings.get("active_fractal_plugin_name")
+            if fp_name:
+                if self.set_active_fractal_plugin(fp_name): # This also sets default plugin params
+                    fp_params = settings.get("fractal_plugin_parameters")
+                    if fp_params: # Override defaults with saved params
+                        for name, value in fp_params.items():
+                            self.set_fractal_plugin_parameter(name, value)
+
+            # Restore coloring settings for divergent
+            cpd_name = settings.get("coloring_plugin_divergent_name")
+            if cpd_name:
+                if self.set_active_coloring_plugin(cpd_name, target_type='divergent'):
+                    cpd_params = settings.get("coloring_plugin_divergent_params")
+                    if cpd_params:
+                        for name, value in cpd_params.items():
+                             self.set_coloring_plugin_parameter(name, value, target_type='divergent')
+
+            cpd_pack = settings.get("color_pack_divergent_name")
+            cpd_map = settings.get("color_map_divergent_name")
+            if cpd_pack and cpd_map:
+                self.set_active_color_map(cpd_pack, cpd_map, target_type='divergent')
+
+            # Restore coloring settings for non-divergent
+            cpnd_name = settings.get("coloring_plugin_non_divergent_name")
+            if cpnd_name:
+                if self.set_active_coloring_plugin(cpnd_name, target_type='non_divergent'):
+                    cpnd_params = settings.get("coloring_plugin_non_divergent_params")
+                    if cpnd_params:
+                        for name, value in cpnd_params.items():
+                             self.set_coloring_plugin_parameter(name, value, target_type='non_divergent')
+
+            cpnd_pack = settings.get("color_pack_non_divergent_name")
+            cpnd_map = settings.get("color_map_non_divergent_name")
+            if cpnd_pack and cpnd_map:
+                self.set_active_color_map(cpnd_pack, cpnd_map, target_type='non_divergent')
+
+            # Restore active target type AFTER specific types are loaded
+            self.active_coloring_target_type = settings.get("active_coloring_target_type", 'divergent')
+
+            # Restore image size (optional, could be handled by UI)
+            self.image_width_px = settings.get("image_width_px", self.image_width_px)
+            self.image_height_px = settings.get("image_height_px", self.image_height_px)
+            self.update_aspect_ratio() # Ensure 'height' (complex plane) is updated
+
+            self.last_fractal_data_cache = None # Invalidate cache
+            logger.log("設定をロードしました。", level="INFO")
+        except Exception as e:
+            logger.log(f"設定のロード中にエラーが発生しました: {e}", level="ERROR")
+            traceback.print_exc()
+
 
     logger.log("\nFractalEngine テストが完了しました。", level="INFO")
