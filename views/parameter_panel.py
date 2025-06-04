@@ -227,11 +227,23 @@ class ParameterPanel(QScrollArea):
         current_vals = self.fractal_controller.get_current_fractal_plugin_parameters_from_engine()
         for p_def in param_defs:
             lbl = p_def.get('label', p_def['name']); name = p_def['name']; type = p_def.get('type', 'float')
-            val = current_vals.get(name, p_def.get('default')); widget = None
+            widget = None # widget を初期化
             if type == 'float':
-                widget = QDoubleSpinBox(); widget.setRange(p_def.get('range',(-1e9,1e9))[0], p_def.get('range',(-1e9,1e9))[1]); widget.setValue(val if val is not None else 0.0); widget.setSingleStep(p_def.get('step',0.01)); widget.setDecimals(p_def.get('decimals',6))
+                widget = QDoubleSpinBox()
+                widget.setRange(p_def.get('range',(-1e9,1e9))[0], p_def.get('range',(-1e9,1e9))[1])
+
+                # プラグインから step と decimals を取得、なければデフォルト値
+                step_val = p_def.get('step', 1e-7) # より細かいデフォルトステップ
+                decimals_val = p_def.get('decimals', 15) # より多くのデフォルト桁数
+
+                widget.setDecimals(decimals_val)   # (1) Decimals を最初に設定
+                widget.setSingleStep(step_val)     # (2) SingleStep を次に設定
+
+                current_plugin_val = current_vals.get(name, p_def.get('default'))
+                widget.setValue(current_plugin_val if current_plugin_val is not None else 0.0) # (3) 最後に値を設定
+
             elif type == 'int':
-                widget = QSpinBox(); widget.setRange(p_def.get('range',(-2**31,2**31-1))[0], p_def.get('range',(-2**31,2**31-1))[1]); widget.setValue(val if val is not None else 0); widget.setSingleStep(p_def.get('step',1))
+                widget = QSpinBox(); widget.setRange(p_def.get('range',(-2**31,2**31-1))[0], p_def.get('range',(-2**31,2**31-1))[1]); widget.setValue(current_vals.get(name, p_def.get('default')) if current_vals.get(name, p_def.get('default')) is not None else 0); widget.setSingleStep(p_def.get('step',1))
             if widget:
                 if 'tooltip' in p_def: widget.setToolTip(p_def['tooltip'])
                 self.plugin_specific_layout.addRow(QLabel(lbl + ":"), widget)
@@ -244,15 +256,15 @@ class ParameterPanel(QScrollArea):
         コントローラーにパラメータの変更を通知します。
 
         Args:
-            value (any): 変更後の値 (スロット接続の都合上存在するが、実際にはsenderから取得)。
+            value (any): 変更後の値。QDoubleSpinBox.valueChanged や QSpinBox.valueChanged から直接渡されます。
             param_name (str): 変更されたパラメータの名前。
         """
         if not self.fractal_controller: return
-        sender = self.sender()
-        if isinstance(sender, (QDoubleSpinBox, QSpinBox)):
-            self.fractal_controller.set_fractal_plugin_parameter_and_update(param_name, sender.value())
-            if '_preset_combo' in self.plugin_widgets:
-                self.plugin_widgets['_preset_combo'].blockSignals(True); self.plugin_widgets['_preset_combo'].setCurrentText("カスタム"); self.plugin_widgets['_preset_combo'].blockSignals(False)
+        # シグナルから渡された 'value' (新しい値) を直接使用
+        self.fractal_controller.set_fractal_plugin_parameter_and_update(param_name, value)
+        # プラグインにプリセットコンボボックスが存在し、それが実際にQComboBoxインスタンスである場合のみ処理
+        if '_preset_combo' in self.plugin_widgets and isinstance(self.plugin_widgets['_preset_combo'], QComboBox):
+            self.plugin_widgets['_preset_combo'].blockSignals(True); self.plugin_widgets['_preset_combo'].setCurrentText("カスタム"); self.plugin_widgets['_preset_combo'].blockSignals(False)
 
     def _populate_coloring_algorithm_combo(self):
         """
