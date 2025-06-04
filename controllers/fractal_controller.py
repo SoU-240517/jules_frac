@@ -1,4 +1,5 @@
 import time
+import traceback # Add this if not present
 from export.image_exporter import ImageExporter # ExporterSignals は ImageExporter 内部で使用されます
 # FractalEngine がインポートされている場合、型が正しく指定されていると仮定しますが、このファイルでは渡されるだけなので必須ではありません。
 # from src.app.models.fractal_engine import FractalEngine # FractalEngineモデルのインポート (型ヒント用)
@@ -186,6 +187,9 @@ class FractalController(QObject):
 
     # --- レンダリング処理 ---
     def trigger_render(self, image_width_px=None, image_height_px=None, full_recompute: bool = True):
+        # Add this logging line
+        self.logger.log(f"FractalController.trigger_render: Called from: {traceback.format_stack()[-2].strip()}", level="DEBUG")
+
         if not self.fractal_engine:
             self.status_updated.emit("エラー: フラクタルエンジン未設定")
             return
