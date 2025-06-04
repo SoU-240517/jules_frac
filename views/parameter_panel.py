@@ -933,9 +933,4 @@ class ParameterPanel(QScrollArea):
 
 
 if __name__ == '__main__':
-            # ただし、上記のループ内で個別ウィジェットに対して focused_value_store を操作するのは煩雑なので、
-            # プリセット適用後は、関連ウィジェットの editingFinished が発行された際に、
-            # original_value が None となり、常に再描画が試みられる（これは許容範囲か）。
-            # より丁寧には、プリセット適用時に値を _focused_value_store にも能動的にセットすることが考えられる。
-            # 今回は、上記のループ内でウィジェットごとに focused_value_store をクリアする対応は一旦コメントアウトしておく。
-            # -> widget.setValue の後に focused_value_store から削除するように修正。
+    pass
