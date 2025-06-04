@@ -31,6 +31,7 @@ class CustomLogger:
     RESET_COLOR = "\033[0m"
     _current_level_int: int
     _is_enabled: bool
+    _log_file_path: Path | None = None
 
     def __new__(cls, *args, **kwargs):
         """シングルトンインスタンスを作成または返します。初回作成時に初期化を行います。"""
@@ -44,13 +45,13 @@ class CustomLogger:
                 cls._start_time = time.time()
 
             # _initialize_singleton_attrs はインスタンスメソッドとして定義されているが、
-            # クラス属性 (_current_level_int, _is_enabled) を設定する。
+            # クラス属性 (_current_level_int, _is_enabled, _log_file_path) を設定する。
             # これは、設定をシングルトン全体で共有するため。
             instance._initialize_singleton_attrs()
 
             cls._instance = instance
             cls._initializing = False # 初期化終了のフラグを解除
-            # print(f"DEBUG: CustomLogger __new__ - Instance created. Level: {cls._current_level_int}, Enabled: {cls._is_enabled}")
+            # print(f"DEBUG: CustomLogger __new__ - Instance created. Level: {cls._current_level_int}, Enabled: {cls._is_enabled}, File: {cls._log_file_path}")
         return cls._instance
 
     def _initialize_singleton_attrs(self):
@@ -67,6 +68,8 @@ class CustomLogger:
         # これにより、SettingsManagerの初期化中にロギングが発生しても、基本的なロギング状態が保証されます。
         CustomLogger._current_level_int = CustomLogger.LOG_LEVELS.get("INFO", 20)
         CustomLogger._is_enabled = True
+        # Use an absolute path for the log file to avoid ambiguity with current working directory
+        CustomLogger._log_file_path = Path("/tmp/app.log") # Default log file path
 
         try:
             # SettingsManager のインスタンス化時にロギングが発生する可能性があるため、
@@ -76,16 +79,36 @@ class CustomLogger:
 
             level_to_set_str = logging_config.get("level", "INFO").upper()
             enabled_bool = logging_config.get("enabled", True)
+            # SettingsManager might provide a relative path, ensure it becomes absolute or handle appropriately.
+            # For now, we'll prioritize the absolute path set above if settings don't provide one,
+            # or if the provided one is relative, it might still be an issue.
+            # Let's assume settings_manager provides 'file' which could be relative or absolute.
+            # If relative, it will be relative to where the app is run.
+            log_file_from_settings = logging_config.get("file")
 
             CustomLogger._current_level_int = CustomLogger.LOG_LEVELS.get(level_to_set_str, CustomLogger.LOG_LEVELS["INFO"])
             CustomLogger._is_enabled = enabled_bool
-            # print(f"DEBUG: CustomLogger _initialize_singleton_attrs - Settings loaded: Level={level_to_set_str}({CustomLogger._current_level_int}), Enabled={enabled_bool}")
+
+            if log_file_from_settings:
+                # If settings provide a path, use it. Consider making it absolute if it's not.
+                # For simplicity, we'll use it as is for now. If issues persist, make it absolute.
+                CustomLogger._log_file_path = Path(log_file_from_settings)
+            # else, the default /tmp/app.log remains.
+
+            # Ensure log directory exists
+            if CustomLogger._log_file_path.parent:
+                 CustomLogger._log_file_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # print(f"DEBUG: CustomLogger _initialize_singleton_attrs - Settings loaded: Level={level_to_set_str}({CustomLogger._current_level_int}), Enabled={enabled_bool}, File={CustomLogger._log_file_path}")
         except Exception as e:
             # 初期化中にエラーが発生した場合のフォールバック (標準エラーに出力検討)
             # この段階ではカスタムロガーが完全には利用できない可能性があるため、printを使用します。
-            print(f"[CRITICAL] CustomLogger: 設定からのロガー初期化に失敗しました: {e}. デフォルト設定 (INFO, Enabled) を使用します。", flush=True)
+            print(f"[CRITICAL] CustomLogger: 設定からのロガー初期化に失敗しました: {e}. デフォルト設定 (INFO, Enabled, /tmp/app.log) を使用します。", flush=True)
             CustomLogger._current_level_int = CustomLogger.LOG_LEVELS.get("INFO", 20)
             CustomLogger._is_enabled = True
+            CustomLogger._log_file_path = Path("/tmp/app.log") # Fallback to absolute path
+            if CustomLogger._log_file_path.parent:
+                 CustomLogger._log_file_path.parent.mkdir(parents=True, exist_ok=True)
 
 
     def set_level(self, level_name_or_int):
@@ -115,6 +138,7 @@ class CustomLogger:
         # 通常、__new__ で行われるが、万が一の場合のフォールバック
         if not hasattr(CustomLogger, '_is_enabled'): CustomLogger._is_enabled = True
         if not hasattr(CustomLogger, '_current_level_int'): CustomLogger._current_level_int = CustomLogger.LOG_LEVELS["INFO"]
+        if not hasattr(CustomLogger, '_log_file_path'): CustomLogger._log_file_path = Path("/tmp/app.log")
 
 
         if not CustomLogger._is_enabled:
@@ -154,11 +178,25 @@ class CustomLogger:
         level_color_code = CustomLogger.LOG_COLORS.get(message_level_str, "") # ログレベルの色
         dim_color_code = CustomLogger.LOG_COLORS.get("DIM_GRAY", "")      # 暗い色のコード
 
-        log_message = (f"{dim_color_code}{formatted_elapsed_time_ms}ms:{CustomLogger.RESET_COLOR} "
-                       f"{level_color_code}{formatted_level_str}{CustomLogger.RESET_COLOR} "
-                       f"{message} "
-                       f"{dim_color_code}[{clickable_path}:{log_context}]{CustomLogger.RESET_COLOR}")
-        print(log_message, flush=True) # flush=True を追加して、出力が即座に行われるようにします
+        log_message_console = (f"{dim_color_code}{formatted_elapsed_time_ms}ms:{CustomLogger.RESET_COLOR} "
+                               f"{level_color_code}{formatted_level_str}{CustomLogger.RESET_COLOR} "
+                               f"{message} "
+                               f"{dim_color_code}[{clickable_path}:{log_context}]{CustomLogger.RESET_COLOR}")
+        print(log_message_console, flush=True)
+
+        if CustomLogger._log_file_path:
+            # ファイル用のログメッセージ (色なし)
+            log_message_file = (f"{formatted_elapsed_time_ms}ms: "
+                                f"{formatted_level_str} "
+                                f"{message} "
+                                f"[{filepath}:{lineno}:{log_context}]") # clickable_path はファイルでは不要
+            try:
+                with open(CustomLogger._log_file_path, "a", encoding="utf-8") as f:
+                    f.write(log_message_file + "\n")
+            except Exception as e:
+                # ファイル書き込みエラーはコンソールに出力 (無限ループを避けるため、ここではlog()を呼び出さない)
+                print(f"[CRITICAL] CustomLogger: ログファイルへの書き込みに失敗しました: {CustomLogger._log_file_path}, Error: {e}", flush=True)
+
 
 if __name__ == '__main__':
     print("--- CustomLogger __main__ テスト開始 ---", flush=True)
