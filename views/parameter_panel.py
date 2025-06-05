@@ -558,13 +558,7 @@ class ParameterPanel(QScrollArea):
             logger.log(f"Error: Invalid target_type '{target_type}' in _update_coloring_plugin_specific_ui", level="ERROR")
             return
 
-        # specific_layout が割り当てられた後
-        # layout_type_name = "NoneType" # 削除
-        # layout_id = "N/A" # 削除
-        # if specific_layout is not None:
-        #     layout_type_name = __builtins__.type(specific_layout).__name__
-        #     layout_id = id(specific_layout)
-        # logger.log(f"Targeting layout for {target_type}: {layout_type_name} - ID: {layout_id}", level="DEBUG") # 削除
+        # specific_layout が割り当てられた後 (ログは前回削除済み)
 
         if not self.fractal_controller or not algo_name or algo_name == "N/A":
             if specific_group: specific_group.setVisible(False)
@@ -604,34 +598,45 @@ class ParameterPanel(QScrollArea):
 
         logger.log(f"Looping through param_defs for '{algo_name}' ({target_type}). Number of defs: {len(param_defs) if param_defs else 0}", level="DEBUG")
         for p_def in param_defs:
-            lbl_text=p_def.get('label',p_def['name']); name=p_def['name']; type=p_def.get('type','float')
-            val=current_vals.get(name, p_def.get('default')); widget=None
-            logger.log(f"Processing p_def: name='{name}', type='{type}', label='{lbl_text}', default='{p_def.get('default')}', current_val_from_engine='{current_vals.get(name)}', final_val_for_widget='{val}'", level="DEBUG")
+            name = p_def['name'] # name を先に取得
+            lbl_text = p_def.get('label', name)
+            p_type = p_def.get('type', 'float') # p_type に変更 (ローカル変数 type との衝突回避)
+            default_val = p_def.get('default')
+            current_val = current_vals.get(name, default_val)
+            widget = None
 
-            if type == 'float':
-                widget=QDoubleSpinBox()
+            logger.log(f"Processing p_def: name='{name}', type='{p_type}', label='{lbl_text}', default='{default_val}', current_val_from_engine='{current_vals.get(name)}', final_val_for_widget='{current_val}'", level="DEBUG")
+
+            if p_type == 'float':
+                widget = QDoubleSpinBox()
                 widget.setRange(p_def.get('range',(-1e9,1e9))[0], p_def.get('range',(-1e9,1e9))[1])
-                widget.setValue(val if val is not None else 0.0)
+                widget.setValue(current_val if current_val is not None else 0.0)
                 widget.setSingleStep(p_def.get('step',0.01))
                 widget.setDecimals(p_def.get('decimals',3))
                 logger.log(f"Created QDoubleSpinBox for '{name}' with value {widget.value()}", level="DEBUG")
-            elif type == 'int':
-                widget=QSpinBox()
+            elif p_type == 'int':
+                widget = QSpinBox()
                 widget.setRange(p_def.get('range',(-2**31,2**31-1))[0], p_def.get('range',(-2**31,2**31-1))[1])
-                widget.setValue(val if val is not None else 0)
+                widget.setValue(current_val if current_val is not None else 0)
                 widget.setSingleStep(p_def.get('step',1))
                 logger.log(f"Created QSpinBox for '{name}' with value {widget.value()}", level="DEBUG")
 
             if widget:
                 if 'tooltip' in p_def: widget.setToolTip(p_def['tooltip'])
+
                 if specific_layout:
                     specific_layout.addRow(QLabel(lbl_text + ":"), widget)
-                    # logger.log(f"Added widget for '{p_def['name']}' (label: '{lbl_text}') to layout for {target_type}. Layout row count: {specific_layout.rowCount()}", level="DEBUG") # 削除済
+                    # ログ追加: addRow の直後
+                    logger.log(f"Added widget for '{name}' (label: '{lbl_text}') to layout for {target_type}. Layout row count: {specific_layout.rowCount()}", level="DEBUG")
                 else:
-                    # logger.log(f"ERROR: specific_layout is None when trying to add widget for '{p_def['name']}' ({target_type}) just after supposedly adding it.", level="ERROR") # 削除
-                    pass # specific_layout is None, do nothing or handle error appropriately
-                widget.valueChanged.connect(partial(self._on_coloring_plugin_parameter_changed, param_name=name, target_type=target_type))
-                if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
+                    logger.log(f"CRITICAL ERROR: specific_layout is None for {target_type} when trying to add widget for {name}.", level="CRITICAL")
+
+                if plugin_widgets:
+                    plugin_widgets[name] = widget
+
+                # シグナル接続
+                if isinstance(widget, (QSpinBox, QDoubleSpinBox)): # このチェックは widget が None でないことを前提とする
+                    widget.valueChanged.connect(partial(self._on_coloring_plugin_parameter_changed, param_name=name, target_type=target_type))
                     widget.editingFinished.connect(partial(self._on_coloring_plugin_parameter_editing_finished, param_name=name, target_type=target_type))
                 widget.installEventFilter(self)
                 if plugin_widgets: plugin_widgets[name] = widget
