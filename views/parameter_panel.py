@@ -559,12 +559,12 @@ class ParameterPanel(QScrollArea):
             return
 
         # specific_layout が割り当てられた後
-        layout_type_name = "NoneType"
-        layout_id = "N/A"
-        if specific_layout is not None:
-            layout_type_name = __builtins__.type(specific_layout).__name__
-            layout_id = id(specific_layout)
-        logger.log(f"Targeting layout for {target_type}: {layout_type_name} - ID: {layout_id}", level="DEBUG")
+        # layout_type_name = "NoneType" # 削除
+        # layout_id = "N/A" # 削除
+        # if specific_layout is not None:
+        #     layout_type_name = __builtins__.type(specific_layout).__name__
+        #     layout_id = id(specific_layout)
+        # logger.log(f"Targeting layout for {target_type}: {layout_type_name} - ID: {layout_id}", level="DEBUG") # 削除
 
         if not self.fractal_controller or not algo_name or algo_name == "N/A":
             if specific_group: specific_group.setVisible(False)
@@ -626,10 +626,10 @@ class ParameterPanel(QScrollArea):
                 if 'tooltip' in p_def: widget.setToolTip(p_def['tooltip'])
                 if specific_layout:
                     specific_layout.addRow(QLabel(lbl_text + ":"), widget)
-                    logger.log(f"Added widget for '{p_def['name']}' (label: '{lbl_text}') to layout for {target_type}. Layout row count: {specific_layout.rowCount()}", level="DEBUG")
+                    # logger.log(f"Added widget for '{p_def['name']}' (label: '{lbl_text}') to layout for {target_type}. Layout row count: {specific_layout.rowCount()}", level="DEBUG") # 削除済
                 else:
-                    # このelseは、もしaddRowの前にspecific_layoutがNoneになるケースがあれば捕捉するためだが、通常は到達しない想定
-                    logger.log(f"ERROR: specific_layout is None when trying to add widget for '{p_def['name']}' ({target_type}) just after supposedly adding it.", level="ERROR")
+                    # logger.log(f"ERROR: specific_layout is None when trying to add widget for '{p_def['name']}' ({target_type}) just after supposedly adding it.", level="ERROR") # 削除
+                    pass # specific_layout is None, do nothing or handle error appropriately
                 widget.valueChanged.connect(partial(self._on_coloring_plugin_parameter_changed, param_name=name, target_type=target_type))
                 if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
                     widget.editingFinished.connect(partial(self._on_coloring_plugin_parameter_editing_finished, param_name=name, target_type=target_type))
