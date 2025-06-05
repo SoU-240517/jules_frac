@@ -550,15 +550,23 @@ class ParameterPanel(QScrollArea):
             plugin_widgets = self.coloring_plugin_widgets_divergent
             specific_group = self.coloring_plugin_specific_group_divergent
             specific_layout = self.coloring_plugin_specific_layout_divergent
+            if specific_layout is None:
+                logger.log(f"CRITICAL ERROR: self.coloring_plugin_specific_layout_divergent is None for target_type '{target_type}'", level="CRITICAL")
+                if specific_group: specific_group.setVisible(False)
+                return
         elif target_type == 'non_divergent':
             plugin_widgets = self.coloring_plugin_widgets_non_divergent
             specific_group = self.coloring_plugin_specific_group_non_divergent
             specific_layout = self.coloring_plugin_specific_layout_non_divergent
+            if specific_layout is None:
+                logger.log(f"CRITICAL ERROR: self.coloring_plugin_specific_layout_non_divergent is None for target_type '{target_type}'", level="CRITICAL")
+                if specific_group: specific_group.setVisible(False)
+                return
         else:
             logger.log(f"Error: Invalid target_type '{target_type}' in _update_coloring_plugin_specific_ui", level="ERROR")
             return
 
-        # specific_layout が割り当てられた後 (ログは前回削除済み)
+        # ログブロックは完全に削除されました
 
         if not self.fractal_controller or not algo_name or algo_name == "N/A":
             if specific_group: specific_group.setVisible(False)
@@ -626,10 +634,12 @@ class ParameterPanel(QScrollArea):
 
                 if specific_layout:
                     specific_layout.addRow(QLabel(lbl_text + ":"), widget)
-                    # ログ追加: addRow の直後
-                    logger.log(f"Added widget for '{name}' (label: '{lbl_text}') to layout for {target_type}. Layout row count: {specific_layout.rowCount()}", level="DEBUG")
+                    # ログブロックは完全に削除されました
                 else:
-                    logger.log(f"CRITICAL ERROR: specific_layout is None for {target_type} when trying to add widget for {name}.", level="CRITICAL")
+                    # ログブロックは完全に削除されました
+                    # logger.log(f"CRITICAL ERROR: specific_layout is None for {target_type} when trying to add widget for {name}.", level="CRITICAL") # 念のため残す場合
+                    pass # specific_layout が None の場合は何もしない (エラーは上でキャッチされるはず)
+
 
                 if plugin_widgets:
                     plugin_widgets[name] = widget
