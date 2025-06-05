@@ -559,10 +559,10 @@ class ParameterPanel(QScrollArea):
             return
 
         # specific_layout が割り当てられた後
-        layout_type_name = "NoneType"
-        layout_id = "N/A"
+        layout_type_name = "NoneType" # 初期化
+        layout_id = "N/A" # 初期化
         if specific_layout is not None:
-            layout_type_name = type(specific_layout).__name__
+            layout_type_name = __builtins__.type(specific_layout).__name__ # ここを修正
             layout_id = id(specific_layout)
         logger.log(f"Targeting layout for {target_type}: {layout_type_name} - ID: {layout_id}", level="DEBUG")
 
