@@ -101,7 +101,7 @@ class IterationSpeedColoringPlugin(ColoringAlgorithmPlugin):
         width_param = common_fractal_params.get('width')
 
         if iterations is None:
-            logger.log("apply_coloring: 'iterations' data not found in fractal_data.", level="ERROR")
+            logger.log("fractal_data に 'iterations' データが見つかりません。", level="ERROR")
             h = height_param if height_param is not None else 100 # Default height
             w = width_param if width_param is not None else 100   # Default width
             return np.zeros((h, w, 4), dtype=np.uint8)
@@ -111,8 +111,8 @@ class IterationSpeedColoringPlugin(ColoringAlgorithmPlugin):
         if height_param is not None and width_param is not None:
             if (height_param, width_param) != (height, width):
                 logger.log(
-                    f"apply_coloring: Shape mismatch. common_fractal_params: ({height_param},{width_param}), "
-                    f"iterations.shape: ({height},{width}). Using shape from iterations array.",
+                    f"形状が一致しません。 common_fractal_params: ({height_param},{width_param}), "
+                    f"iterations.shape: ({height},{width}). 反復配列からの形状を使用します。",
                     level="WARNING"
                 )
         # Else, if params are None, shape from iterations is already set.

@@ -152,7 +152,7 @@ class PluginManager:
         if plugin:
             try:
                 params = plugin.get_parameters_definition()
-                logger.log(f"プラグインが見つかりました '{plugin.name}' for target '{getattr(plugin, 'target_type', 'N/A')}'", level="DEBUG")
+                logger.log(f"'{getattr(plugin, 'target_type', 'N/A')}'用プラグインあり: '{plugin.name}'", level="DEBUG")
             except Exception as e:
                 logger.log(f"Error getting params for '{plugin.name}': {e}", level="ERROR")
         else:

@@ -28,7 +28,7 @@ class FractalRenderer(QRunnable):
 
     def run(self):
         self.signals.rendering_started.emit()
-        self.logger.log("FractalRenderer: Rendering started.", level="DEBUG")
+        self.logger.log("レンダリング開始", level="DEBUG")
 
         try:
             self.fractal_engine.image_width_px = self.image_width_px
@@ -97,15 +97,15 @@ class FractalRenderer(QRunnable):
                 colored_image_non_divergent
             )
 
-            self.logger.log(f"FractalRenderer: Rendering finished. Compute: {compute_time_ms:.1f}ms, Color: {coloring_time_ms:.1f}ms", level="INFO")
+            self.logger.log(f"レンダリング完了。計算時間: {compute_time_ms:.1f}ms, 着色時間: {coloring_time_ms:.1f}ms", level="INFO")
             try:
                 self.signals.rendering_finished.emit(final_image.astype(np.uint8), compute_time_ms, coloring_time_ms)
             except RuntimeError as e_emit_finished:
-                self.logger.log(f"FractalRenderer: Error emitting rendering_finished: {e_emit_finished}", level="ERROR")
+                self.logger.log(f"レンダリング完了の発行中にエラーが発生しました: {e_emit_finished}", level="ERROR")
 
         except Exception as e_outer:
-            self.logger.log(f"FractalRenderer: Error during rendering: {e_outer}", level="ERROR", exc_info=True)
+            self.logger.log(f"レンダリング中にエラーが発生しました: {e_outer}", level="ERROR", exc_info=True)
             try:
                 self.signals.rendering_failed.emit(f"レンダリング中にエラーが発生しました: {e_outer}")
             except RuntimeError as e_emit_failed_outer:
-                self.logger.log(f"FractalRenderer: Error emitting rendering_failed: {e_emit_failed_outer}", level="ERROR")
+                self.logger.log(f"レンダリング失敗の発行中にエラーが発生しました: {e_emit_failed_outer}", level="ERROR")

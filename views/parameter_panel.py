@@ -540,7 +540,7 @@ class ParameterPanel(QScrollArea):
         """
         self._clear_coloring_plugin_specific_ui(target_type) # Clear the specific UI first
 
-        logger.log(f"ParameterPanel._update_coloring_plugin_specific_ui for algo: '{algo_name}', target: '{target_type}'", level="DEBUG")
+#        logger.log(f"ParameterPanel._update_coloring_plugin_specific_ui for algo: '{algo_name}', target: '{target_type}'", level="DEBUG")
 
         plugin_widgets = None
         specific_group = None
@@ -578,7 +578,7 @@ class ParameterPanel(QScrollArea):
 
         if not param_defs:
             if specific_group: specific_group.setVisible(False)
-            logger.log(f"No param_defs found for '{algo_name}' ({target_type}). Hiding specific group.", level="DEBUG")
+            logger.log(f"'{algo_name}' ({target_type}) の param_defs が見つかりません。特定のグループを非表示にしています。", level="DEBUG")
             return
 
         if specific_group:
@@ -1083,18 +1083,18 @@ class ParameterPanel(QScrollArea):
         レンダリング状態が変更されたときに呼び出されるスロット。
         フラクタルタイプ選択コンボボックスの有効/無効を切り替えます。
         """
-        logger.log(f"ParameterPanel._on_rendering_state_changed: Received is_rendering = {is_rendering}", level="DEBUG")
+        logger.log(f"受信 is_rendering = {is_rendering}", level="DEBUG")
 
         def _update_ui():
             if hasattr(self, 'fractal_combo'):
-                logger.log(f"ParameterPanel._on_rendering_state_changed (_update_ui): Setting fractal_combo.setEnabled({not is_rendering}) (before). Current state: {self.fractal_combo.isEnabled()}", level="DEBUG")
+                logger.log(f"fractal_combo.setEnabled の設定({not is_rendering}) (before). Current state: {self.fractal_combo.isEnabled()}", level="DEBUG")
                 self.fractal_combo.setEnabled(not is_rendering)
-                logger.log(f"ParameterPanel._on_rendering_state_changed (_update_ui): fractal_combo.isEnabled() is now {self.fractal_combo.isEnabled()} (after).", level="DEBUG")
+                logger.log(f"fractal_combo.isEnabled() is now {self.fractal_combo.isEnabled()} (after).", level="DEBUG")
             else:
-                logger.log("ParameterPanel._on_rendering_state_changed (_update_ui): self.fractal_combo does not exist.", level="WARNING")
+                logger.log("self.fractal_combo は存在しません。", level="WARNING")
 
         QTimer.singleShot(0, _update_ui)
-        logger.log(f"ParameterPanel._on_rendering_state_changed: Scheduled _update_ui with QTimer.singleShot", level="DEBUG")
+        logger.log("_update_ui を QTimer.singleShot でスケジュールしました。", level="DEBUG")
 
     def eventFilter(self, obj, event):
         """
@@ -1104,7 +1104,7 @@ class ParameterPanel(QScrollArea):
         if isinstance(obj, (QSpinBox, QDoubleSpinBox)):
             if event.type() == QEvent.Type.FocusIn:
                 self._focused_value_store[obj] = obj.value()
-                logger.log(f"ParameterPanel.eventFilter: FocusIn on {obj.objectName()}. Stored value: {obj.value()}", level="DEBUG")
+                logger.log(f"FocusIn on {obj.objectName()}. Stored value: {obj.value()}", level="DEBUG")
             # FocusOut時の値クリアはeditingFinished内で行うのでここでは不要
         return super().eventFilter(obj, event)
 
@@ -1121,7 +1121,7 @@ class ParameterPanel(QScrollArea):
         """
         if preset_name == "カスタム" or not self.fractal_controller: return
 
-        logger.log(f"Applying preset '{preset_name}' for plugin '{plugin_name}' on target '{target_type}'", level="DEBUG")
+        logger.log(f"プリセット '{preset_name}' をプラグイン '{plugin_name}' に適用中 (ターゲット: '{target_type}')", level="DEBUG")
 
         plugin_widgets_dict = self.coloring_plugin_widgets_divergent if target_type == 'divergent' else self.coloring_plugin_widgets_non_divergent
         algo_combo = self.coloring_algorithm_combo_divergent if target_type == 'divergent' else self.coloring_algorithm_combo_non_divergent
@@ -1132,7 +1132,7 @@ class ParameterPanel(QScrollArea):
             # This is a sanity check.
             current_ui_algo_name = algo_combo.currentText()
             if current_ui_algo_name != plugin_name:
-                logger.log(f"Preset selection for plugin '{plugin_name}' but UI shows '{current_ui_algo_name}' for {target_type}. Aborting preset application.", level="WARNING")
+                logger.log(f"プラグイン '{plugin_name}' のプリセット選択ですが、UI は {target_type} 用に '{current_ui_algo_name}' を表示しています。プリセットの適用を中止します。", level="WARNING")
                 return
 
             all_params_set_for_preset = True
