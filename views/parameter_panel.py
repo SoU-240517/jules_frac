@@ -528,8 +528,18 @@ class ParameterPanel(QScrollArea):
             item = specific_layout.takeAt(0)
             if item.widget(): item.widget().deleteLater()
 
-    @pyqtSlot(str, str)
+    @pyqtSlot(str, str) # Added target_type to slot signature, assuming it's passed by caller
     def _update_coloring_plugin_specific_ui(self, algo_name: str, target_type: str):
+        """
+        指定されたカラーリングアルゴリズムの固有パラメータUIを構築・更新します。
+        コントローラーからパラメータ定義、プリセット、現在の値を取得してUIに反映します。
+
+        Args:
+            algo_name (str): UIを更新する対象のカラーリングアルゴリズムの名前。
+            target_type (str): 対象タイプ ('divergent' or 'non_divergent').
+        """
+        self._clear_coloring_plugin_specific_ui(target_type) # Clear the specific UI first
+
         logger.log(f"ParameterPanel._update_coloring_plugin_specific_ui for algo: '{algo_name}', target: '{target_type}'", level="DEBUG")
 
         plugin_widgets = None
@@ -537,109 +547,107 @@ class ParameterPanel(QScrollArea):
         specific_layout = None
 
         if target_type == 'divergent':
-            self._clear_coloring_plugin_specific_ui(target_type)
             plugin_widgets = self.coloring_plugin_widgets_divergent
             specific_group = self.coloring_plugin_specific_group_divergent
             specific_layout = self.coloring_plugin_specific_layout_divergent
+            if specific_layout is None:
+                logger.log(f"CRITICAL ERROR: self.coloring_plugin_specific_layout_divergent is None for target_type '{target_type}'", level="CRITICAL")
+                if specific_group: specific_group.setVisible(False)
+                return
         elif target_type == 'non_divergent':
-            self._clear_coloring_plugin_specific_ui(target_type)
             plugin_widgets = self.coloring_plugin_widgets_non_divergent
             specific_group = self.coloring_plugin_specific_group_non_divergent
             specific_layout = self.coloring_plugin_specific_layout_non_divergent
+            if specific_layout is None:
+                logger.log(f"CRITICAL ERROR: self.coloring_plugin_specific_layout_non_divergent is None for target_type '{target_type}'", level="CRITICAL")
+                if specific_group: specific_group.setVisible(False)
+                return
         else:
             logger.log(f"Error: Invalid target_type '{target_type}' in _update_coloring_plugin_specific_ui", level="ERROR")
-            if hasattr(self, 'coloring_plugin_specific_group_divergent'): # 安全策
-                self.coloring_plugin_specific_group_divergent.setVisible(False)
-            if hasattr(self, 'coloring_plugin_specific_group_non_divergent'): # 安全策
-                self.coloring_plugin_specific_group_non_divergent.setVisible(False)
             return
 
-        if plugin_widgets is None or specific_layout is None or specific_group is None:
-            logger.log(f"CRITICAL: UI elements for {target_type} (widgets, layout, or group) are not initialized properly.", level="CRITICAL")
-            return
+        # ログブロックは完全に削除されました
 
         if not self.fractal_controller or not algo_name or algo_name == "N/A":
-            specific_group.setVisible(False)
-            logger.log(f"No algo_name ('{algo_name}') or controller. Hiding specific group for {target_type}.", level="DEBUG")
+            if specific_group: specific_group.setVisible(False)
+            logger.log(f"No controller, algo_name, or algo_name is N/A. Hiding specific group for {target_type}.", level="DEBUG")
             return
 
         param_defs = self.fractal_controller.get_coloring_plugin_parameter_definitions_from_engine(algo_name, target_type=target_type)
-        logger.log(f"param_defs for '{algo_name}' ({target_type}): {param_defs}", level="DEBUG")
+        logger.log(f"param_defs for '{algo_name}' ({target_type}): {param_defs}", level="DEBUG") # Log param_defs content
 
         if not param_defs:
-            specific_group.setVisible(False)
+            if specific_group: specific_group.setVisible(False)
             logger.log(f"No param_defs found for '{algo_name}' ({target_type}). Hiding specific group.", level="DEBUG")
             return
 
-        specific_group.setVisible(True)
-        target_display_name = "発散部" if target_type == 'divergent' else "非発散部"
-        specific_group.setTitle(f"{algo_name} ({target_display_name}) 固有設定")
-        logger.log(f"Specific group for {target_type} set to visible for algo '{algo_name}'.", level="DEBUG")
+        if specific_group:
+            specific_group.setVisible(True)
+            logger.log(f"Specific group for {target_type} set to visible for algo '{algo_name}'.", level="DEBUG")
 
+        target_display_name = "発散部" if target_type == 'divergent' else "非発散部"
+        if specific_group: specific_group.setTitle(f"{algo_name} ({target_display_name}) 固有設定")
         current_vals = self.fractal_controller.get_current_coloring_plugin_parameters_from_engine(target_type=target_type)
         logger.log(f"Current values for {target_type} specific params: {current_vals}", level="DEBUG")
 
         presets = self.fractal_controller.get_plugin_presets(algo_name, target_type=target_type)
         if presets:
+            logger.log(f"Presets found for '{algo_name}' ({target_type}): {list(presets.keys())}", level="DEBUG")
             preset_combo = QComboBox()
             preset_combo.addItem("カスタム")
-            for preset_name_key in presets.keys():
-                preset_combo.addItem(preset_name_key)
+            for preset_name in presets.keys(): preset_combo.addItem(preset_name)
             preset_combo.currentTextChanged.connect(
                 partial(self._on_coloring_preset_selected, plugin_name=algo_name, presets_data=presets.copy(), target_type=target_type)
             )
-            specific_layout.addRow(QLabel("プリセット:"), preset_combo)
-            plugin_widgets['_coloring_preset_combo'] = preset_combo
-            logger.log(f"Presets combo added for '{algo_name}' ({target_type}). Layout row count: {specific_layout.rowCount()}", level="DEBUG")
+            if specific_layout: specific_layout.addRow(QLabel("プリセット:"), preset_combo)
+            if plugin_widgets: plugin_widgets['_coloring_preset_combo'] = preset_combo
         else:
             logger.log(f"No presets found for '{algo_name}' ({target_type}).", level="DEBUG")
 
-        logger.log(f"Looping through param_defs for '{algo_name}' ({target_type}). Number of defs: {len(param_defs)}", level="DEBUG")
+        logger.log(f"Looping through param_defs for '{algo_name}' ({target_type}). Number of defs: {len(param_defs) if param_defs else 0}", level="DEBUG")
         for p_def in param_defs:
-            name = p_def['name']
+            name = p_def['name'] # name を先に取得
             lbl_text = p_def.get('label', name)
             p_type = p_def.get('type', 'float')
             default_val = p_def.get('default')
-
-            current_val = default_val
-            if current_vals: # current_vals が None でないことを確認
-                current_val = current_vals.get(name, default_val)
-
-            final_val_for_widget = current_val
-
+            current_val = current_vals.get(name, default_val)
             widget = None
+
+            logger.log(f"Processing p_def: name='{name}', type='{p_type}', label='{lbl_text}', default='{default_val}', current_val_from_engine='{current_vals.get(name)}', final_val_for_widget='{current_val}'", level="DEBUG")
+
             if p_type == 'float':
                 widget = QDoubleSpinBox()
-                widget.setRange(p_def.get('range', (-1e9, 1e9))[0], p_def.get('range', (-1e9, 1e9))[1])
-                widget.setSingleStep(p_def.get('step', 0.01))
-                widget.setDecimals(p_def.get('decimals', 3))
+                widget.setRange(p_def.get('range',(-1e9,1e9))[0], p_def.get('range',(-1e9,1e9))[1])
+                # setValue と setSingleStep/setDecimals の順序をプラグイン固有UIと合わせる
+                widget.setDecimals(p_def.get('decimals',3))
+                widget.setSingleStep(p_def.get('step',0.01))
                 widget.setValue(current_val if current_val is not None else 0.0)
-                final_val_for_widget = widget.value()
-                logger.log(f"Created QDoubleSpinBox for '{name}' with value {final_val_for_widget}", level="DEBUG")
+                logger.log(f"Created QDoubleSpinBox for '{name}' with value {widget.value()}", level="DEBUG")
             elif p_type == 'int':
                 widget = QSpinBox()
-                widget.setRange(p_def.get('range', (-2**31, 2**31 - 1))[0], p_def.get('range', (-2**31, 2**31 - 1))[1])
-                widget.setSingleStep(p_def.get('step', 1))
+                widget.setRange(p_def.get('range',(-2**31,2**31-1))[0], p_def.get('range',(-2**31,2**31-1))[1])
+                widget.setSingleStep(p_def.get('step',1))
                 widget.setValue(current_val if current_val is not None else 0)
-                final_val_for_widget = widget.value()
-                logger.log(f"Created QSpinBox for '{name}' with value {final_val_for_widget}", level="DEBUG")
-
-            logger.log(f"Processing p_def: name='{name}', type='{p_type}', label='{lbl_text}', default='{default_val}', current_val_from_engine='{current_vals.get(name, 'N/A') if current_vals else 'N/A'}', final_val_for_widget='{final_val_for_widget}'", level="DEBUG")
+                logger.log(f"Created QSpinBox for '{name}' with value {widget.value()}", level="DEBUG")
 
             if widget:
                 if 'tooltip' in p_def:
                     widget.setToolTip(p_def['tooltip'])
 
-                specific_layout.addRow(QLabel(lbl_text + ":"), widget)
-                logger.log(f"Added widget for '{name}' (label: '{lbl_text}') to layout for {target_type}. Layout row count: {specific_layout.rowCount()}", level="DEBUG")
+                if specific_layout is not None:
+                    specific_layout.addRow(QLabel(lbl_text + ":"), widget)
+                # else: # specific_layout is None の場合のログは削除
+                    # logger.log(f"CRITICAL ERROR: specific_layout is None for {target_type} when trying to add widget for {name}.", level="CRITICAL")
 
-                plugin_widgets[name] = widget
-                logger.log(f"Registered widget for '{name}' in {target_type}_plugin_widgets. Current dict keys: {list(plugin_widgets.keys())}", level="DEBUG")
+                if plugin_widgets:
+                    plugin_widgets[name] = widget
 
+                # シグナル接続
                 if isinstance(widget, (QDoubleSpinBox, QSpinBox)):
                     widget.valueChanged.connect(partial(self._on_coloring_plugin_parameter_changed, param_name=name, target_type=target_type))
                     widget.editingFinished.connect(partial(self._on_coloring_plugin_parameter_editing_finished, param_name=name, target_type=target_type))
                     widget.installEventFilter(self)
+                # `if plugin_widgets: plugin_widgets[name] = widget` の重複行を削除 (既に上で登録済み)
             else:
                 logger.log(f"Warning: Widget not created for param '{name}' of type '{p_type}' for algo '{algo_name}' ({target_type}).", level="WARNING")
 
