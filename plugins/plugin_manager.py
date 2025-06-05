@@ -67,7 +67,7 @@ class PluginManager:
         """
         # target_dict.clear() # 呼び出し側 (load_all_plugins) でクリアするよう変更
 
-        logger.log(f"{plugin_type_name} プラグインを '{folder_path}' から読込中...", level="INFO")
+        logger.log(f"{plugin_type_name} プラグインを読込中...", level="INFO")
 
         if not folder_path.is_dir():
             logger.log(f"{plugin_type_name} プラグインフォルダが見つかりません: {folder_path}", level="ERROR")
@@ -109,7 +109,7 @@ class PluginManager:
                                           f"{file_path.name} を無視し、既存のものを使用します。", level="WARNING")
                                 else:
                                     target_dict[plugin_instance.name] = plugin_instance
-                                    logger.log(f"'{plugin_instance.name}' を読込完了", level="INFO")
+                                    logger.log(f"'{plugin_instance.name}' を読込完了", level="DEBUG")
                             except Exception as e:
                                 logger.log(f"{file_path.name} から {plugin_type_name} プラグイン '{member_name}' のインスタンス化に失敗: {e}", level="ERROR")
                 except Exception as e:
@@ -152,11 +152,11 @@ class PluginManager:
         if plugin:
             try:
                 params = plugin.get_parameters_definition()
-                logger.log(f"PluginManager.get_coloring_plugin: Found plugin '{plugin.name}' for target '{getattr(plugin, 'target_type', 'N/A')}'. Params: {params}", level="DEBUG")
+                logger.log(f"プラグインが見つかりました '{plugin.name}' for target '{getattr(plugin, 'target_type', 'N/A')}'", level="DEBUG")
             except Exception as e:
-                logger.log(f"PluginManager.get_coloring_plugin: Error getting params for '{plugin.name}': {e}", level="ERROR")
+                logger.log(f"Error getting params for '{plugin.name}': {e}", level="ERROR")
         else:
-            logger.log(f"PluginManager.get_coloring_plugin: No plugin found for name '{name}' and target '{target_type}'.", level="WARNING")
+            logger.log(f"No plugin found for name '{name}' and target '{target_type}'.", level="WARNING")
         return plugin
 
     def reload_all_plugins(self):

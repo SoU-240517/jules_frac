@@ -259,14 +259,14 @@ class FractalEngine:
             self.current_coloring_plugin_parameters_divergent.clear()
             for p_def in plugin.get_parameters_definition():
                 self.current_coloring_plugin_parameters_divergent[p_def['name']] = p_def['default']
-            logger.log(f"発散部用アクティブカラーリングプラグインを '{plugin_name}' に設定しました。", level="INFO")
+            logger.log(f"発散部用カラーリングプラグインを '{plugin_name}' に設定", level="INFO")
             return True
         elif target_type == 'non_divergent':
             self.current_coloring_plugin_non_divergent = plugin
             self.current_coloring_plugin_parameters_non_divergent.clear()
             for p_def in plugin.get_parameters_definition():
                 self.current_coloring_plugin_parameters_non_divergent[p_def['name']] = p_def['default']
-            logger.log(f"非発散部用アクティブカラーリングプラグインを '{plugin_name}' に設定しました。", level="INFO")
+            logger.log(f"非発散部用カラーリングプラグインを '{plugin_name}' に設定", level="INFO")
             return True
         else:
             logger.log(f"set_active_coloring_plugin のための無効なターゲットタイプ '{target_type}'", level="WARNING")

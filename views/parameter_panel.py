@@ -452,7 +452,7 @@ class ParameterPanel(QScrollArea):
              logger.log(f"Error: Combo box not found for target_type '{target_type}'", level="ERROR")
              return
 
-        logger.log(f"ParameterPanel._populate_coloring_algorithm_combo: Populating for target_type = {target_type}", level="DEBUG")
+#        logger.log(f"target_type の入力 = {target_type}", level="DEBUG")
 
         algo_names = self.fractal_controller.get_available_coloring_plugin_names_from_engine(target_type=target_type)
         active_algo = self.fractal_controller.get_active_coloring_plugin_name_from_engine(target_type=target_type)
