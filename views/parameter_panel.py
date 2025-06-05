@@ -558,10 +558,13 @@ class ParameterPanel(QScrollArea):
             logger.log(f"Error: Invalid target_type '{target_type}' in _update_coloring_plugin_specific_ui", level="ERROR")
             return
 
+        # specific_layout が割り当てられた後
+        layout_type_name = "NoneType"
+        layout_id = "N/A"
         if specific_layout is not None:
-            logger.log(f"Targeting layout for {target_type}: {type(specific_layout).__name__} - ID: {id(specific_layout)}", level="DEBUG")
-        else:
-            logger.log(f"Targeting layout for {target_type}: specific_layout is None", level="WARNING")
+            layout_type_name = type(specific_layout).__name__
+            layout_id = id(specific_layout)
+        logger.log(f"Targeting layout for {target_type}: {layout_type_name} - ID: {layout_id}", level="DEBUG")
 
         if not self.fractal_controller or not algo_name or algo_name == "N/A":
             if specific_group: specific_group.setVisible(False)
