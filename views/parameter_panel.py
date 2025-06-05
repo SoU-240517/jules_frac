@@ -608,7 +608,7 @@ class ParameterPanel(QScrollArea):
         for p_def in param_defs:
             name = p_def['name'] # name を先に取得
             lbl_text = p_def.get('label', name)
-            p_type = p_def.get('type', 'float') # p_type に変更 (ローカル変数 type との衝突回避)
+            p_type = p_def.get('type', 'float')
             default_val = p_def.get('default')
             current_val = current_vals.get(name, default_val)
             widget = None
@@ -618,40 +618,43 @@ class ParameterPanel(QScrollArea):
             if p_type == 'float':
                 widget = QDoubleSpinBox()
                 widget.setRange(p_def.get('range',(-1e9,1e9))[0], p_def.get('range',(-1e9,1e9))[1])
-                widget.setValue(current_val if current_val is not None else 0.0)
-                widget.setSingleStep(p_def.get('step',0.01))
+                # setValue と setSingleStep/setDecimals の順序をプラグイン固有UIと合わせる
                 widget.setDecimals(p_def.get('decimals',3))
+                widget.setSingleStep(p_def.get('step',0.01))
+                widget.setValue(current_val if current_val is not None else 0.0)
                 logger.log(f"Created QDoubleSpinBox for '{name}' with value {widget.value()}", level="DEBUG")
             elif p_type == 'int':
                 widget = QSpinBox()
                 widget.setRange(p_def.get('range',(-2**31,2**31-1))[0], p_def.get('range',(-2**31,2**31-1))[1])
-                widget.setValue(current_val if current_val is not None else 0)
                 widget.setSingleStep(p_def.get('step',1))
+                widget.setValue(current_val if current_val is not None else 0)
                 logger.log(f"Created QSpinBox for '{name}' with value {widget.value()}", level="DEBUG")
 
             if widget:
-                if 'tooltip' in p_def: widget.setToolTip(p_def['tooltip'])
+                if 'tooltip' in p_def:
+                    widget.setToolTip(p_def['tooltip'])
 
-                if specific_layout:
+                # specific_layout はこの関数の冒頭で target_type に応じて割り当て済みのはず
+                # また、_init_ui で QFormLayout として初期化済みのはず
+                if specific_layout is not None:
                     specific_layout.addRow(QLabel(lbl_text + ":"), widget)
-                    # ログブロックは完全に削除されました
+                    # ログはaddRowの直後に追加 (以前のデバッグログを復活させる)
+                    logger.log(f"Added widget for '{name}' (label: '{lbl_text}') to layout for {target_type}. Layout row count: {specific_layout.rowCount()}", level="DEBUG")
                 else:
-                    # ログブロックは完全に削除されました
-                    # logger.log(f"CRITICAL ERROR: specific_layout is None for {target_type} when trying to add widget for {name}.", level="CRITICAL") # 念のため残す場合
-                    pass # specific_layout が None の場合は何もしない (エラーは上でキャッチされるはず)
-
+                    # このエラーログはCRITICALであり、もし発生すれば大きな問題
+                    logger.log(f"CRITICAL ERROR: specific_layout is None for {target_type} when trying to add widget for {name}.", level="CRITICAL")
 
                 if plugin_widgets:
                     plugin_widgets[name] = widget
 
                 # シグナル接続
-                if isinstance(widget, (QSpinBox, QDoubleSpinBox)): # このチェックは widget が None でないことを前提とする
+                if isinstance(widget, (QDoubleSpinBox, QSpinBox)):
                     widget.valueChanged.connect(partial(self._on_coloring_plugin_parameter_changed, param_name=name, target_type=target_type))
                     widget.editingFinished.connect(partial(self._on_coloring_plugin_parameter_editing_finished, param_name=name, target_type=target_type))
-                widget.installEventFilter(self)
-                if plugin_widgets: plugin_widgets[name] = widget
+                    widget.installEventFilter(self)
+                # `if plugin_widgets: plugin_widgets[name] = widget` の重複行を削除 (既に上で登録済み)
             else:
-                logger.log(f"Widget not created for p_def: {p_def}", level="WARNING")
+                logger.log(f"Warning: Widget not created for param '{name}' of type '{p_type}' for algo '{algo_name}' ({target_type}).", level="WARNING")
 
     def _on_coloring_plugin_parameter_changed(self, value, param_name: str, target_type: str):
         """
