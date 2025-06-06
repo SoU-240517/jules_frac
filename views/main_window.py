@@ -109,10 +109,7 @@ class MainWindow(QMainWindow):
                 self.fractal_controller.active_fractal_plugin_ui_needs_update.connect(
                     self.parameter_panel._update_fractal_plugin_specific_ui) # 正しいスロットに接続
 
-            if hasattr(self.fractal_controller, 'active_coloring_plugin_ui_needs_update') and \
-               hasattr(self.parameter_panel, '_update_coloring_plugin_specific_ui'):
-                self.fractal_controller.active_coloring_plugin_ui_needs_update.connect(
-                    self.parameter_panel._update_coloring_plugin_specific_ui)
+            # 以下の active_coloring_plugin_ui_needs_update 接続ブロックは削除されました。
 
             if hasattr(self.fractal_controller, 'active_color_map_changed_externally') and \
                hasattr(self.parameter_panel, '_update_color_selection_from_controller'):
@@ -156,7 +153,7 @@ class MainWindow(QMainWindow):
         コントローラーからレンダリングタスク開始のシグナルを受信したときに呼び出されます。
         ステータスバーのアニメーションを開始します。
         """
-        self.logger.log("MainWindow: Received rendering_task_started. Starting animation.", level="DEBUG")
+        self.logger.log("レンダリングタスクが開始されました。アニメーションを開始します。", level="DEBUG")
         self.status_bar_animator.start_animation()
 
     def update_status_bar(self, message: str):
@@ -168,7 +165,7 @@ class MainWindow(QMainWindow):
             message (str): ステータスバーに表示する新しいメッセージ。
         """
         if self.status_bar_animator and self.status_bar_animator.is_running:
-            self.logger.log(f"MainWindow: update_status_bar called with message '{message}'. Stopping animation.", level="DEBUG")
+            self.logger.log(f"update_status_bar がメッセージとともに呼び出されました '{message}'. アニメーションを停止します。", level="DEBUG")
             self.status_bar_animator.stop_animation(final_message=message)
             return # アニメーターがメッセージを設定します
         if self.status_bar: self.status_bar.showMessage(message)
@@ -380,7 +377,7 @@ class MainWindow(QMainWindow):
             return
 
         if not self.fractal_controller:
-            logger.log("初回描画に FractalController が利用できません。", level="ERROR")
+            logger.log("初回描画に FractalController を利用できません。", level="ERROR")
             return
 
         self._initial_render_attempts += 1

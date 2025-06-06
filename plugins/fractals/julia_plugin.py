@@ -5,8 +5,22 @@ from plugins.base_fractal_plugin import FractalPlugin
 from logger.custom_logger import CustomLogger # logger がプロジェクトルート/loggerにあると仮定
 
 logger = CustomLogger()
-@jit(nopython=True) # cache=True を削除しました
+@jit(nopython=True) # Numba JITコンパイラを適用します。
 def _calculate_julia_point_jit(z_real_start, z_imag_start, c_real_const, c_imag_const, max_iters, escape_radius_sq):
+    """
+    ジュリア集合の単一の点に対する計算をJITコンパイルで実行します。
+
+    Args:
+        z_real_start (float): 開始複素数zの実数部。
+        z_imag_start (float): 開始複素数zの虚数部。
+        c_real_const (float): 定数複素数cの実数部。
+        c_imag_const (float): 定数複素数cの虚数部。
+        max_iters (int): 最大反復回数。
+        escape_radius_sq (float): 発散とみなすための半径の2乗。
+
+    Returns:
+        tuple[int, float, float]: (反復回数, 最後のzの実数部, 最後のzの虚数部)。
+    """
     z_real = z_real_start
     z_imag = z_imag_start
     for i in range(max_iters):
@@ -14,16 +28,34 @@ def _calculate_julia_point_jit(z_real_start, z_imag_start, c_real_const, c_imag_
         z_imag_sq = z_imag * z_imag
         mod_sq = z_real_sq + z_imag_sq
         if mod_sq > escape_radius_sq:
-            return i, z_real, z_imag # Return iterations, last z_real, last z_imag
+            return i, z_real, z_imag # 反復回数、最後のz_real、最後のz_imagを返す
 
         new_z_imag = 2.0 * z_real * z_imag + c_imag_const
         z_real = z_real_sq - z_imag_sq + c_real_const
         z_imag = new_z_imag
-    return max_iters, z_real, z_imag # Converged or reached max_iters
+    return max_iters, z_real, z_imag # 収束したか、最大反復回数に到達した
 
-@jit(nopython=True) # cache=True を削除しました
+@jit(nopython=True) # Numba JITコンパイラを適用します。
 def _compute_julia_grid_jit(width_px, height_px, min_x, max_x, min_y, max_y,
                             c_real_const, c_imag_const, max_iters, escape_radius_sq):
+    """
+    指定されたグリッドのジュリア集合をJITコンパイルで計算します。
+
+    Args:
+        width_px (int): 画像の幅（ピクセル）。
+        height_px (int): 画像の高さ（ピクセル）。
+        min_x (float): 複素平面のx軸の最小値 (z_real_startの範囲)。
+        max_x (float): 複素平面のx軸の最大値 (z_real_startの範囲)。
+        min_y (float): 複素平面のy軸の最小値 (z_imag_startの範囲)。
+        max_y (float): 複素平面のy軸の最大値 (z_imag_startの範囲)。
+        c_real_const (float): 定数複素数cの実数部。
+        c_imag_const (float): 定数複素数cの虚数部。
+        max_iters (int): 最大反復回数。
+        escape_radius_sq (float): 発散とみなすための半径の2乗。
+
+    Returns:
+        tuple[np.ndarray, np.ndarray, np.ndarray]: (反復回数の配列, 最後のzの実数部の配列, 最後のzの虚数部の配列)。
+    """
     iter_result = np.empty((height_px, width_px), dtype=np.int32)
     last_z_real_result = np.empty((height_px, width_px), dtype=np.float64)
     last_z_imag_result = np.empty((height_px, width_px), dtype=np.float64)
@@ -47,11 +79,14 @@ def _compute_julia_grid_jit(width_px, height_px, min_x, max_x, min_y, max_y,
 
 
 class JuliaPlugin(FractalPlugin):
+    """ジュリア集合を計算するためのフラクタルプラグイン。"""
     @property
     def name(self) -> str:
+        """プラグインの名前を返します。"""
         return "Julia"
 
     def get_parameters_definition(self) -> list:
+        """このフラクタルに固有のパラメータ定義を返します。"""
         return [
             {
                 'name': 'c_real',
@@ -78,6 +113,7 @@ class JuliaPlugin(FractalPlugin):
         ]
 
     def get_default_view_parameters(self) -> dict:
+        """デフォルトのビューパラメータを返します。"""
         return {
             'center_real': 0.0,
             'center_imag': 0.0,
@@ -86,6 +122,18 @@ class JuliaPlugin(FractalPlugin):
         }
 
     def compute_fractal(self, common_params: dict, plugin_params: dict, image_width_px: int, image_height_px: int) -> dict:
+        """
+        指定されたパラメータに基づいてジュリア集合を計算します。
+
+        Args:
+            common_params (dict): すべてのフラクタルに共通のパラメータ。
+            plugin_params (dict): このフラクタルに固有のパラメータ。
+            image_width_px (int): 生成する画像の幅（ピクセル）。
+            image_height_px (int): 生成する画像の高さ（ピクセル）。
+
+        Returns:
+            dict: 計算結果。'iterations', 'last_zn_values', 'last_z_modulus_sq', 'is_diverged' を含みます。
+        """
         center_real = common_params['center_real']
         center_imag = common_params['center_imag']
         width = common_params['width']
@@ -114,10 +162,19 @@ class JuliaPlugin(FractalPlugin):
             max_iterations, escape_radius_sq
         )
         last_zn_values_complex = last_z_real_array + 1j * last_z_imag_array
+        last_z_modulus_sq = np.abs(last_zn_values_complex)**2 # |Z|^2 を計算
+        is_diverged = iter_array < max_iterations
+
         logger.log(f"計算完了。反復回数配列形状: {iter_array.shape}, last_zn_values形状: {last_zn_values_complex.shape}", level="DEBUG")
-        return {'iterations': iter_array, 'last_zn_values': last_zn_values_complex}
+        return {
+            'iterations': iter_array,
+            'last_zn_values': last_zn_values_complex,
+            'last_z_modulus_sq': last_z_modulus_sq,
+            'is_diverged': is_diverged
+        }
 
     def get_presets(self) -> dict | None:
+        """利用可能なC定数のプリセットを返します。"""
         return {
             "クラシックビューティー": {"c_real": -0.745, "c_imag": 0.113},
             "ファイゲンバウム点": {"c_real": -1.401155, "c_imag": 0.0},
@@ -130,10 +187,10 @@ class JuliaPlugin(FractalPlugin):
 
 if __name__ == '__main__':
     plugin = JuliaPlugin()
-    logger.log(f"Plugin Name: {plugin.name}", level="INFO")
+    logger.log(f"プラグイン名: {plugin.name}", level="INFO")
     param_defs = plugin.get_parameters_definition()
-    logger.log(f"Parameter Definitions: {param_defs}", level="INFO")
-    logger.log(f"Default View Parameters: {plugin.get_default_view_parameters()}", level="INFO")
+    logger.log(f"パラメータ定義: {param_defs}", level="INFO")
+    logger.log(f"デフォルトビューパラメータ: {plugin.get_default_view_parameters()}", level="INFO")
 
     presets = plugin.get_presets()
     logger.log(f"利用可能なプリセット: {list(presets.keys()) if presets else 'なし'}", level="INFO")
@@ -176,11 +233,11 @@ if __name__ == '__main__':
             test_common_params['center_imag'] - test_common_params['height']/2,
             test_common_params['center_imag'] + test_common_params['height']/2
         ))
-        plt.colorbar(label="Iterations")
+        plt.colorbar(label="反復回数")
         c_text = f"C=({test_plugin_params.get('c_real',0):.3f} + {test_plugin_params.get('c_imag',0):.3f}i)"
-        plt.title(f"{plugin.name} Iterations Test ({img_width_test}x{img_height_test})\n{c_text}")
-        plt.xlabel("Real")
-        plt.ylabel("Imaginary")
+        plt.title(f"{plugin.name} 反復回数テスト ({img_width_test}x{img_height_test})\n{c_text}")
+        plt.xlabel("実数部")
+        plt.ylabel("虚数部")
         plt.show()
     except ImportError:
         logger.log("matplotlibが見つかりません。画像表示テストをスキップします。", level="INFO")
