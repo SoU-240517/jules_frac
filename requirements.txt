@@ -1,4 +1,6 @@
-PyQt6
-NumPy
-Numba
-Pillow
+matplotlib
+numba
+numpy
+Pillow==11.2.1
+PyQt6==6.9.1
+pyqt6_sip==13.10.2
