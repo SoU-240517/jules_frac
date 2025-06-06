@@ -18,7 +18,7 @@ class FractalEngine:
     高解像度画像の出力機能も提供します。
     """
     def __init__(self, project_root_path: Path, image_width_px=800, image_height_px=600,
-                 fractal_plugin_folder="plugins/fractals",  # project_root_pathからの相対パス
+                 settings_manager=None, fractal_plugin_folder="plugins/fractals",  # project_root_pathからの相対パス
                  coloring_plugin_folder="plugins/coloring", # 同上
                  color_pack_folder="plugins/colorpacks"):   # 同上
         """
@@ -26,12 +26,14 @@ class FractalEngine:
 
         Args:
             project_root_path (Path): プロジェクトのルートディレクトリへのパス。プラグインやカラーパックの読み込みに使用されます。
+            settings_manager (SettingsManager, optional): 設定管理クラスのインスタンス。
             image_width_px (int): プレビュー表示用のデフォルト画像幅 (ピクセル単位)。
             image_height_px (int): プレビュー表示用のデフォルト画像高さ (ピクセル単位)。
             fractal_plugin_folder (str): `project_root_path` からのフラクタルプラグインフォルダへの相対パス。
             coloring_plugin_folder (str): `project_root_path` からのカラーリングプラグインフォルダへの相対パス。
             color_pack_folder (str): `project_root_path` からのカラーパックフォルダへの相対パス。
         """
+        self.settings_manager = settings_manager
         self.max_iterations = 100
         self.center_real = -0.5
         self.center_imag = 0.0
@@ -69,6 +71,15 @@ class FractalEngine:
         self.last_fractal_data_cache: dict | None = None
 
         self._initialize_default_plugins_and_map()
+
+        if self.settings_manager:
+            engine_saved_settings = self.settings_manager.get_setting("engine_settings")
+            if engine_saved_settings and isinstance(engine_saved_settings, dict):
+                logger.log("保存されたエンジン設定をロードします。", level="INFO")
+                self.load_settings(engine_saved_settings)
+            else:
+                logger.log("保存されたエンジン設定が見つからないか、形式が不正です。デフォルト設定を使用します。", level="INFO")
+
 
     def _initialize_default_plugins_and_map(self):
         """
@@ -593,47 +604,6 @@ class FractalEngine:
         logger.log(f"高解像度画像が正常に生成されました ({output_width}x{output_height})。", level="INFO")
         return downsampled_image_rgba
 
-
-if __name__ == '__main__':
-    # テストには、CWDからの相対的なデフォルトの場所にプラグインとカラーパックが必要です
-    # 例: CWD = プロジェクトルートの場合、"src/app/plugins/fractals" のようなパスが有効です。
-    logger.log("FractalEngine (generate_image_for_output を含む) スタンドアロンテスト", level="INFO")
-    # スタンドアロンテストの場合、CWDがプロジェクトルートであると仮定します
-    test_project_root = Path.cwd()
-    logger.log(f"  テスト用のプロジェクトルート: {test_project_root}", level="INFO")
-    engine = FractalEngine(project_root_path=test_project_root, image_width_px=80, image_height_px=60) # 画面表示用の小さなデフォルト値
-
-    if not engine.get_active_fractal_plugin() or not engine.get_active_coloring_plugin():
-        logger.log("デフォルトプラグインが読み込まれていません。パスまたはプラグインの可用性を確認してください。テストを完全に続行できません。", level="WARNING")
-    else:
-        logger.log(f"アクティブなフラクタルプラグイン: {engine.get_active_fractal_plugin().name}", level="INFO")
-        logger.log(f"アクティブなカラーリングプラグイン: {engine.get_active_coloring_plugin().name}", level="INFO")
-        cp, cm = engine.get_current_color_map_selection()
-        logger.log(f"アクティブなカラーマップ: {cp} - {cm}", level="INFO")
-
-        output_params = {
-            'max_iterations': 200, # 出力用の反復回数を上書き
-            # 他の共通パラメータは、上書きされない限りエンジンの現在の状態を使用します
-        }
-
-        # 高解像度出力のテスト (例: Mandelbrot と Grayscale)
-        logger.log("\n160x120 画像を 2x2 SSAA で生成中...", level="INFO")
-        output_image = engine.generate_image_for_output(
-            output_width=160, output_height=120,
-            common_params_override=output_params,
-            # 現在のプラグインとそのパラメータ、および現在のカラーマップを使用
-            antialiasing_level="2x2 SSAA"
-        )
-        if output_image is not None:
-            logger.log(f"  出力画像が生成されました。形状: {output_image.shape}, Dtype: {output_image.dtype}", level="INFO")
-            assert output_image.shape == (120, 160, 4)
-            # import matplotlib.pyplot as plt # 必要に応じて視覚的な確認用
-            # plt.imshow(output_image); plt.show()
-        else:
-            logger.log("  高解像度画像の生成に失敗しました。", level="ERROR")
-
-    # TODO: Add save_settings and load_settings tests here once implemented
-
     # --- Save/Load Settings ---
     def save_settings(self) -> dict:
         """現在のエンジンの設定を辞書としてシリアライズします。"""
@@ -658,27 +628,30 @@ if __name__ == '__main__':
             "image_width_px": self.image_width_px,
             "image_height_px": self.image_height_px,
         }
-        logger.log("設定を保存しました。", level="DEBUG")
+        logger.log("エンジン設定をシリアライズしました。", level="DEBUG")
         return settings
 
     def load_settings(self, settings: dict):
         """辞書からエンジンの設定を復元します。"""
+        if not isinstance(settings, dict):
+            logger.log("load_settings: settings が辞書ではありません。ロードをスキップします。", level="WARNING")
+            return
         try:
             cp = settings.get("common_parameters")
-            if cp:
+            if cp and isinstance(cp, dict):
                 self.set_common_parameters(
-                    center_real=cp.get('center_real', -0.5),
-                    center_imag=cp.get('center_imag', 0.0),
-                    width=cp.get('width', 3.0),
-                    max_iterations=cp.get('max_iterations', 100),
-                    escape_radius=cp.get('escape_radius', 2.0)
+                    center_real=cp.get('center_real', self.center_real),
+                    center_imag=cp.get('center_imag', self.center_imag),
+                    width=cp.get('width', self.width),
+                    max_iterations=cp.get('max_iterations', self.max_iterations),
+                    escape_radius=cp.get('escape_radius', self.escape_radius)
                 )
 
             fp_name = settings.get("active_fractal_plugin_name")
             if fp_name:
                 if self.set_active_fractal_plugin(fp_name): # This also sets default plugin params
                     fp_params = settings.get("fractal_plugin_parameters")
-                    if fp_params: # Override defaults with saved params
+                    if fp_params and isinstance(fp_params, dict): # Override defaults with saved params
                         for name, value in fp_params.items():
                             self.set_fractal_plugin_parameter(name, value)
 
@@ -687,42 +660,95 @@ if __name__ == '__main__':
             if cpd_name:
                 if self.set_active_coloring_plugin(cpd_name, target_type='divergent'):
                     cpd_params = settings.get("coloring_plugin_divergent_params")
-                    if cpd_params:
+                    if cpd_params and isinstance(cpd_params, dict):
                         for name, value in cpd_params.items():
                              self.set_coloring_plugin_parameter(name, value, target_type='divergent')
 
             cpd_pack = settings.get("color_pack_divergent_name")
             cpd_map = settings.get("color_map_divergent_name")
             if cpd_pack and cpd_map:
-                self.set_active_color_map(cpd_pack, cpd_map, target_type='divergent')
+                # Make sure the pack and map exist before trying to set them
+                if cpd_pack in self.get_available_color_pack_names() and \
+                   cpd_map in self.get_available_color_map_names_in_pack(cpd_pack):
+                    self.set_active_color_map(cpd_pack, cpd_map, target_type='divergent')
+                else:
+                    logger.log(f"発散部: 保存されたカラーマップ {cpd_pack}/{cpd_map} が見つかりません。", level="WARNING")
 
             # Restore coloring settings for non-divergent
             cpnd_name = settings.get("coloring_plugin_non_divergent_name")
             if cpnd_name:
                 if self.set_active_coloring_plugin(cpnd_name, target_type='non_divergent'):
                     cpnd_params = settings.get("coloring_plugin_non_divergent_params")
-                    if cpnd_params:
+                    if cpnd_params and isinstance(cpnd_params, dict):
                         for name, value in cpnd_params.items():
                              self.set_coloring_plugin_parameter(name, value, target_type='non_divergent')
 
             cpnd_pack = settings.get("color_pack_non_divergent_name")
             cpnd_map = settings.get("color_map_non_divergent_name")
             if cpnd_pack and cpnd_map:
-                self.set_active_color_map(cpnd_pack, cpnd_map, target_type='non_divergent')
+                if cpnd_pack in self.get_available_color_pack_names() and \
+                   cpnd_map in self.get_available_color_map_names_in_pack(cpnd_pack):
+                    self.set_active_color_map(cpnd_pack, cpnd_map, target_type='non_divergent')
+                else:
+                    logger.log(f"非発散部: 保存されたカラーマップ {cpnd_pack}/{cpnd_map} が見つかりません。", level="WARNING")
 
             # Restore active target type AFTER specific types are loaded
-            self.active_coloring_target_type = settings.get("active_coloring_target_type", 'divergent')
+            self.active_coloring_target_type = settings.get("active_coloring_target_type", self.active_coloring_target_type)
 
             # Restore image size (optional, could be handled by UI)
-            self.image_width_px = settings.get("image_width_px", self.image_width_px)
-            self.image_height_px = settings.get("image_height_px", self.image_height_px)
+            # Ensure these are positive before setting
+            loaded_width = settings.get("image_width_px", self.image_width_px)
+            if loaded_width > 0: self.image_width_px = loaded_width
+            loaded_height = settings.get("image_height_px", self.image_height_px)
+            if loaded_height > 0: self.image_height_px = loaded_height
             self.update_aspect_ratio() # Ensure 'height' (complex plane) is updated
 
             self.last_fractal_data_cache = None # Invalidate cache
-            logger.log("設定をロードしました。", level="INFO")
+            logger.log("エンジン設定をロードしました。", level="INFO")
         except Exception as e:
-            logger.log(f"設定のロード中にエラーが発生しました: {e}", level="ERROR")
+            logger.log(f"エンジン設定のロード中にエラーが発生しました: {e}", level="ERROR")
             traceback.print_exc()
 
+if __name__ == '__main__':
+    # テストには、CWDからの相対的なデフォルトの場所にプラグインとカラーパックが必要です
+    # 例: CWD = プロジェクトルートの場合、"src/app/plugins/fractals" のようなパスが有効です。
+    logger.log("FractalEngine (generate_image_for_output を含む) スタンドアロンテスト", level="INFO")
+    # スタンドアロンテストの場合、CWDがプロジェクトルートであると仮定します
+    test_project_root = Path.cwd()
+    logger.log(f"  テスト用のプロジェクトルート: {test_project_root}", level="INFO")
+    engine = FractalEngine(project_root_path=test_project_root, image_width_px=80, image_height_px=60) # 画面表示用の小さなデフォルト値
+
+    if not engine.get_active_fractal_plugin() or not engine.get_active_coloring_plugin('divergent'): # Check for divergent
+        logger.log("デフォルトプラグインが読み込まれていません。パスまたはプラグインの可用性を確認してください。テストを完全に続行できません。", level="WARNING")
+    else:
+        logger.log(f"アクティブなフラクタルプラグイン: {engine.get_active_fractal_plugin().name}", level="INFO")
+        active_coloring_div = engine.get_active_coloring_plugin('divergent')
+        if active_coloring_div:
+            logger.log(f"アクティブな発散部カラーリングプラグイン: {active_coloring_div.name}", level="INFO")
+        cp_div, cm_div = engine.get_current_color_map_selection('divergent')
+        logger.log(f"アクティブな発散部カラーマップ: {cp_div} - {cm_div}", level="INFO")
+
+        output_params = {
+            'max_iterations': 200, # 出力用の反復回数を上書き
+            # 他の共通パラメータは、上書きされない限りエンジンの現在の状態を使用します
+        }
+
+        # 高解像度出力のテスト (例: Mandelbrot と Grayscale)
+        logger.log("\n160x120 画像を 2x2 SSAA で生成中...", level="INFO")
+        output_image = engine.generate_image_for_output(
+            output_width=160, output_height=120,
+            common_params_override=output_params,
+            # 現在のプラグインとそのパラメータ、および現在のカラーマップを使用
+            antialiasing_level="2x2 SSAA"
+        )
+        if output_image is not None:
+            logger.log(f"  出力画像が生成されました。形状: {output_image.shape}, Dtype: {output_image.dtype}", level="INFO")
+            assert output_image.shape == (120, 160, 4)
+            # import matplotlib.pyplot as plt # 必要に応じて視覚的な確認用
+            # plt.imshow(output_image); plt.show()
+        else:
+            logger.log("  高解像度画像の生成に失敗しました。", level="ERROR")
+
+    # TODO: Add save_settings and load_settings tests here once implemented
 
     logger.log("\nFractalEngine テストが完了しました。", level="INFO")

@@ -31,8 +31,9 @@ def _apply_iteration_speed_coloring_jit(
             if iters_val < 0:
                 diff = 0
             else:
-                # diffが正のmax_iterationsに基づいて計算されることを保証する
-                # max_iterationsは呼び出し元によって既に1以上であることが保証されている
+                # diff は max_iterations と iters_val の差。
+                # iters_val が小さい (max_iterations よりずっと小さい) ほど diff は大きくなる。
+                # iters_val が max_iterations に等しい場合、diff は 0 になる。
                 diff = max_iterations - iters_val
                 diff = max(0, min(diff, max_iterations))
 
@@ -40,6 +41,8 @@ def _apply_iteration_speed_coloring_jit(
                 # ゼロ除算を防ぐためにmax_iterationsがゼロでないことを保証する
                 # これは呼び出し元がmax_iterations >= 1と設定することで保証されるべき
                 gray_val = int(255 * (diff / max_iterations))
+                # diff が 0 (iters_val == max_iterations) の場合、gray_val は 0 (黒)。
+                # diff が max_iterations (iters_val == 0) の場合、gray_val は 255 (白)。
                 # Numbaは配列代入にリスト内包表記を直接使用するのが難しい
                 img_array_rgb[r_idx, c_idx, 0] = gray_val
                 img_array_rgb[r_idx, c_idx, 1] = gray_val
@@ -55,6 +58,8 @@ def _apply_iteration_speed_coloring_jit(
 
                     # Ensure max_iterations is not zero
                     color_idx = int((diff / max_iterations) * (num_colors - 1))
+                    # diff が 0 (iters_val == max_iterations) の場合、color_idx は 0 (カラーマップの最初の色)。
+                    # diff が max_iterations (iters_val == 0) の場合、color_idx は num_colors - 1 (カラーマップの最後の色)。
                     color_idx = max(0, min(color_idx, num_colors - 1))
 
                     img_array_rgb[r_idx, c_idx, 0] = color_map_array[color_idx, 0]
@@ -65,9 +70,29 @@ def _apply_iteration_speed_coloring_jit(
 
 class IterationSpeedColoringPlugin(ColoringAlgorithmPlugin):
     """
-    非発散領域（内部）の収束速度に基づいて色を付けるプラグイン。
-    max_iterations との差分 `diff` を計算し、`diff` が小さいほど収束が速い（内側）とみなし、
-    カラーマップの若いインデックスを割り当てる。
+    非発散領域（内部）の点の 'iterations' 値に基づいて色を付けるプラグイン。
+
+    動作原理:
+    1. 各点 (ピクセル) の反復計算回数 `iters_val` を取得します。
+    2. `max_iterations` (最大反復回数) と `iters_val` との差 `diff = max_iterations - iters_val` を計算します。
+       - `iters_val` が小さいほど (つまり、`max_iterations` に達するずっと前に計算が完了したと仮定できる場合)、
+         `diff` は大きくなります。
+       - `iters_val` が `max_iterations` に等しい場合 (多くのフラクタル計算で非発散領域の点がこの値を持ちます)、
+         `diff` は 0 になります。
+    3. `diff` の値を正規化 (`diff / max_iterations`) し、それに基づいて色を決定します。
+       - グレースケールの場合: `gray = 255 * (diff / max_iterations)`。`diff` が 0 なら黒、`max_iterations` なら白。
+       - カラーマップ使用の場合: `color_index = (diff / max_iterations) * (num_colors - 1)`。
+         `diff` が 0 ならカラーマップの最初の色、`max_iterations` なら最後の色。
+
+    注意点:
+    標準的なマンデルブロ集合やジュリア集合の計算では、非発散領域と判定された全ての点の `iters_val` は
+    `max_iterations` となることが一般的です。その結果、これらの点では `diff` が 0 となり、
+    このプラグインを使用すると非発散領域全体が単色（グレースケールでは黒、カラーマップ使用時は
+    カラーマップの最初の色）で塗りつぶされることになります。
+    非発散部で色のグラデーションを得るためには、`iters_val` が `max_iterations` 未満の値を持ちうるような
+    特殊なフラクタル計算アルゴリズムや、あるいは `iterations` 配列にそのような情報が格納されている場合に限られます。
+    一般的なケースで非発散部に豊かな色彩表現を求める場合は、`ComplexPotentialColoringPlugin` のような
+    他のアルゴリズムの利用を検討してください。
     """
 
     @property
