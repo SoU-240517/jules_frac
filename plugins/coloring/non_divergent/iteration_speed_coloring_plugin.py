@@ -111,8 +111,8 @@ class IterationSpeedColoringPlugin(ColoringAlgorithmPlugin):
         if height_param is not None and width_param is not None:
             if (height_param, width_param) != (height, width):
                 logger.log(
-                    f"形状が一致しません。 common_fractal_params: ({height_param},{width_param}), "
-                    f"iterations.shape: ({height},{width}). 反復配列からの形状を使用します。",
+                    f"形状が一致しません。common_fractal_params のピクセルサイズ: ({height_param}, {width_param}), "
+                    f"iterations 配列の形状: ({height}, {width})。反復配列からの形状を使用します。",
                     level="WARNING"
                 )
         # Else, if params are None, shape from iterations is already set.

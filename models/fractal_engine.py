@@ -402,37 +402,37 @@ class FractalEngine:
         plugin_params = self.get_coloring_plugin_parameters(target_type)
         pack_name, map_name = self.get_current_color_map_selection(target_type)
 
-        if not active_plugin or data_to_color is None:
+        if not active_plugin or not data_to_color:
             logger.log(f"apply_coloring ({target_type}) 中止: プラグイン ({active_plugin is not None}) またはデータ ({data_to_color is not None}) がありません。", level="WARNING")
             return None
 
-        color_map_list = []
-        if pack_name and map_name:
-            color_map_list = self.color_manager.get_color_map_data(pack_name, map_name)
-        if not color_map_list : color_map_list = [(i,i,i) for i in range(0,256,16)] # 単純なフォールバック
-
-        common_fp = self.get_common_parameters()
-        # Ensure image dimensions in common_fp match the data being colored
+        # 共通パラメータを構築
+        common_params = self.get_common_parameters()
+        # common_params の 'height' と 'width' を、これから処理する画像のピクセル寸法で上書きする
         iterations_array = data_to_color.get('iterations')
         if iterations_array is not None and iterations_array.ndim == 2:
-            common_fp['image_height_px'] = iterations_array.shape[0]
-            common_fp['image_width_px'] = iterations_array.shape[1]
-        else: # Fallback or if iterations is missing/malformed
-            common_fp['image_height_px'] = self.image_height_px
-            common_fp['image_width_px'] = self.image_width_px
+            height_px, width_px = iterations_array.shape
+            common_params['height'] = height_px
+            common_params['width'] = width_px
+        else:
             logger.log("apply_coloring: iterations_array が見つからないか、無効な形状です。デフォルトの画像サイズを使用します。", level="WARNING")
-
+            common_params['height'] = self.image_height_px
+            common_params['width'] = self.image_width_px
 
         try:
             return active_plugin.apply_coloring(
-                data_to_color, common_fp, plugin_params, color_map_list
+                fractal_data=data_to_color,
+                common_fractal_params=common_params,
+                algorithm_params=plugin_params,
+                color_map_data=self.color_manager.get_color_map_data(pack_name, map_name) if pack_name and map_name else []
             )
         except Exception as e:
-            logger.log(f"カラーリング中のエラー: {e}", level="ERROR")
-            logger.log("トレースバック (直近の呼び出し):", level="ERROR") # トレースバックが出力されている事実をログに記録
-            traceback.print_exc() # トレースバック情報を標準エラー出力に出力
-            h = common_fp['image_height_px']; w = common_fp['image_width_px']
-            err_img = np.full((h if h>0 else 1, w if w>0 else 1, 4), [255,0,0,255], dtype=np.uint8)
+            logger.log(f"カラーリングプラグイン '{active_plugin.name}' の実行中にエラーが発生しました: {e}", level="ERROR")
+            logger.log("トレースバック (直近の呼び出し):", level="ERROR")
+            traceback.print_exc()
+            h = common_params.get('height', self.image_height_px)
+            w = common_params.get('width', self.image_width_px)
+            err_img = np.full((h if h > 0 else 1, w if w > 0 else 1, 4), [255, 0, 0, 255], dtype=np.uint8)
             return err_img
 
     def _get_antialiasing_factor(self, antialiasing_level_str: str) -> int:
