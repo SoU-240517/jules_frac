@@ -2,11 +2,11 @@
     "pack_name": "デフォルト",
     "maps": [
         {
-            "map_name": "グレースケール (反転)",
+            "map_name": "グレースケール",
             "type": "gradient",
             "gradient_points": [
-                {"pos": 0.0, "color": [255,255,255]},
-                {"pos": 1.0, "color": [0,0,0]}
+                {"pos": 0.0, "color": [0,0,0]},
+                {"pos": 1.0, "color": [255,255,255]}
             ],
             "num_colors": 256
         },

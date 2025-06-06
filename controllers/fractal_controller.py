@@ -15,8 +15,8 @@ class FractalController(QObject):
     parameters_updated_externally = pyqtSignal(dict)
     active_fractal_plugin_ui_needs_update = pyqtSignal(str)
     active_coloring_plugin_ui_needs_update = pyqtSignal(str) # (plugin_name) - May become obsolete or used for simpler updates
-    active_coloring_target_and_plugin_changed_externally = pyqtSignal(str, str) # (plugin_name, target_type)
-    active_color_map_changed_externally = pyqtSignal(str, str)
+    active_coloring_target_and_plugin_changed_externally = pyqtSignal(str, str) # (target_type, plugin_name) - Note order if changed
+    active_color_map_changed_externally = pyqtSignal(str, str, str) # pack_name, map_name, target_type
     rendering_task_started = pyqtSignal() # New signal
     rendering_state_changed = pyqtSignal(bool) # True if rendering started, False if finished/failed
 
@@ -134,114 +134,115 @@ class FractalController(QObject):
             self.active_fractal_plugin_ui_needs_update.emit("")
 
     # --- Coloring Plugin and Map Management ---
-    def get_available_coloring_plugin_names_from_engine(self, target_type: str | None = None) -> list[str]:
+    def get_available_coloring_plugin_names_from_engine(self, target_type: str) -> list[str]: # target_type is now mandatory
         if not self.fractal_engine: return []
-        tt = target_type if target_type is not None else self.active_coloring_target_type
-        # Assuming FractalEngine.get_available_coloring_plugin_names now takes target_type
-        return self.fractal_engine.get_available_coloring_plugin_names(target_type=tt)
+        # tt = target_type if target_type is not None else self.active_coloring_target_type # No longer needed
+        return self.fractal_engine.get_available_coloring_plugin_names(target_type=target_type)
 
-    def get_active_coloring_plugin_name_from_engine(self, target_type: str | None = None) -> str | None:
+    def get_active_coloring_plugin_name_from_engine(self, target_type: str) -> str | None: # target_type is now mandatory
         if not self.fractal_engine: return None
-        tt = target_type if target_type is not None else self.active_coloring_target_type
-        # Assuming FractalEngine.get_active_coloring_plugin now takes target_type
-        active_plugin = self.fractal_engine.get_active_coloring_plugin(target_type=tt)
+        # tt = target_type if target_type is not None else self.active_coloring_target_type # No longer needed
+        active_plugin = self.fractal_engine.get_active_coloring_plugin(target_type=target_type)
         return active_plugin.name if active_plugin else None
 
-    def get_coloring_plugin_parameter_definitions_from_engine(self, plugin_name: str, target_type: str | None = None) -> list:
+    def get_coloring_plugin_parameter_definitions_from_engine(self, plugin_name: str, target_type: str) -> list: # target_type is now mandatory
         if not self.fractal_engine: return []
-        tt = target_type if target_type is not None else self.active_coloring_target_type
-        # Assuming PluginManager.get_coloring_plugin now takes target_type
-        plugin = self.fractal_engine.plugin_manager.get_coloring_plugin(plugin_name, target_type=tt)
-        return plugin.get_parameters_definition() if plugin else []
+        plugin = self.fractal_engine.plugin_manager.get_coloring_plugin(plugin_name, target_type=target_type)
+        if plugin:
+            logger.log(f"Plugin '{getattr(plugin, 'name', plugin_name)}' ({target_type}) PluginManagerから取得したプラグイン情報: {plugin}", level="DEBUG")
+            definitions = plugin.get_parameters_definition()
+            logger.log(f"plugin '{getattr(plugin, 'name', plugin_name)}' ({target_type}), エンジンから定義を取得: {definitions}", level="DEBUG")
+            return definitions
+        else:
+            logger.log(f"Plugin '{plugin_name}' ({target_type}) PluginManager によって見つかりません。", level="WARNING")
+            return []
 
-    def get_plugin_presets(self, plugin_name: str, target_type: str | None = None) -> dict: # Return type changed to dict
+    def get_plugin_presets(self, plugin_name: str, target_type: str) -> dict: # target_type is now mandatory
         """
         指定されたカラーリングプラグインのプリセットを取得します。
         FractalEngineのPluginManagerに処理を委譲します。
         """
         if not self.fractal_engine or not hasattr(self.fractal_engine, 'plugin_manager'):
-            return {} # Return empty dict
+            return {}
 
-        tt = target_type if target_type is not None else self.active_coloring_target_type
-        # Assuming PluginManager.get_coloring_plugin now takes target_type
-        plugin = self.fractal_engine.plugin_manager.get_coloring_plugin(plugin_name, target_type=tt)
+        # tt = target_type if target_type is not None else self.active_coloring_target_type # No longer needed
+        plugin = self.fractal_engine.plugin_manager.get_coloring_plugin(plugin_name, target_type=target_type)
 
         if plugin and hasattr(plugin, 'get_presets'):
             try:
                 presets = plugin.get_presets()
-                return presets if isinstance(presets, dict) else {} # Ensure it's a dict
+                return presets if isinstance(presets, dict) else {}
             except Exception as e:
-                logger.log(f"プラグイン '{plugin_name}' (target: {tt}) のプリセット取得中にエラー: {e}", level="WARNING")
-        return {} # Return empty dict
+                logger.log(f"プラグイン '{plugin_name}' (target: {target_type}) のプリセット取得中にエラー: {e}", level="WARNING")
+        return {}
 
-    def get_current_coloring_plugin_parameters_from_engine(self, target_type: str | None = None) -> dict:
+    def get_current_coloring_plugin_parameters_from_engine(self, target_type: str) -> dict: # target_type is now mandatory
         if not self.fractal_engine: return {}
-        tt = target_type if target_type is not None else self.active_coloring_target_type
-        # Assuming FractalEngine.get_coloring_plugin_parameters now takes target_type
-        return self.fractal_engine.get_coloring_plugin_parameters(target_type=tt)
+        # tt = target_type if target_type is not None else self.active_coloring_target_type # No longer needed
+        return self.fractal_engine.get_coloring_plugin_parameters(target_type=target_type)
 
-    def set_active_coloring_plugin_and_recolor(self, plugin_name: str, target_type: str): # target_type is now mandatory
+    def set_active_coloring_plugin_and_recolor(self, plugin_name: str, target_type: str):
         if not self.fractal_engine: return
-
-        self.active_coloring_target_type = target_type # Update the controller's active target type
-
-        # Assuming FractalEngine.set_active_coloring_plugin now takes target_type
+        self.active_coloring_target_type = target_type
         success = self.fractal_engine.set_active_coloring_plugin(plugin_name, target_type=target_type)
-
         if success:
-            # Emit the new signal with target type first, then plugin name, to match ParameterPanel's slot
             self.active_coloring_target_and_plugin_changed_externally.emit(target_type, plugin_name)
-            # self.active_coloring_plugin_ui_needs_update.emit(plugin_name) # Keep or remove based on Panel's needs
             self.trigger_recolor()
         else:
-            # If setting failed, maybe emit with empty plugin name for that target type
             self.active_coloring_target_and_plugin_changed_externally.emit(target_type, "")
 
-    def set_coloring_plugin_parameter_and_recolor(self, param_name: str, value: any, target_type: str | None = None, allow_recolor: bool = True):
+    def set_coloring_plugin_parameter_and_recolor(self, param_name: str, value: any, target_type: str, allow_recolor: bool = True): # target_type is now mandatory
         if not self.fractal_engine: return
-        tt = target_type if target_type is not None else self.active_coloring_target_type
-        # Assuming FractalEngine.set_coloring_plugin_parameter now takes target_type
-        self.fractal_engine.set_coloring_plugin_parameter(param_name, value, target_type=tt)
-        self.update_status_display()
+        self.active_coloring_target_type = target_type # Update active target type
+        self.fractal_engine.set_coloring_plugin_parameter(param_name, value, target_type=target_type)
+        # self.update_status_display() # update_status_display will be called by trigger_recolor or if not recoloring, can be called explicitly
         if allow_recolor:
-            self.trigger_recolor() # This will use self.active_coloring_target_type
+            self.trigger_recolor()
+        else:
+            self.update_status_display() # If not recoloring, update status now
 
-    def get_available_color_pack_names_from_engine(self) -> list[str]:
+    def get_available_color_pack_names_from_engine(self) -> list[str]: # This can remain global
         return self.fractal_engine.get_available_color_pack_names() if self.fractal_engine else []
-    def get_active_color_pack_name_from_engine(self) -> str | None:
+
+    def get_active_color_pack_name_from_engine(self, target_type: str) -> str | None: # target_type is now mandatory
         if self.fractal_engine:
-            # Pass the controller's currently active target type
-            selection = self.fractal_engine.get_current_color_map_selection(target_type=self.active_coloring_target_type)
+            selection = self.fractal_engine.get_current_color_map_selection(target_type=target_type)
             return selection[0] if selection else None
         return None
-    def get_color_map_names_in_pack_from_engine(self, pack_name: str) -> list[str]:
+
+    def get_color_map_names_in_pack_from_engine(self, pack_name: str) -> list[str]: # This can remain global for a given pack
         return self.fractal_engine.get_available_color_map_names_in_pack(pack_name) if self.fractal_engine else []
-    def get_active_color_map_name_from_engine(self) -> str | None:
+
+    def get_active_color_map_name_from_engine(self, target_type: str) -> str | None: # target_type is now mandatory
         if self.fractal_engine:
-            # Pass the controller's currently active target type
-            selection = self.fractal_engine.get_current_color_map_selection(target_type=self.active_coloring_target_type)
+            selection = self.fractal_engine.get_current_color_map_selection(target_type=target_type)
             return selection[1] if selection else None
         return None
-    def get_color_map_data_from_engine(self, pack_name: str, map_name: str) -> list[tuple[int,int,int]] | None:
+
+    def get_color_map_data_from_engine(self, pack_name: str, map_name: str) -> list[tuple[int,int,int]] | None: # Global for pack/map
         if self.fractal_engine: return self.fractal_engine.color_manager.get_color_map_data(pack_name, map_name)
         return None
-    def set_active_color_map_and_recolor(self, pack_name: str, map_name: str):
+
+    def set_active_color_map_and_recolor(self, pack_name: str, map_name: str, target_type: str): # target_type is now mandatory
         if not self.fractal_engine: return
-        success = self.fractal_engine.set_active_color_map(pack_name, map_name, self.active_coloring_target_type)
-        if success: self.active_color_map_changed_externally.emit(pack_name, map_name); self.trigger_recolor()
+        self.active_coloring_target_type = target_type # Update active target type
+        success = self.fractal_engine.set_active_color_map(pack_name, map_name, target_type=target_type)
+        if success:
+            self.active_color_map_changed_externally.emit(pack_name, map_name, target_type) # Emit with target_type
+            self.trigger_recolor()
 
     # --- レンダリング処理 ---
     def trigger_render(self, image_width_px=None, image_height_px=None, full_recompute: bool = True):
         # Add this logging line
-        self.logger.log(f"FractalController.trigger_render: Called from: {traceback.format_stack()[-2].strip()}", level="DEBUG")
+        self.logger.log(f"発信元: {traceback.format_stack()[-2].strip()}", level="DEBUG")
 
         if not self.fractal_engine:
             self.status_updated.emit("エラー: フラクタルエンジン未設定")
             return
 
         if self.current_renderer_task is not None and not self.thread_pool.waitForDone(10): # Check active task with timeout
-            self.logger.log("FractalController: Previous rendering task still active. Not starting a new one.", level="WARNING") # Uses self.logger
-            self.status_updated.emit("前の描画処理がまだ実行中です。")
+            self.logger.log("以前の描画処理がまだ実行中。新しいタスクは開始されません。", level="WARNING") # Uses self.logger
+            self.status_updated.emit("前の描画処理がまだ実行中。")
             return
 
         self.status_updated.emit(f"描画準備中...") # Initial brief message
@@ -268,45 +269,45 @@ class FractalController(QObject):
         self.current_renderer_task.signals.rendering_failed.connect(self._on_renderer_failed)
 
         self.thread_pool.start(self.current_renderer_task)
-        self.logger.log(f"FractalController: Queued FractalRenderer for {render_width}x{render_height}, full_recompute={full_recompute}", level="INFO") # Uses self.logger
+        self.logger.log(f"フラクタルレンダラーキュー {render_width}x{render_height}, full_recompute={full_recompute}", level="INFO") # Uses self.logger
 
     @pyqtSlot()
     def _on_renderer_started(self):
-        self.logger.log("FractalController._on_renderer_started: Received signal.", level="DEBUG")
-        self.logger.log("FractalController._on_renderer_started: Setting self.is_rendering = True (before).", level="DEBUG")
+        self.logger.log("信号受信", level="DEBUG")
+        self.logger.log("self.is_rendering の設定 = True (before).", level="DEBUG")
         self.is_rendering = True
-        self.logger.log(f"FractalController._on_renderer_started: self.is_rendering = {self.is_rendering} (after).", level="DEBUG")
+        self.logger.log(f"self.is_rendering = {self.is_rendering} (after).", level="DEBUG")
         self.rendering_task_started.emit()
-        self.logger.log("FractalController._on_renderer_started: Emitting self.rendering_state_changed.emit(True) (before).", level="DEBUG")
+        self.logger.log("self.rendering_state_changed を発行しています。emit(True) (before).", level="DEBUG")
         self.rendering_state_changed.emit(True)
-        self.logger.log("FractalController._on_renderer_started: Emitted self.rendering_state_changed.emit(True) (after).", level="DEBUG")
+        self.logger.log("self.rendering_state_changed が発行されました。emit(True) (after).", level="DEBUG")
 
     @pyqtSlot(object, float, float)
     def _on_renderer_finished(self, colored_image, compute_time_ms, coloring_time_ms):
-        self.logger.log(f"FractalController._on_renderer_finished: Renderer task finished. Compute: {compute_time_ms:.1f}ms, Color: {coloring_time_ms:.1f}ms", level="INFO")
+        self.logger.log(f"レンダータスク完了。計算時間: {compute_time_ms:.1f}ms, 着色時間: {coloring_time_ms:.1f}ms", level="INFO")
         self.last_compute_time_ms = compute_time_ms
         self.last_coloring_time_ms = coloring_time_ms
         self.image_rendered.emit(colored_image)
         self.update_status_display() # Generate and emit final status message
         self.current_renderer_task = None
-        self.logger.log("FractalController._on_renderer_finished: Setting self.is_rendering = False (before).", level="DEBUG")
+        self.logger.log("self.is_rendering の設定 = False (before).", level="DEBUG")
         self.is_rendering = False
-        self.logger.log(f"FractalController._on_renderer_finished: self.is_rendering = {self.is_rendering} (after).", level="DEBUG")
-        self.logger.log("FractalController._on_renderer_finished: Emitting self.rendering_state_changed.emit(False) (before).", level="DEBUG")
+        self.logger.log(f"self.is_rendering = {self.is_rendering} (after).", level="DEBUG")
+        self.logger.log("self.rendering_state_changed を発行しています。emit(False) (before).", level="DEBUG")
         self.rendering_state_changed.emit(False)
-        self.logger.log("FractalController._on_renderer_finished: Emitted self.rendering_state_changed.emit(False) (after).", level="DEBUG")
+        self.logger.log("self.rendering_state_changed が発行されました。emit(False) (after).", level="DEBUG")
 
     @pyqtSlot(str)
     def _on_renderer_failed(self, error_message):
-        self.logger.log(f"FractalController._on_renderer_failed: Renderer task failed: {error_message}", level="ERROR")
+        self.logger.log(f"レンダータスク失敗: {error_message}", level="ERROR")
         self.status_updated.emit(f"描画エラー: {error_message}")
         self.current_renderer_task = None
-        self.logger.log("FractalController._on_renderer_failed: Setting self.is_rendering = False (before).", level="DEBUG")
+        self.logger.log("self.is_rendering の設定 = False (before).", level="DEBUG")
         self.is_rendering = False
-        self.logger.log(f"FractalController._on_renderer_failed: self.is_rendering = {self.is_rendering} (after).", level="DEBUG")
-        self.logger.log("FractalController._on_renderer_failed: Emitting self.rendering_state_changed.emit(False) (before).", level="DEBUG")
+        self.logger.log(f"self.is_rendering = {self.is_rendering} (after).", level="DEBUG")
+        self.logger.log("self.rendering_state_changed を発行しています。emit(False) (before).", level="DEBUG")
         self.rendering_state_changed.emit(False)
-        self.logger.log("FractalController._on_renderer_failed: Emitted self.rendering_state_changed.emit(False) (after).", level="DEBUG")
+        self.logger.log("self.rendering_state_changed が発行されました。emit(False) (after).", level="DEBUG")
 
     def trigger_recolor(self):
         self.trigger_render(full_recompute=False)
@@ -317,45 +318,54 @@ class FractalController(QObject):
             return
 
         active_fp = self.fractal_engine.get_active_fractal_plugin()
-        # Get active coloring plugin based on the controller's active_coloring_target_type
-        active_cp = self.fractal_engine.get_active_coloring_plugin(target_type=self.active_coloring_target_type)
-
-        # Fetch color pack and map name based on the active target type
-        cpk_name, cm_name = self.fractal_engine.get_current_color_map_selection(target_type=self.active_coloring_target_type)
-
-        if not active_fp: # active_cp can be None if no plugin for that target type
+        if not active_fp:
             self.status_updated.emit("フラクタルプラグイン未設定.")
             return
 
+        # Divergent part
+        active_cp_div = self.fractal_engine.get_active_coloring_plugin(target_type='divergent')
+        cpk_name_div, cm_name_div = self.fractal_engine.get_current_color_map_selection(target_type='divergent')
+        # cp_p_div = self.fractal_engine.get_coloring_plugin_parameters(target_type='divergent')
+
+        # Non-Divergent part
+        active_cp_non_div = self.fractal_engine.get_active_coloring_plugin(target_type='non_divergent')
+        cpk_name_non_div, cm_name_non_div = self.fractal_engine.get_current_color_map_selection(target_type='non_divergent')
+        # cp_p_non_div = self.fractal_engine.get_coloring_plugin_parameters(target_type='non_divergent')
+
         common_p = self.fractal_engine.get_common_parameters()
         fp_p = self.fractal_engine.get_fractal_plugin_parameters()
-        # Get coloring parameters for the specific active target type
-        cp_p = self.fractal_engine.get_coloring_plugin_parameters(target_type=self.active_coloring_target_type)
 
         w = common_p.get('width', self.initial_width)
         zoom = self.initial_width / w if w > 0 else 0
 
-        status = [f"F: {active_fp.name}"]
-        if active_cp:
-            target_label = "D" if self.active_coloring_target_type == 'divergent' else "ND"
-            status.append(f"C({target_label}): {active_cp.name} ({cpk_name}/{cm_name})")
-        else:
-            status.append(f"C: N/A ({cpk_name}/{cm_name})")
+        status_parts = [f"F: {active_fp.name}"]
 
-        status.append(f"中心:({common_p.get('center_real',0):.3f},{common_p.get('center_imag',0):.3f})")
-        status.append(f"幅:{w:.2e}({zoom:.1f}x) Iter:{common_p.get('max_iterations',0)}")
+        div_status = f"C(D): {active_cp_div.name if active_cp_div else 'N/A'} ({cpk_name_div or 'N/A'}/{cm_name_div or 'N/A'})"
+        # if cp_p_div: div_status += f" P:[{', '.join([f'{k}:{v:.2f}' if isinstance(v,float) else f'{k}:{v}' for k,v in cp_p_div.items()])}]"
+        status_parts.append(div_status)
+
+        non_div_status = f"C(ND): {active_cp_non_div.name if active_cp_non_div else 'N/A'} ({cpk_name_non_div or 'N/A'}/{cm_name_non_div or 'N/A'})"
+        # if cp_p_non_div: non_div_status += f" P:[{', '.join([f'{k}:{v:.2f}' if isinstance(v,float) else f'{k}:{v}' for k,v in cp_p_non_div.items()])}]"
+        status_parts.append(non_div_status)
+
+        status_parts.append(f"中心:({common_p.get('center_real',0):.3f},{common_p.get('center_imag',0):.3f})")
+        status_parts.append(f"幅:{w:.2e}({zoom:.1f}x) Iter:{common_p.get('max_iterations',0)}")
 
         if fp_p:
-            status.append(f"FP:[{', '.join([f'{k}:{v:.3f}' if isinstance(v,float) else f'{k}:{v}' for k,v in fp_p.items()])}]")
+            status_parts.append(f"FP:[{', '.join([f'{k}:{v:.3f}' if isinstance(v,float) else f'{k}:{v}' for k,v in fp_p.items()])}]")
 
-        if cp_p:
-            status.append(f"CP:[{', '.join([f'{k}:{v:.3f}' if isinstance(v,float) else f'{k}:{v}' for k,v in cp_p.items()])}]")
+        # Display parameters for the currently active_coloring_target_type
+        # active_target_cp_params = self.fractal_engine.get_coloring_plugin_parameters(target_type=self.active_coloring_target_type)
+        # if active_target_cp_params:
+        #     param_label = "D_CP" if self.active_coloring_target_type == 'divergent' else "ND_CP"
+        #     status_parts.append(f"{param_label}:[{', '.join([f'{k}:{v:.3f}' if isinstance(v,float) else f'{k}:{v}' for k,v in active_target_cp_params.items()])}]")
 
-        status.append(f"{self.fractal_engine.image_width_px}x{self.fractal_engine.image_height_px}px")
+
+        status_parts.append(f"{self.fractal_engine.image_width_px}x{self.fractal_engine.image_height_px}px")
         if self.last_compute_time_ms > 0:
-            status.append(f"Calc:{self.last_compute_time_ms:.1f}ms")
-        status.append(f"Color:{self.last_coloring_time_ms:.1f}ms")
-        self.status_updated.emit(" | ".join(status))
+            status_parts.append(f"Calc:{self.last_compute_time_ms:.1f}ms")
+        status_parts.append(f"Color:{self.last_coloring_time_ms:.1f}ms")
+        self.status_updated.emit(" | ".join(status_parts))
 
     # --- Pan and Zoom (略 - 変更なし) ---
     def pan_fractal(self, dr, di):

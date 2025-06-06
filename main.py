@@ -47,8 +47,8 @@ if __name__ == '__main__':
     # --- ロガー設定完了 ---
 
     # モデル・コントローラーの作成
-    # FractalEngineにプロジェクトルートパスを渡す
-    fractal_engine = FractalEngine(project_root_path=_project_root) # プラグイン読み込みのためにプロジェクトルートを渡す
+    # FractalEngineにプロジェクトルートパスとSettingsManagerを渡す
+    fractal_engine = FractalEngine(project_root_path=_project_root, settings_manager=settings_manager) # プラグイン読み込みと設定読み込みのために渡す
     fractal_controller = FractalController(fractal_engine)
 
     # ダークテーマのスタイルシート

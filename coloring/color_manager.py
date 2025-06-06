@@ -1,21 +1,21 @@
 import json
 from pathlib import Path
 import numpy as np
-from logger.custom_logger import CustomLogger # CustomLoggerをインポート
+from logger.custom_logger import CustomLogger # CustomLoggerをインポートします
 
-logger = CustomLogger() # ロガーインスタンスを作成
+logger = CustomLogger() # ロガーインスタンスを作成します
 
 class ColorManager:
-    """カラーパックとカラーマップを管理するクラス。"""
+    """カラーパックとカラーマップを管理するクラスです。"""
     def __init__(self, color_packs_dir: str = "plugins/colorpacks"):
-        logger.log(f"ColorManager初期化中。カラーパックディレクトリ: {color_packs_dir}", level="DEBUG")
-        # color_packs_dir はプロジェクトルートからの相対パスを想定
+        logger.log("ColorManager初期化中...", level="DEBUG")
+        # color_packs_dir はプロジェクトルートからの相対パスを想定しています
         self.color_packs_dir = Path(color_packs_dir)
         self.color_packs = {}  # {パック名: {マップ名: RGBタプルのリスト, ...}}
         self.load_color_packs()
 
     def _generate_gradient_colors(self, gradient_points: list[dict], num_colors: int) -> list[tuple[int, int, int]]:
-        """指定されたグラデーションポイントと色数に基づいてグラデーションカラーを生成する。"""
+        """指定されたグラデーションポイントと色数に基づいてグラデーションカラーを生成します。"""
         if not gradient_points:
             logger.log("_generate_gradient_colors がグラデーションポイントなしで呼び出されました。", level="WARNING")
             return [(0, 0, 0)] * num_colors
@@ -25,10 +25,10 @@ class ColorManager:
         # ポイントを位置 (pos) でソートする
         points = sorted(gradient_points, key=lambda p: p['pos'])
 
-        # 出力用のカラーリスト
+        # 出力用のカラーリストです
         output_colors = []
 
-        # 各ポイントの位置と色値を抽出する
+        # 各ポイントの位置と色値を抽出します
         # np.interpはソートされたxpを期待するため、元の0-1スケールを使用する
         positions = np.array([p['pos'] for p in points])
 
@@ -36,7 +36,7 @@ class ColorManager:
         colors_g = np.array([p['color'][1] for p in points])
         colors_b = np.array([p['color'][2] for p in points])
 
-        # 補間する新しい位置 (0.0 から 1.0 の範囲で均等に配置する)
+        # 補間する新しい位置 (0.0 から 1.0 の範囲で均等に配置します)
         target_positions = np.linspace(0.0, 1.0, num_colors)
 
         interp_r = np.interp(target_positions, positions, colors_r)
@@ -44,7 +44,7 @@ class ColorManager:
         interp_b = np.interp(target_positions, positions, colors_b)
 
         for i in range(num_colors):
-            output_colors.append(
+            output_colors.append( # np.clipで値を0-255の範囲に収めます
                 (int(round(np.clip(interp_r[i], 0, 255))), # np.clipで値を0-255の範囲に収める
                  int(round(np.clip(interp_g[i], 0, 255))),
                  int(round(np.clip(interp_b[i], 0, 255))))
@@ -55,16 +55,16 @@ class ColorManager:
         self.color_packs.clear()
 
         # プロジェクトルートからの相対パスとして解決する (より堅牢な方法が望ましい)
-        # このファイル(color_manager.py)の場所からプロジェクトルートを推定するのは困難な場合がある。
+        # このファイル(color_manager.py)の場所からプロジェクトルートを推定するのは困難な場合があります。
         # main.pyなどでアプリケーションのルートディレクトリを決定し、
-        # それを基準に絶対パスを構成するのがより望ましいアプローチである。
-        # ここでは、渡されたパスがプロジェクトルートからの相対パスであると仮定する。
+        # それを基準に絶対パスを構成するのがより望ましいアプローチです。
+        # ここでは、渡されたパスがプロジェクトルートからの相対パスであると仮定します。
         # カレントワーキングディレクトリがプロジェクトルートでない場合、
-        # このPath解決は期待通りに動作しない可能性がある。
-        # 簡単のため、ここでは Path.cwd() / self.color_packs_dir を使用する。
-        # より良い方法は、アプリケーション起動時にルートパスを決定し、それをベースパスとして渡すことである。
+        # このPath解決は期待通りに動作しない可能性があります。
+        # 簡単のため、ここでは Path.cwd() / self.color_packs_dir を使用します。
+        # より良い方法は、アプリケーション起動時にルートパスを決定し、それをベースパスとして渡すことです。
 
-        # effective_packs_dir = self.color_packs_dir # このままではカレントワーキングディレクトリに依存する
+        # effective_packs_dir はカレントワーキングディレクトリに依存します
         # 実行時のカレントディレクトリがプロジェクトルートであると仮定した場合
         effective_packs_dir = Path.cwd() / self.color_packs_dir
         if not self.color_packs_dir.is_absolute(): # 相対パスで与えられた場合はカレントディレクトリを基準とする
@@ -75,7 +75,7 @@ class ColorManager:
 
         logger.log("カラーパックを読込中...", level="INFO")
         if not effective_packs_dir.is_dir():
-            logger.log(f"カラーパックディレクトリが見つかりません: {effective_packs_dir.resolve()}", level="ERROR")
+            logger.log(f"カラーパックディレクトリが見つかりません: {effective_packs_dir}", level="ERROR")
             return
 
         for file_path in effective_packs_dir.glob("*.json"):
@@ -87,7 +87,7 @@ class ColorManager:
                 maps_data = data.get("maps")
 
                 if not pack_name or not isinstance(maps_data, list):
-                    logger.log(f"ファイル形式が無効または不完全です: {file_path.name}", level="WARNING")
+                    logger.log(f"ファイル形式が無効または不完全です: {file_path}", level="WARNING")
                     continue
 
                 current_pack_maps = {}
@@ -99,7 +99,7 @@ class ColorManager:
 
                     if "colors" in map_entry and isinstance(map_entry["colors"], list):
                         colors_list = [tuple(c) for c in map_entry["colors"] if isinstance(c, list) and len(c) == 3 and all(isinstance(x, int) for x in c)]
-                        if colors_list: # 検証後に空でないことを確認
+                        if colors_list: # 検証後に空でないことを確認します
                            current_pack_maps[map_name] = colors_list
                         else:
                             logger.log(f"'{pack_name}/{map_name}' のカラーフォーマットが無効です。", level="WARNING")
@@ -116,24 +116,24 @@ class ColorManager:
 
                 if current_pack_maps:
                     if pack_name in self.color_packs:
-                         logger.log(f"カラーパック名 '{pack_name}' は重複しています。マップのマージまたは上書きが発生する可能性があります。", level="WARNING")
+                         logger.log(f"カラーパック名 '{pack_name}' は重複しています。マップのマージまたは上書きが発生する可能性があります。", level="WARNING") # マップのマージまたは上書きが発生する可能性があります
                     self.color_packs.setdefault(pack_name, {}).update(current_pack_maps)
-                    logger.log(f"{file_path.name} から{len(current_pack_maps)} マップ読込完了", level="INFO")
+                    logger.log(f"{file_path.name} から{len(current_pack_maps)} マップ読込完了", level="DEBUG")
 
             except json.JSONDecodeError as e:
-                logger.log(f"{file_path.name} からのJSON解析に失敗しました: {e}", level="ERROR")
+                logger.log(f"{file_path} からのJSON解析に失敗しました: {e}", level="ERROR")
             except Exception as e:
-                logger.log(f"ファイル '{file_path.name}' の処理中に予期せぬエラーが発生しました: {e}", level="ERROR")
+                logger.log(f"ファイル '{file_path}' の処理中に予期せぬエラーが発生しました: {e}", level="ERROR")
 
         if not self.color_packs:
             logger.log("有効なカラーパックは読み込まれませんでした。", level="INFO")
 
     def get_available_color_pack_names(self) -> list[str]:
-        """利用可能なすべてのカラーパック名のリストを返す。"""
+        """利用可能なすべてのカラーパック名のリストを返します。"""
         return list(self.color_packs.keys())
 
     def get_color_maps_in_pack(self, pack_name: str) -> list[str]:
-        """指定されたカラーパック内のすべてのカラーマップ名のリストを返す。"""
+        """指定されたカラーパック内のすべてのカラーマップ名のリストを返します。"""
         return list(self.color_packs.get(pack_name, {}).keys())
 
     def get_color_map_data(self, pack_name: str, map_name: str) -> list[tuple[int, int, int]] | None:
@@ -142,7 +142,7 @@ class ColorManager:
 
 if __name__ == '__main__':
     # テスト用の一時ディレクトリとファイルを作成する
-    # このスクリプトは "temp_color_packs" を作成できる場所から実行されることを想定している
+    # このスクリプトは "temp_color_packs" を作成できる場所から実行されることを想定しています
     temp_dir = Path("temp_color_packs_test")
     temp_dir.mkdir(exist_ok=True)
 
@@ -169,7 +169,7 @@ if __name__ == '__main__':
     with open(temp_dir / "custom_test.json", "w", encoding="utf-8") as f:
         json.dump(custom_pack_content, f, indent=4)
 
-    logger.log(f"ColorManager テスト: 一時ディレクトリ '{temp_dir.resolve()}' を使用中", level="INFO")
+    logger.log(f"ColorManager テスト: 一時ディレクトリ '{temp_dir}' を使用中", level="INFO")
     manager = ColorManager(color_packs_dir=str(temp_dir)) # 一時ディレクトリのパスを渡す
 
     pack_names = manager.get_available_color_pack_names()
@@ -202,11 +202,11 @@ if __name__ == '__main__':
                 assert map_data_fixed[0] == (255,0,0)
 
     # 一時ディレクトリをクリーンアップ
-    import shutil
+    import shutil # 一時ディレクトリをクリーンアップします
     try:
         shutil.rmtree(temp_dir)
         logger.log(f"一時ディレクトリをクリーンアップしました: {temp_dir}", level="INFO")
     except Exception as e:
-        logger.log(f"一時ディレクトリ {temp_dir} のクリーンアップ中にエラーが発生しました: {e}", level="ERROR")
+        logger.log(f"一時ディレクトリ '{temp_dir}' のクリーンアップ中にエラーが発生しました: {e}", level="ERROR")
 
     logger.log("ColorManager テスト終了。", level="INFO")
