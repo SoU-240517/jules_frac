@@ -34,6 +34,7 @@ class FractalController(QObject):
         self.initial_width = self.fractal_engine.width if self.fractal_engine else 3.0
         self.logger = CustomLogger() # Add logger instance
         self.is_rendering = False
+        self.preview_downscale_factor = 0.5 # プレビュー解像度を50%に
 
         self.current_exporter: ImageExporter | None = None
         self.thread_pool = QThreadPool.globalInstance()
@@ -232,7 +233,7 @@ class FractalController(QObject):
             self.trigger_recolor()
 
     # --- レンダリング処理 ---
-    def trigger_render(self, image_width_px=None, image_height_px=None, full_recompute: bool = True):
+    def trigger_render(self, image_width_px=None, image_height_px=None, full_recompute: bool = True, is_preview: bool = False):
         # Add this logging line
         self.logger.log(f"発信元: {traceback.format_stack()[-2].strip()}", level="DEBUG")
 
@@ -240,36 +241,53 @@ class FractalController(QObject):
             self.status_updated.emit("エラー: フラクタルエンジン未設定")
             return
 
-        if self.current_renderer_task is not None and not self.thread_pool.waitForDone(10): # Check active task with timeout
+        # プレビューレンダリングの場合、既存のタスクをキャンセルしようと試みる
+        if is_preview and self.current_renderer_task is not None:
+             # QRunnableには直接的なキャンセルメソッドがないため、
+             # 新しいタスクがすぐに始まることで古いタスクの結果を事実上無視する。
+             # もしFractalRendererに停止フラグがあれば、ここでセットできる。
+             self.logger.log("プレビュー要求のため、進行中のレンダリングを置き換えます。", level="DEBUG")
+             # self.current_renderer_task.cancel() # FractalRendererにcancel()が実装されていれば
+
+        if self.is_rendering and not is_preview:
             self.logger.log("以前の描画処理がまだ実行中。新しいタスクは開始されません。", level="WARNING") # Uses self.logger
             self.status_updated.emit("前の描画処理がまだ実行中。")
             return
 
         self.status_updated.emit(f"描画準備中...") # Initial brief message
 
-        render_width = image_width_px if image_width_px is not None else self.fractal_engine.image_width_px
-        render_height = image_height_px if image_height_px is not None else self.fractal_engine.image_height_px
+        # プレビューモードの場合、解像度をダウンスケールする
+        if is_preview:
+            render_width = int(self.main_window.render_area.width() * self.preview_downscale_factor)
+            render_height = int(self.main_window.render_area.height() * self.preview_downscale_factor)
+            self.logger.log(f"プレビューレンダリングを開始します。解像度: {render_width}x{render_height}", level="DEBUG")
+        else:
+            render_width = image_width_px if image_width_px is not None else self.main_window.render_area.width()
+            render_height = image_height_px if image_height_px is not None else self.main_window.render_area.height()
+            self.logger.log(f"高品質レンダリングを開始します。解像度: {render_width}x{render_height}", level="DEBUG")
 
         if render_width <= 0 or render_height <= 0:
-            self.status_updated.emit("エラー: 画像サイズ不正")
-            self.logger.log(f"FractalController: Invalid image size for render: {render_width}x{render_height}", level="ERROR") # Uses self.logger
+            self.logger.log(f"無効なレンダリングサイズ ({render_width}x{render_height}) のため、描画をスキップします。", level="WARNING")
             return
+
+        self.is_rendering = True
+        self.rendering_state_changed.emit(True)
+
+        self.fractal_engine.update_image_size(render_width, render_height)
+        self.last_render_width, self.last_render_height = render_width, render_height
 
         self.current_renderer_task = FractalRenderer(
             fractal_engine=self.fractal_engine,
             image_width_px=render_width,
             image_height_px=render_height,
             full_recompute=full_recompute,
-            # Pass the active coloring target type to the renderer
             active_coloring_target_type=self.active_coloring_target_type
         )
-
         self.current_renderer_task.signals.rendering_started.connect(self._on_renderer_started)
         self.current_renderer_task.signals.rendering_finished.connect(self._on_renderer_finished)
         self.current_renderer_task.signals.rendering_failed.connect(self._on_renderer_failed)
 
         self.thread_pool.start(self.current_renderer_task)
-        self.logger.log(f"フラクタルレンダラーキュー {render_width}x{render_height}, full_recompute={full_recompute}", level="INFO") # Uses self.logger
 
     @pyqtSlot()
     def _on_renderer_started(self):
@@ -310,6 +328,10 @@ class FractalController(QObject):
         self.logger.log("self.rendering_state_changed が発行されました。emit(False) (after).", level="DEBUG")
 
     def trigger_recolor(self):
+        """
+        現在のフラクタルデータを再利用して、カラーリングのみを再実行します。
+        主にカラーマップやカラーリングアルゴリズムのパラメータが変更されたときに使用されます。
+        """
         self.trigger_render(full_recompute=False)
 
     def update_status_display(self):
@@ -368,39 +390,62 @@ class FractalController(QObject):
         self.status_updated.emit(" | ".join(status_parts))
 
     # --- Pan and Zoom (略 - 変更なし) ---
-    def pan_fractal(self, dr, di):
-        if not self.fractal_engine: return
-        cp = self.fractal_engine.get_common_parameters()
-        if not cp: return
+    def pan_fractal(self, dr, di, is_preview: bool = False):
+        """
+        現在のフラクタルの中心座標を(dr, di)だけ移動させ、再描画をトリガーします。
 
-        nc_r = cp.get('center_real', 0.0) - dr
-        nc_i = cp.get('center_imag', 0.0) - di
+        パン操作では、通常フラクタルデータの完全な再計算は不要で、
+        既存のデータを使って再着色するだけで十分高速なプレビューが可能です。
+        ただし、表示領域の端では新しいデータが必要になる場合があります。
 
-        self.fractal_engine.set_common_parameters(
-            center_real=nc_r,
-            center_imag=nc_i,
-            width=cp.get('width', self.initial_width),
-            max_iterations=cp.get('max_iterations', 100) # パン操作では反復回数は変更しない
-            # escape_radius は現在の値を維持 (エンジン側でNoneを適切に処理する場合)
-        )
-        self.parameters_updated_externally.emit(self.get_current_common_parameters())
-        self.trigger_render(full_recompute=True)
+        Args:
+            dr (float): 中心のReal部を移動させる量。
+            di (float): 中心のImaginary部を移動させる量。
+            is_preview (bool): プレビュー品質でのレンダリングを要求するかどうか。
+        """
+        if self.fractal_engine:
+            current_params = self.fractal_engine.get_common_parameters()
+            new_center_real = current_params['center_real'] - dr
+            new_center_imag = current_params['center_imag'] - di
+            self.fractal_engine.set_common_parameters(
+                center_real=new_center_real,
+                center_imag=new_center_imag,
+                width=current_params['width'],
+                max_iterations=current_params['max_iterations']
+            )
+            # パン操作ではフラクタル計算はスキップ(full_recompute=False)
+            self.trigger_render(full_recompute=False, is_preview=is_preview)
 
-    def zoom_fractal_to_point(self, fix_r, fix_i, mfx, mfy, new_w):
-        if not self.fractal_engine or self.fractal_engine.image_width_px == 0: return
-        cp = self.fractal_engine.get_common_parameters()
-        if not cp: return
+    def zoom_fractal_to_point(self, fix_r, fix_i, mfx, mfy, new_w, is_preview: bool = False):
+        """
+        指定した点(fix_r, fix_i)がビューポートの相対位置(mfx, mfy)に
+        留まるように、表示幅がnew_wになるまでズームします。
 
-        asp = self.fractal_engine.image_height_px / self.fractal_engine.image_width_px; new_h = new_w*asp
-        nc_r = fix_r-(mfx-0.5)*new_w; nc_i = fix_i+(mfy-0.5)*new_h
-        self.fractal_engine.set_common_parameters(
-            center_real=nc_r,
-            center_imag=nc_i,
-            width=new_w,
-            max_iterations=cp.get('max_iterations', 100) # ズーム操作では反復回数は変更しない
-        )
-        self.parameters_updated_externally.emit(self.get_current_common_parameters())
-        self.trigger_render(full_recompute=True)
+        Args:
+            fix_r (float): ズームの不動点のReal部。
+            fix_i (float): ズームの不動点のImaginary部。
+            mfx (float): ビューポート内での不動点の相対X位置 (0.0-1.0)。
+            mfy (float): ビューポート内での不動点の相対Y位置 (0.0-1.0)。
+            new_w (float): ズーム後の新しい表示領域の幅。
+            is_preview (bool): プレビュー品質でのレンダリングを要求するかどうか。
+        """
+        if self.fractal_engine:
+            current_params = self.fractal_engine.get_common_parameters()
+            aspect_ratio = current_params['height'] / current_params['width'] if current_params['width'] != 0 else 1.0
+            new_h = new_w * aspect_ratio
+
+            # 新しい中心座標を計算
+            new_center_real = fix_r - (mfx - 0.5) * new_w
+            new_center_imag = fix_i - (mfy - 0.5) * new_h
+
+            self.fractal_engine.set_common_parameters(
+                center_real=new_center_real,
+                center_imag=new_center_imag,
+                width=new_w,
+                max_iterations=current_params['max_iterations']
+            )
+            # ズームではフラクタルデータの再計算が必須
+            self.trigger_render(full_recompute=True, is_preview=is_preview)
 
     # --- 高解像度エクスポート ---
     def start_high_res_export(self, export_settings: dict):

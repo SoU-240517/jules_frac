@@ -11,7 +11,7 @@ if __name__ == "__main__" and (__package__ is None or __package__ == ""):
 
 from PyQt6.QtWidgets import QLabel, QSizePolicy
 from PyQt6.QtGui import QImage, QPixmap, QCursor
-from PyQt6.QtCore import Qt, QPointF
+from PyQt6.QtCore import Qt, QPointF, QTimer
 import numpy as np
 from PIL import Image, ImageQt
 from logger.custom_logger import CustomLogger
@@ -45,6 +45,12 @@ class RenderArea(QLabel):
         self.last_mouse_pos = None
         self.setMouseTracking(True)
 
+        self.is_interactive_mode = False
+        self.high_quality_render_timer = QTimer(self)
+        self.high_quality_render_timer.setSingleShot(True)
+        self.high_quality_render_timer.setInterval(500)  # 500ms後に高品質レンダリング
+        self.high_quality_render_timer.timeout.connect(self._request_high_quality_render)
+
     def set_default_background(self):
         """
         画像がロードされていない場合に表示されるデフォルトの背景テキストとスタイルを設定します。
@@ -52,6 +58,17 @@ class RenderArea(QLabel):
         self.setText("フラクタル画像がここに表示されます。\nパラメータを設定し描画処理を開始してください。")
         self.setStyleSheet("background-color: #333333; color: #AAAAAA; border: 1px solid #454545; padding: 10px;")
         self.setWordWrap(True)
+
+    def _request_high_quality_render(self):
+        """タイマーによって呼び出され、高品質な再描画を要求する。"""
+        self.is_interactive_mode = False
+        if self.fractal_controller:
+            logger.log("インタラクティブ操作後の高品質レンダリングをトリガーします。", level="DEBUG")
+            self.fractal_controller.trigger_render(
+                image_width_px=self.width(),
+                image_height_px=self.height(),
+                is_preview=False
+            )
 
     def update_image(self, image_data_np):
         """
@@ -86,10 +103,17 @@ class RenderArea(QLabel):
                 self.clear()
                 return
 
+            if self.is_interactive_mode:
+                # プレビュー中は常にスムージングなしのスケーリングを使用して高速化
+                scaling_mode = Qt.TransformationMode.FastTransformation
+            else:
+                # 高品質レンダリング後はスムーズなスケーリング
+                scaling_mode = Qt.TransformationMode.SmoothTransformation
+
             pil_image = Image.fromarray(image_data_np, 'RGBA')
             qimage = ImageQt.ImageQt(pil_image)
             self._original_pixmap = QPixmap.fromImage(qimage)
-            self._display_scaled_pixmap()
+            self._display_scaled_pixmap(scaling_mode) # スケーリングモードを渡す
             # print(f"RenderArea: 画像更新 ({width}x{height})。表示サイズ: {self.width()}x{self.height()}")
             # 画像が更新された際のデバッグメッセージ
         except Exception as e:
@@ -98,16 +122,18 @@ class RenderArea(QLabel):
             self._original_pixmap = None
             self.clear()
 
-    def _display_scaled_pixmap(self):
+    def _display_scaled_pixmap(self, mode=Qt.TransformationMode.SmoothTransformation):
         """
         現在の `_original_pixmap` をウィジェットのサイズに合わせてスケーリングし、表示します。
         アスペクト比は維持されます。
+        Args:
+            mode (Qt.TransformationMode): スケーリングに使用するトランスフォーメーションモード。
         """
         if self._original_pixmap and not self._original_pixmap.isNull():
             scaled_pixmap = self._original_pixmap.scaled(
                 self.size(),
                 Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation
+                mode
             )
             self.setPixmap(scaled_pixmap)
             self.setStyleSheet("")
@@ -126,6 +152,10 @@ class RenderArea(QLabel):
         if self._original_pixmap and not self._original_pixmap.isNull():
             self._display_scaled_pixmap()
 
+        # ウィンドウリサイズ後に高品質レンダリングを要求
+        self.is_interactive_mode = True # 一時的にインタラクティブモードに
+        self.high_quality_render_timer.start()
+
     def mousePressEvent(self, event):
         """
         マウスボタンが押されたときに呼び出されます。左ボタンでパン操作を開始します。
@@ -137,6 +167,10 @@ class RenderArea(QLabel):
                 self.panning = True
                 self.last_mouse_pos = event.position()
                 self.setCursor(QCursor(Qt.CursorShape.ClosedHandCursor))
+
+                self.is_interactive_mode = True
+                self.high_quality_render_timer.stop() # 高品質レンダリングタイマーを止める
+
                 event.accept()
                 return
         event.ignore()
@@ -173,7 +207,8 @@ class RenderArea(QLabel):
             delta_real = (delta_qpoint.x() / self.width()) * fractal_width_complex
             delta_imag = (delta_qpoint.y() / self.height()) * fractal_height_complex
 
-            self.fractal_controller.pan_fractal(delta_real, delta_imag)
+            # is_preview=Trueでパン操作を通知
+            self.fractal_controller.pan_fractal(delta_real, delta_imag, is_preview=True)
 
             self.last_mouse_pos = current_pos
             event.accept()
@@ -196,6 +231,10 @@ class RenderArea(QLabel):
         """
         if event.button() == Qt.MouseButton.LeftButton and self.panning:
             self.panning = False
+
+            # 高品質レンダリングをタイマーで予約
+            self.high_quality_render_timer.start()
+
             if self.pixmap() and not self.pixmap().isNull() and self.fractal_controller:
                 self.setCursor(QCursor(Qt.CursorShape.OpenHandCursor))
             else:
@@ -220,6 +259,9 @@ class RenderArea(QLabel):
         if delta_angle == 0:
             event.ignore()
             return
+
+        self.is_interactive_mode = True
+        self.high_quality_render_timer.stop() # ズーム操作中はタイマーを止める
 
         # マウスホイールの標準ステップは120単位（15度）
         num_steps = delta_angle / 120.0
@@ -249,19 +291,25 @@ class RenderArea(QLabel):
         mouse_x_frac = mouse_pos_pixel.x() / self.width()
         mouse_y_frac = mouse_pos_pixel.y() / self.height()
 
-        # マウス位置のフラクタル座標
-        mouse_real_coord = (current_center_real - current_width / 2.0) + (mouse_x_frac * current_width)
-        # フラクタルの虚数軸は画面Yと逆向きの場合が多い
-        mouse_imag_coord = (current_center_imag + current_height / 2.0) - (mouse_y_frac * current_height)
+        # カーソル位置の複素数を計算
+        view_top_left_real = current_center_real - current_width / 2.0
+        view_top_left_imag = current_center_imag - current_height / 2.0
 
-        # コントローラのズーム処理を呼び出し
+        fixed_point_real = view_top_left_real + mouse_x_frac * current_width
+        fixed_point_imag = view_top_left_imag + mouse_y_frac * current_height
+
         self.fractal_controller.zoom_fractal_to_point(
-            mouse_real_coord,
-            mouse_imag_coord,
-            mouse_x_frac,
-            mouse_y_frac,
-            new_width
+            fix_r=fixed_point_real,
+            fix_i=fixed_point_imag,
+            mfx=mouse_x_frac,
+            mfy=mouse_y_frac,
+            new_w=new_width,
+            is_preview=True # プレビューとしてズーム
         )
+
+        # ズーム操作後に高品質レンダリングを予約
+        self.high_quality_render_timer.start()
+
         event.accept()
 
 
@@ -284,27 +332,27 @@ if __name__ == '__main__':
         def get_current_engine_parameters(self):
             return self._params.copy()
 
-        def pan_fractal(self, dr, di):
-            self._params["center_real"] -= dr
-            self._params["center_imag"] -= di
+        def pan_fractal(self, dr, di, is_preview=False):
+            self._params["center_real"] += dr
+            self._params["center_imag"] += di
             logger.log(f"MockController: パン。新しい中心: ({self._params['center_real']:.4f}, {self._params['center_imag']:.4f})", level="DEBUG")
             self.parameters_updated_externally.emit()
 
-        def zoom_fractal_to_point(self, fixed_r, fixed_i, frac_x, frac_y, new_w):
+        def zoom_fractal_to_point(self, fix_r, fix_i, mfx, mfy, new_w, is_preview=False):
             # モック用の簡易ズーム処理（本来のロジックは実コントローラ側）
             old_w = self._params["width"]
             aspect = self.image_height_px / self.image_width_px
             new_h = new_w * aspect
 
-            self._params["center_real"] = fixed_r - (frac_x - 0.5) * new_w
-            self._params["center_imag"] = fixed_i + (frac_y - 0.5) * new_h
+            self._params["center_real"] = fix_r - (mfx - 0.5) * new_w
+            self._params["center_imag"] = fix_i - (mfy - 0.5) * new_h
             self._params["width"] = new_w
             self._params["height"] = new_h # 高さも更新
             logger.log(f"MockController: ズーム。新しい幅: {new_w:.4e} 新しい中心: ({self._params['center_real']:.4f}, {self._params['center_imag']:.4f})", level="DEBUG")
             self.parameters_updated_externally.emit()
 
-        def trigger_render(self, w, h):
-             logger.log(f"MockController: trigger_renderが呼ばれました（{w}x{h}）", level="DEBUG")
+        def trigger_render(self, image_width_px, image_height_px, is_preview=False):
+             logger.log(f"MockController: trigger_renderが呼ばれました（{image_width_px}x{image_height_px}）", level="DEBUG")
 
     app = QApplication(sys.argv)
     main_win = QMainWindow()
