@@ -13,7 +13,7 @@ from numba import jit
 
 logger = CustomLogger()
 
-@jit(nopython=True, cache=True)
+@jit(nopython=True)
 def _calculate_potentials_jit(
     iterations: np.ndarray,
     last_zn_values: np.ndarray, # 複素数の最終Z値
@@ -53,7 +53,7 @@ def _calculate_potentials_jit(
                     has_valid = True # ポテンシャルが実質的に最小であっても、色付け対象の有効な点として扱う
     return potentials, min_p, max_p, has_valid
 
-@jit(nopython=True, cache=True)
+@jit(nopython=True)
 def _normalize_and_color_jit(
     potentials: np.ndarray,
     min_potential_norm: float, # 正規化に使用する最小ポテンシャル

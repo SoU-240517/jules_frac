@@ -24,6 +24,26 @@ from logger.custom_logger import CustomLogger
 
 logger = CustomLogger()
 
+def clear_numba_cache_on_exit():
+    """Numbaのキャッシュディレクトリを安全に削除する。"""
+    logger.log("Numbaキャッシュのクリアを試みます...", level="INFO")
+    try:
+        numba_cache_dir_path_str = numba.config.CACHE_DIR
+        if numba_cache_dir_path_str:
+            numba_cache_dir = Path(numba_cache_dir_path_str)
+            if numba_cache_dir.exists() and numba_cache_dir.is_dir():
+                logger.log(f"Numbaキャッシュディレクトリをクリアします: {numba_cache_dir}", level="INFO")
+                shutil.rmtree(numba_cache_dir, ignore_errors=True)
+                logger.log(f"Numbaキャッシュディレクトリをクリアしました。", level="INFO")
+            else:
+                logger.log(f"Numbaキャッシュディレクトリが見つからないか、ディレクトリではありません: {numba_cache_dir}", level="INFO")
+        else:
+            logger.log(f"Numbaキャッシュディレクトリが設定されていません (numba.config.CACHE_DIR is None)。", level="INFO")
+    except ImportError:
+        logger.log("Numbaまたはshutilモジュールが見つからないため、Numbaキャッシュをクリアできません。", level="WARNING")
+    except Exception as e:
+        logger.log(f"Numbaキャッシュディレクトリのクリア中にエラーが発生しました: {e}", level="WARNING")
+
 if __name__ == '__main__':
     if hasattr(Qt.ApplicationAttribute, 'AA_EnableHighDpiScaling'):
         QApplication.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling)
@@ -53,22 +73,7 @@ if __name__ == '__main__':
     # --- ロガー設定完了 ---
 
     # --- Numbaキャッシュのクリア ---
-    try:
-        numba_cache_dir_path_str = numba.config.CACHE_DIR
-        if numba_cache_dir_path_str:
-            numba_cache_dir = Path(numba_cache_dir_path_str)
-            if numba_cache_dir.exists() and numba_cache_dir.is_dir():
-                logger.log(f"Numbaキャッシュディレクトリをクリアします: {numba_cache_dir}", level="INFO")
-                shutil.rmtree(numba_cache_dir)
-                logger.log(f"Numbaキャッシュディレクトリをクリアしました。", level="INFO")
-            else:
-                logger.log(f"Numbaキャッシュディレクトリが見つからないか、ディレクトリではありません: {numba_cache_dir}", level="INFO")
-        else:
-            logger.log(f"Numbaキャッシュディレクトリが設定されていません (numba.config.CACHE_DIR is None)。", level="INFO")
-    except ImportError:
-        logger.log("Numbaまたはshutilモジュールが見つからないため、Numbaキャッシュをクリアできません。", level="WARNING")
-    except Exception as e:
-        logger.log(f"Numbaキャッシュディレクトリのクリア中にエラーが発生しました: {e}", level="WARNING")
+    clear_numba_cache_on_exit()
     # --- Numbaキャッシュのクリア完了 ---
 
     # モデル・コントローラーの作成
@@ -145,5 +150,8 @@ if __name__ == '__main__':
         logger.log("警告: MainWindow.status_barが見つからない、または初期化されていないため、status_updatedシグナルを接続できません。", level="WARNING")
 
     main_window.show()
+
+    # アプリケーションの終了時にキャッシュをクリアするシグナルを接続
+    app.aboutToQuit.connect(clear_numba_cache_on_exit)
 
     sys.exit(app.exec())

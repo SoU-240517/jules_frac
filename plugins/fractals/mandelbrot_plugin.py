@@ -1,12 +1,12 @@
 import numpy as np
-from numba import jit
+from numba import jit, prange
 
 from plugins.base_fractal_plugin import FractalPlugin
 from logger.custom_logger import CustomLogger # logger がプロジェクトルート/loggerにあると仮定
 
 logger = CustomLogger()
 
-@jit(nopython=True, cache=True)
+@jit(nopython=True)
 def _calculate_mandelbrot_point_jit(c_real, c_imag, max_iters, escape_radius_sq):
     """
     マンデルブロ集合の単一の点に対する計算をJITコンパイルで実行します。
@@ -35,7 +35,7 @@ def _calculate_mandelbrot_point_jit(c_real, c_imag, max_iters, escape_radius_sq)
     # 収束したか、最大反復回数に到達した
     return max_iters, z_real, z_imag
 
-@jit(nopython=True, cache=True, parallel=True)
+@jit(nopython=True, parallel=True)
 def _compute_mandelbrot_grid_jit(width_px, height_px, min_x, max_x, min_y, max_y, max_iters, escape_radius_sq):
     """
     指定されたグリッドのマンデルブロ集合をJITコンパイルで並列計算します。

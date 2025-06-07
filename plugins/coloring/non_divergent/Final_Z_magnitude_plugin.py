@@ -13,7 +13,7 @@ from numba import jit
 
 logger = CustomLogger()
 
-@jit(nopython=True, cache=True)
+@jit(nopython=True)
 def _apply_final_z_abs_coloring_jit(
     iterations: np.ndarray,
     last_zn_values: np.ndarray, # 複素数型 (complex128)
