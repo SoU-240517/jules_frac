@@ -3,6 +3,10 @@ from pathlib import Path
 import shutil
 import numba
 
+# Numbaのキャッシュ機能をグローバルに無効化する
+# この設定は、個々の @jit(cache=True) よりも優先されることを期待
+numba.config.CACHE = False
+
 # プロジェクトのルートディレクトリ（'src'の親）をsys.pathに追加
 # これにより、'jules_frac' ディレクトリからの相対インポートや、そのサブディレクトリからのインポートが可能になる
 _project_root = Path(__file__).resolve().parent # このスクリプトがあるディレクトリをプロジェクトルートとする
