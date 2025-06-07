@@ -53,11 +53,33 @@ def _apply_final_z_abs_coloring_jit(
                     if color_map_array is not None:
                         num_colors = color_map_array.shape[0]
                         if num_colors > 0:
-                            color_idx = int(corrected_val * (num_colors - 1))
-                            color_idx = max(0, min(color_idx, num_colors - 1)) # クリッピング
-                            img_array_rgb[r_idx, c_idx, 0] = color_map_array[color_idx, 0]
-                            img_array_rgb[r_idx, c_idx, 1] = color_map_array[color_idx, 1]
-                            img_array_rgb[r_idx, c_idx, 2] = color_map_array[color_idx, 2]
+                            # 浮動小数点インデックスを計算
+                            float_idx = corrected_val * (num_colors - 1)
+
+                            # 線形補間のためのインデックスと重みを計算
+                            idx1 = int(float_idx)
+                            idx2 = idx1 + 1
+
+                            # 配列の境界チェック
+                            if idx1 >= num_colors - 1:
+                                idx1 = idx2 = num_colors - 1
+
+                            # 補間係数 (小数部分)
+                            interp_factor = float_idx - idx1
+
+                            # 2つの色を取得
+                            c1_r, c1_g, c1_b = color_map_array[idx1]
+                            c2_r, c2_g, c2_b = color_map_array[idx2]
+
+                            # 線形補間
+                            r = c1_r * (1.0 - interp_factor) + c2_r * interp_factor
+                            g = c1_g * (1.0 - interp_factor) + c2_g * interp_factor
+                            b = c1_b * (1.0 - interp_factor) + c2_b * interp_factor
+
+                            # 結果を代入
+                            img_array_rgb[r_idx, c_idx, 0] = int(r)
+                            img_array_rgb[r_idx, c_idx, 1] = int(g)
+                            img_array_rgb[r_idx, c_idx, 2] = int(b)
                         else: # カラーマップが空の場合 (フォールバック)
                             img_array_rgb[r_idx, c_idx, 0] = 0
                             img_array_rgb[r_idx, c_idx, 1] = 0
