@@ -639,8 +639,9 @@ class ParameterPanel(QScrollArea):
                 # else: # specific_layout is None の場合のログは削除
                     # logger.log(f"CRITICAL ERROR: specific_layout is None for {target_type} when trying to add widget for {name}.", level="CRITICAL")
 
-                if plugin_widgets:
-                    plugin_widgets[name] = widget
+                if plugin_widgets is not None:
+                    # Note: This is simplified. If sliders are re-introduced, this needs adjustment.
+                    plugin_widgets[(name, target_type)] = (widget, None)
 
                 # シグナル接続
                 if isinstance(widget, (QDoubleSpinBox, QSpinBox)):
@@ -689,10 +690,15 @@ class ParameterPanel(QScrollArea):
         if not self.fractal_controller: return
 
         plugin_widgets = self.coloring_plugin_widgets_divergent if target_type == 'divergent' else self.coloring_plugin_widgets_non_divergent
-        widget = plugin_widgets.get(param_name)
 
-        if widget and isinstance(widget, (QSpinBox, QDoubleSpinBox)):
-            original_value = self._focused_value_store.pop(widget, None) # pop from the shared store
+        widget_key = (param_name, target_type)
+        widget_tuple = plugin_widgets.get(widget_key)
+
+        if widget_tuple and isinstance(widget_tuple[0], (QSpinBox, QDoubleSpinBox)):
+            widget = widget_tuple[0]
+            # The key for focused_value_store should be consistent with how it's set in eventFilter
+            focus_key = widget # In the new logic, the widget itself is the key
+            original_value = self._focused_value_store.pop(focus_key, None)
             current_value = widget.value()
 
             if original_value is not None and current_value != original_value:
@@ -703,7 +709,8 @@ class ParameterPanel(QScrollArea):
                 self.fractal_controller.set_coloring_plugin_parameter_and_recolor(param_name, current_value, target_type=target_type)
             else:
                 logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: Value not changed for {param_name} ({target_type}). Current: {current_value}. Original: {original_value}. Skipping recolor.", level="DEBUG")
-        elif widget:
+        elif widget_tuple:
+            widget = widget_tuple[0]
             logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: Widget {param_name} ({target_type}) is not a SpinBox/DoubleSpinBox. Type: {type(widget)}. Skipping.", level="DEBUG")
         else:
             logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: Widget for {param_name} ({target_type}) not found. Skipping.", level="WARNING")
