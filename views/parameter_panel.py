@@ -341,6 +341,7 @@ class ParameterPanel(QScrollArea):
             widget = None # widget を初期化
             if type == 'float':
                 widget = QDoubleSpinBox()
+                widget.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
                 widget.setRange(p_def.get('range',(-1e9,1e9))[0], p_def.get('range',(-1e9,1e9))[1])
 
                 # プラグインから step と decimals を取得、なければデフォルト値
@@ -352,9 +353,6 @@ class ParameterPanel(QScrollArea):
 
                 current_plugin_val = current_vals.get(name, p_def.get('default'))
                 widget.setValue(current_plugin_val if current_plugin_val is not None else 0.0) # (3) 最後に値を設定
-
-                if p_def.get('hide_spin_buttons', False):
-                    widget.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
 
             elif type == 'int':
                 widget = QSpinBox(); widget.setRange(p_def.get('range',(-2**31,2**31-1))[0], p_def.get('range',(-2**31,2**31-1))[1]); widget.setValue(current_vals.get(name, p_def.get('default')) if current_vals.get(name, p_def.get('default')) is not None else 0); widget.setSingleStep(p_def.get('step',1))
@@ -610,6 +608,7 @@ class ParameterPanel(QScrollArea):
 
             if p_type == 'float':
                 widget = QDoubleSpinBox()
+                widget.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
                 widget.setRange(p_def.get('range',(-1e9,1e9))[0], p_def.get('range',(-1e9,1e9))[1])
                 # setValue と setSingleStep/setDecimals の順序をプラグイン固有UIと合わせる
                 widget.setDecimals(p_def.get('decimals',3))
