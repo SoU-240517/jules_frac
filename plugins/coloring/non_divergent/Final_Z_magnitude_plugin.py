@@ -14,22 +14,30 @@ from numba import jit
 logger = CustomLogger()
 
 # @jit(nopython=True, cache=True) # DEBUG
-def _calculate_max_abs_z_for_non_divergent_points_jit(
+        def _calculate_max_abs_z_for_non_divergent_points_jit( # Renamed in thought to max_abs_z_calculated
     iterations: np.ndarray,
     last_zn_values: np.ndarray,
     max_iterations: int
 ) -> float:
     height, width = iterations.shape
-    max_abs_z = 0.0
-    # non_divergent_point_exists = False # DEBUG: Not strictly needed for print-debugging max_abs_z
+            max_abs_z_calculated_val = 0.0 # Renamed internal variable
+            # non_divergent_point_exists = False # DEBUG
     for r_idx in range(height):
         for c_idx in range(width):
             if iterations[r_idx, c_idx] == max_iterations:
                 # non_divergent_point_exists = True # DEBUG
                 abs_z = np.abs(last_zn_values[r_idx, c_idx])
-                if abs_z > max_abs_z:
-                    max_abs_z = abs_z
-    return max_abs_z
+                        if abs_z > max_abs_z_calculated_val:
+                            max_abs_z_calculated_val = abs_z
+
+            # Ensure a minimum value if all non-divergent points are at Z=0 or very close,
+            # or if there are no non-divergent points.
+            # This helps prevent division by zero or extremely small numbers in normalization.
+            if max_abs_z_calculated_val < 1e-9: # If max is effectively zero
+                 # Default to 1.0 to avoid issues, effectively making norm_val = abs_z.
+                 # This case implies all non-divergent points are at or very near the origin.
+                return 1.0 # Or 1e-9 if a tiny scale is preferred over direct mapping
+            return max_abs_z_calculated_val
 
 # @jit(nopython=True, cache=True) # DEBUG
 def _apply_final_z_abs_coloring_jit(
@@ -204,19 +212,29 @@ class FinalZMagnitudeColoringPlugin(ColoringAlgorithmPlugin):
             gamma = 1.0
 
         # 非発散点の最大絶対値を計算
-        max_abs_z_for_norm = _calculate_max_abs_z_for_non_divergent_points_jit(
+        max_abs_z_calculated = _calculate_max_abs_z_for_non_divergent_points_jit( # Renamed from max_abs_z_for_norm
             iterations,
             last_zn_values,
             max_iterations
         )
-        # logger.log(f"Calculated max_abs_z_for_norm: {max_abs_z_for_norm}", level="INFO") # DEBUG: Changed level
-        logger.log(f"Dynamic scaling in FinalZMagnitude: max_abs_z_for_norm = {max_abs_z_for_norm}", level="DEBUG")
 
-        if max_abs_z_for_norm == 0:
-            logger.log("max_abs_z_for_norm is 0. Normalization will result in 0 for all non-divergent points.", level="WARNING")
-            # 必要であれば、ここでデフォルト値（例：1.0）を設定することもできるが、
-            # JIT関数内で0除算を避ける処理があるため、ここでは0のまま渡す。
-            # max_abs_z_for_norm = 1.0 # 例えばこのように
+        upper_cap = 1.0
+        effective_max_abs_z = min(max_abs_z_calculated, upper_cap)
+
+        # Safety check: if effective_max_abs_z ended up as zero or extremely small
+        # (e.g. if upper_cap was 0, or if _calculate_max_abs_z_... returned < 1e-9 and cap was also small)
+        # _calculate_max_abs_z_for_non_divergent_points_jit is now designed to return >= 1e-9 (or 1.0),
+        # so this check is more for extreme robustness if upper_cap is very low.
+        if effective_max_abs_z < 1e-9:
+            effective_max_abs_z = 1.0 # Fallback to 1.0 if it's still too small
+
+        logger.log(f"Dynamic scaling: calculated_max_abs_z = {max_abs_z_calculated}, effective_max_abs_z (capped at {upper_cap}) = {effective_max_abs_z}", level="DEBUG")
+
+        # The old check for max_abs_z_for_norm == 0 is now less critical here because
+        # _calculate_max_abs_z_for_non_divergent_points_jit handles the all-zero case by returning 1.0,
+        # and effective_max_abs_z also has a floor of 1e-9 (then 1.0).
+        # if effective_max_abs_z == 0: # Or < 1e-9
+        #     logger.log("effective_max_abs_z is ~0. Normalization might be problematic.", level="WARNING")
 
 
         img_array = np.zeros((height, width, 4), dtype=np.uint8)
@@ -246,7 +264,7 @@ class FinalZMagnitudeColoringPlugin(ColoringAlgorithmPlugin):
             last_zn_values,
             max_iterations,
             # escape_radius, # 動的スケーリングのため削除
-            max_abs_z_for_norm, # 新しいパラメータ
+            effective_max_abs_z, # Use the capped and floored value
             gamma,
             img_array_rgb,
             color_map_np_array,
