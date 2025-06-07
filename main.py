@@ -3,9 +3,9 @@ from pathlib import Path
 import shutil
 import numba
 
-# Numbaのキャッシュ機能をグローバルに無効化する
+# Numbaのキャッシュ機能をグローバルに有効化する
 # この設定は、個々の @jit(cache=True) よりも優先されることを期待
-numba.config.CACHE = False
+numba.config.CACHE = True
 
 # プロジェクトのルートディレクトリ（'src'の親）をsys.pathに追加
 # これにより、'jules_frac' ディレクトリからの相対インポートや、そのサブディレクトリからのインポートが可能になる
@@ -26,6 +26,8 @@ logger = CustomLogger()
 
 def clear_numba_cache_on_exit():
     """Numbaのキャッシュディレクトリを安全に削除する。"""
+    # この機能は現在無効化されています。キャッシュをクリアしたい場合は、手動で__pycache__フォルダを削除するか、この関数のコメントアウトを解除してください。
+    return
     logger.log("Numbaキャッシュのクリアを試みます...", level="INFO")
     try:
         numba_cache_dir_path_str = numba.config.CACHE_DIR
@@ -73,7 +75,8 @@ if __name__ == '__main__':
     # --- ロガー設定完了 ---
 
     # --- Numbaキャッシュのクリア ---
-    clear_numba_cache_on_exit()
+    # パフォーマンス向上のため、キャッシュの自動クリアは無効化されています。
+    # clear_numba_cache_on_exit()
     # --- Numbaキャッシュのクリア完了 ---
 
     # モデル・コントローラーの作成
@@ -152,6 +155,7 @@ if __name__ == '__main__':
     main_window.show()
 
     # アプリケーションの終了時にキャッシュをクリアするシグナルを接続
-    app.aboutToQuit.connect(clear_numba_cache_on_exit)
+    # パフォーマンス向上のため、キャッシュの自動クリアは無効化されています。
+    # app.aboutToQuit.connect(clear_numba_cache_on_exit)
 
     sys.exit(app.exec())
