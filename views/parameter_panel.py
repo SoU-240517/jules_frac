@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QScrollArea, QWidget, QVBoxLayout, QGroupBox, QFormLayout,
-    QLabel, QSpinBox, QDoubleSpinBox, QSlider, QComboBox, QPushButton,
+    QLabel, QSpinBox, QDoubleSpinBox, QComboBox, QPushButton,
     QListWidget, QListWidgetItem, QAbstractSpinBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize, QTimer, QEvent # Added QEvent
@@ -36,7 +36,6 @@ class ParameterPanel(QScrollArea):
         self.coloring_plugin_widgets_divergent = {} # 発散部用
         self.coloring_plugin_widgets_non_divergent = {} # 非発散部用
         self._focused_value_store = {} # フォーカス時の値を保存する辞書
-        self._slider_original_value = {} # スライダー操作開始時の値を保存する辞書
 
         # UIの初期化とコントローラーからのデータ読み込み
         self._init_ui()
@@ -113,10 +112,8 @@ class ParameterPanel(QScrollArea):
         self.common_params_layout = QFormLayout()
         self.iter_spinbox = QSpinBox(); self.iter_spinbox.setRange(10,100000)
         self.iter_spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
-        self.iter_spinbox.installEventFilter(self) # イベントフィルターをインストール
-        self.iter_slider = QSlider(Qt.Orientation.Horizontal); self.iter_slider.setRange(10,10000)
+        self.iter_spinbox.installEventFilter(self)
         self.common_params_layout.addRow(QLabel("最大反復回数:"), self.iter_spinbox)
-        self.common_params_layout.addRow(self.iter_slider)
         common_params_group.setLayout(self.common_params_layout)
         self.main_layout.addWidget(common_params_group)
 
@@ -223,13 +220,9 @@ class ParameterPanel(QScrollArea):
         self.render_button = QPushButton("描画実行")
         self.main_layout.addWidget(self.render_button)
         self.main_layout.addStretch(1)
-        # 共通パラメータシグナルの接続
-        self.iter_spinbox.valueChanged.connect(self._on_iter_spinbox_changed)
-        self.iter_slider.valueChanged.connect(self._on_iter_slider_changed)
+
         # 再描画をトリガーするシグナル接続
         self.iter_spinbox.editingFinished.connect(self._on_value_changed_by_ui)
-        self.iter_slider.sliderReleased.connect(self._on_value_changed_by_ui)
-        self.iter_slider.sliderPressed.connect(self._on_iter_slider_pressed) # sliderPressedシグナルを接続
 
     def _create_colormap_thumbnail(self, colors: list[tuple[int,int,int]], thumb_width: int = 96, thumb_height: int = 18) -> QPixmap:
         """
@@ -885,21 +878,6 @@ class ParameterPanel(QScrollArea):
         pack_combo.blockSignals(False)
         map_list_widget.blockSignals(False)
 
-    def _on_iter_spinbox_changed(self, value):
-        """最大反復回数スピンボックスの値が変更されたときにスライダーを更新します。"""
-        self.iter_slider.setValue(value)
-        # self._on_value_changed_by_ui() # ここでは再描画をトリガーしない
-    def _on_iter_slider_changed(self, value):
-        """最大反復回数スライダーの値が変更されたときにスピンボックスを更新します。"""
-        if self.iter_spinbox.value() != value:
-            self.iter_spinbox.setValue(value)
-        # else: self._on_value_changed_by_ui() # ここでは再描画をトリガーしない
-    def _on_iter_slider_pressed(self):
-        """iter_sliderが押されたときに現在の値を保存します。"""
-        sender_slider = self.sender()
-        if isinstance(sender_slider, QSlider):
-            self._slider_original_value[sender_slider] = sender_slider.value()
-            logger.log(f"ParameterPanel._on_iter_slider_pressed: Slider {sender_slider.objectName()} pressed. Stored value: {sender_slider.value()}", level="DEBUG")
     def _on_value_changed_by_ui(self):
         """
         共通パラメータ関連のUI要素 (中心座標、幅、反復回数) の編集が完了したときに呼び出されます。
@@ -931,18 +909,6 @@ class ParameterPanel(QScrollArea):
             else: # Value changed
                 logger.log(f"ParameterPanel._on_value_changed_by_ui (SpinBox): Value changed for {widget_object_name} from {original_value} to {current_value}. Rendering.", level="DEBUG")
 
-        elif isinstance(sender_widget, QSlider):
-            original_value = self._slider_original_value.pop(sender_widget, None)
-            current_value = sender_widget.value()
-            param_changed_for_signal = True # Slider の編集完了も常に通知対象
-
-            if original_value is not None and current_value == original_value:
-                trigger_render_flag = False
-                logger.log(f"ParameterPanel._on_value_changed_by_ui (Slider): Value not changed for {widget_object_name}. Current: {current_value}. Original: {original_value}. Skipping render.", level="DEBUG")
-            elif original_value is None:
-                logger.log(f"ParameterPanel._on_value_changed_by_ui (Slider): No original value for {widget_object_name}. Rendering.", level="DEBUG")
-            else: # Value changed
-                logger.log(f"ParameterPanel._on_value_changed_by_ui (Slider): Value changed for {widget_object_name} from {original_value} to {current_value}. Rendering.", level="DEBUG")
         else:
             # 知らないタイプのウィジェットからの場合 (例えばボタンなど、通常ここには来ないはずだが念のため)
             logger.log(f"ParameterPanel._on_value_changed_by_ui: Sender is an unexpected widget type: {widget_object_name}. Assuming render is needed.", level="WARNING")
@@ -1070,11 +1036,8 @@ class ParameterPanel(QScrollArea):
             self._set_ui_values(params['max_iterations'])
     def _set_ui_values(self, iterations: int): # 他の共通パラメータも引数に追加する可能性あり
         self.iter_spinbox.blockSignals(True)
-        self.iter_slider.blockSignals(True)
         self.iter_spinbox.setValue(iterations)
-        self.iter_slider.setValue(iterations) # スライダーも同期
         self.iter_spinbox.blockSignals(False)
-        self.iter_slider.blockSignals(False)
     def get_current_ui_parameters(self) -> dict:
         """
         現在のUIから共通パラメータの値を取得して辞書として返します。

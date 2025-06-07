@@ -104,7 +104,7 @@ class GrayscaleColoringPlugin(ColoringAlgorithmPlugin):
     @property
     def name(self) -> str:
         """カラーリングアルゴリズムの名前を返します。"""
-        return "反復回数ベース (カラーマップ対応)" # 名前を変更して機能を反映
+        return "反復回数ベース" # 名前を変更して機能を反映
 
     def get_parameters_definition(self) -> list:
         """このカラーリングアルゴリズムに固有の調整可能なパラメータのリストを返します。"""
