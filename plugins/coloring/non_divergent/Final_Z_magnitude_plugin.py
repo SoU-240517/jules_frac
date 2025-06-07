@@ -13,18 +13,39 @@ from numba import jit
 
 logger = CustomLogger()
 
-@jit(nopython=True, cache=True)
+# @jit(nopython=True, cache=True) # DEBUG
+def _calculate_max_abs_z_for_non_divergent_points_jit(
+    iterations: np.ndarray,
+    last_zn_values: np.ndarray,
+    max_iterations: int
+) -> float:
+    height, width = iterations.shape
+    max_abs_z = 0.0
+    # non_divergent_point_exists = False # DEBUG: Not strictly needed for print-debugging max_abs_z
+    for r_idx in range(height):
+        for c_idx in range(width):
+            if iterations[r_idx, c_idx] == max_iterations:
+                # non_divergent_point_exists = True # DEBUG
+                abs_z = np.abs(last_zn_values[r_idx, c_idx])
+                if abs_z > max_abs_z:
+                    max_abs_z = abs_z
+    return max_abs_z
+
+# @jit(nopython=True, cache=True) # DEBUG
 def _apply_final_z_abs_coloring_jit(
     iterations: np.ndarray,
     last_zn_values: np.ndarray, # 複素数型 (complex128)
     max_iterations: int,
-    escape_radius: float,
+    # escape_radius: float, # 動的スケーリングのためコメントアウトまたは削除
+    max_abs_z_for_norm: float, # 動的スケーリング用の最大絶対値
     gamma: float,
     img_array_rgb: np.ndarray, # RGB部分（高さx幅x3）のみを渡す
     color_map_array: np.ndarray | None, # カラーマップ用のNumPy配列、またはNone
     use_color_map: bool
 ) -> None:
     height, width = iterations.shape
+    debug_print_count = 0
+    max_debug_prints = 5
 
     for r_idx in range(height):
         for c_idx in range(width):
@@ -32,15 +53,25 @@ def _apply_final_z_abs_coloring_jit(
                 final_z = last_zn_values[r_idx, c_idx]
                 abs_z = np.abs(final_z)
 
-                norm_val = min(max(abs_z / escape_radius, 0.0), 1.0)
+                norm_val_before_gamma = 0.0
+                if max_abs_z_for_norm > 0:
+                    norm_val_before_gamma = min(max(abs_z / max_abs_z_for_norm, 0.0), 1.0)
+                # else norm_val_before_gamma remains 0.0
 
-                if norm_val > 0:
-                     corrected_val = norm_val ** (1.0 / gamma)
+                if norm_val_before_gamma > 0:
+                     corrected_val_after_gamma = norm_val_before_gamma ** (1.0 / gamma)
                 else:
-                    corrected_val = 0.0
+                    corrected_val_after_gamma = 0.0
 
-                # ガンマ補正後もクリッピングが必要な場合がある
-                corrected_val = min(max(corrected_val, 0.0), 1.0)
+                corrected_val_after_gamma = min(max(corrected_val_after_gamma, 0.0), 1.0)
+
+                if debug_print_count < max_debug_prints:
+                    print(f"[DEBUG JIT] Point ({r_idx},{c_idx}): abs_z={abs_z:.4f}, max_abs_z_for_norm={max_abs_z_for_norm:.4f}, "
+                          f"norm_val(raw)={norm_val_before_gamma:.4f}, corrected_val(gamma)={corrected_val_after_gamma:.4f}, gamma={gamma:.2f}")
+                    debug_print_count += 1
+
+                # Use corrected_val_after_gamma for coloring
+                corrected_val = corrected_val_after_gamma
 
                 if not use_color_map: # グレースケール
                     gray_val = int(corrected_val * 255)
@@ -161,14 +192,31 @@ class FinalZMagnitudeColoringPlugin(ColoringAlgorithmPlugin):
             max_iterations = 1
 
         escape_radius = common_fractal_params.get('escape_radius', 2.0)
-        if escape_radius <= 0: # escape_radius は正であるべき
-            logger.log(f"escape_radius ({escape_radius}) は正であるべきです。デフォルト値 2.0 を使用します。", level="WARNING")
-            escape_radius = 2.0
+        # escape_radius は _apply_final_z_abs_coloring_jit に直接渡されなくなるが、
+        # 他のロジック（例：ドキュメントや将来の拡張）で参照される可能性があるため、
+        # common_fractal_params からの取得は残しておく。
+        # ただし、このプラグインの現在の正規化ロジックでは使用されない。
+        _escape_radius_param = common_fractal_params.get('escape_radius', 2.0) # 変数名を変更して未使用を示す
 
         gamma = algorithm_params.get("gamma", 1.0)
         if gamma <= 0: # ガンマ値は正であるべき
             logger.log(f"ガンマ値 ({gamma}) は正であるべきです。デフォルト値 1.0 を使用します。", level="WARNING")
             gamma = 1.0
+
+        # 非発散点の最大絶対値を計算
+        max_abs_z_for_norm = _calculate_max_abs_z_for_non_divergent_points_jit(
+            iterations,
+            last_zn_values,
+            max_iterations
+        )
+        # logger.log(f"Calculated max_abs_z_for_norm: {max_abs_z_for_norm}", level="INFO") # DEBUG: Changed level
+        logger.log(f"Dynamic scaling in FinalZMagnitude: max_abs_z_for_norm = {max_abs_z_for_norm}", level="DEBUG")
+
+        if max_abs_z_for_norm == 0:
+            logger.log("max_abs_z_for_norm is 0. Normalization will result in 0 for all non-divergent points.", level="WARNING")
+            # 必要であれば、ここでデフォルト値（例：1.0）を設定することもできるが、
+            # JIT関数内で0除算を避ける処理があるため、ここでは0のまま渡す。
+            # max_abs_z_for_norm = 1.0 # 例えばこのように
 
 
         img_array = np.zeros((height, width, 4), dtype=np.uint8)
@@ -197,7 +245,8 @@ class FinalZMagnitudeColoringPlugin(ColoringAlgorithmPlugin):
             iterations,
             last_zn_values,
             max_iterations,
-            escape_radius,
+            # escape_radius, # 動的スケーリングのため削除
+            max_abs_z_for_norm, # 新しいパラメータ
             gamma,
             img_array_rgb,
             color_map_np_array,
