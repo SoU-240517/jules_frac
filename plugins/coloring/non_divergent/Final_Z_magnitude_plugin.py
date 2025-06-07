@@ -13,7 +13,7 @@ from numba import jit
 
 logger = CustomLogger()
 
-# @jit(nopython=True, cache=True) # 一時的にJITを無効化
+@jit(nopython=True, cache=True)
 def _apply_final_z_abs_coloring_jit(
     iterations: np.ndarray,
     last_zn_values: np.ndarray, # 複素数型 (complex128)
@@ -26,47 +26,25 @@ def _apply_final_z_abs_coloring_jit(
 ) -> None:
     height, width = iterations.shape
 
-    # デバッグ用変数の初期化
-    max_abs_z_overall = 0.0
-    max_norm_val_overall = 0.0
-    max_corrected_val_overall = 0.0
-    count_norm_val_near_one = 0
-    count_corrected_val_near_one = 0
-    non_divergent_points_count = 0
-
     for r_idx in range(height):
         for c_idx in range(width):
             if iterations[r_idx, c_idx] == max_iterations: # 非発散点
-                non_divergent_points_count += 1
                 final_z = last_zn_values[r_idx, c_idx]
                 abs_z = np.abs(final_z)
 
-                if abs_z > max_abs_z_overall:
-                    max_abs_z_overall = abs_z
-
                 norm_val = min(max(abs_z / escape_radius, 0.0), 1.0)
-
-                if norm_val > max_norm_val_overall:
-                    max_norm_val_overall = norm_val
-                if norm_val >= 0.95:
-                    count_norm_val_near_one += 1
 
                 if norm_val > 0:
                      corrected_val = norm_val ** (1.0 / gamma)
                 else:
                     corrected_val = 0.0
 
+                # ガンマ補正後もクリッピングが必要な場合がある
                 corrected_val = min(max(corrected_val, 0.0), 1.0)
-
-
-                if corrected_val > max_corrected_val_overall:
-                    max_corrected_val_overall = corrected_val
-                if corrected_val >= 0.95:
-                    count_corrected_val_near_one += 1
 
                 if not use_color_map: # グレースケール
                     gray_val = int(corrected_val * 255)
-                    gray_val = max(0, min(gray_val, 255))
+                    gray_val = max(0, min(gray_val, 255)) # 念のためクリッピング
                     img_array_rgb[r_idx, c_idx, 0] = gray_val
                     img_array_rgb[r_idx, c_idx, 1] = gray_val
                     img_array_rgb[r_idx, c_idx, 2] = gray_val
@@ -74,24 +52,17 @@ def _apply_final_z_abs_coloring_jit(
                     if color_map_array is not None:
                         num_colors = color_map_array.shape[0]
                         if num_colors > 0:
-                            color_idx = int(corrected_val * num_colors) # Original fix attempt
-                            color_idx = max(0, min(color_idx, num_colors - 1))
-
+                            # This was the first fix attempt, which should be kept.
+                            color_idx = int(corrected_val * num_colors)
+                            color_idx = max(0, min(color_idx, num_colors - 1)) # クリッピング
                             img_array_rgb[r_idx, c_idx, 0] = color_map_array[color_idx, 0]
                             img_array_rgb[r_idx, c_idx, 1] = color_map_array[color_idx, 1]
                             img_array_rgb[r_idx, c_idx, 2] = color_map_array[color_idx, 2]
-                        else:
+                        else: # カラーマップが空の場合 (フォールバック)
                             img_array_rgb[r_idx, c_idx, 0] = 0
                             img_array_rgb[r_idx, c_idx, 1] = 0
                             img_array_rgb[r_idx, c_idx, 2] = 0
-
-    print(f"[DEBUG] Non-divergent points: {non_divergent_points_count}")
-    if non_divergent_points_count > 0:
-        print(f"[DEBUG] Max abs_z observed: {max_abs_z_overall} (escape_radius: {escape_radius})")
-        print(f"[DEBUG] Max norm_val observed: {max_norm_val_overall}")
-        print(f"[DEBUG] Max corrected_val observed: {max_corrected_val_overall} (gamma: {gamma})")
-        print(f"[DEBUG] norm_val >= 0.95 count: {count_norm_val_near_one}")
-        print(f"[DEBUG] corrected_val >= 0.95 count: {count_corrected_val_near_one}")
+            # else: 発散した点などはデフォルトの色（黒）のまま
 
 
 class FinalZMagnitudeColoringPlugin(ColoringAlgorithmPlugin):
