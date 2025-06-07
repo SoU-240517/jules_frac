@@ -6,7 +6,7 @@ from logger.custom_logger import CustomLogger # logger がプロジェクトル�
 
 logger = CustomLogger()
 
-    # @jit(nopython=True, cache=True) # Numba JITを一時的に無効化
+@jit(nopython=True, cache=True)
 def _calculate_mandelbrot_point_jit(c_real, c_imag, max_iters, escape_radius_sq):
     """
     マンデルブロ集合の単一の点に対する計算をJITコンパイルで実行します。
@@ -35,7 +35,7 @@ def _calculate_mandelbrot_point_jit(c_real, c_imag, max_iters, escape_radius_sq)
     # 収束したか、最大反復回数に到達した
     return max_iters, z_real, z_imag
 
-    # @jit(nopython=True, cache=True, parallel=True) # Numba JITを一時的に無効化
+@jit(nopython=True, cache=True, parallel=True)
 def _compute_mandelbrot_grid_jit(width_px, height_px, min_x, max_x, min_y, max_y, max_iters, escape_radius_sq):
     """
     指定されたグリッドのマンデルブロ集合をJITコンパイルで並列計算します。

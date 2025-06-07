@@ -1,5 +1,7 @@
 import sys
 from pathlib import Path
+import shutil
+import numba
 
 # プロジェクトのルートディレクトリ（'src'の親）をsys.pathに追加
 # これにより、'jules_frac' ディレクトリからの相対インポートや、そのサブディレクトリからのインポートが可能になる
@@ -45,6 +47,25 @@ if __name__ == '__main__':
     # 実際にDEBUGレベルでログが出力されるかは、ファイル内の設定とここでの設定によります。
     logger.log(f"ロガー設定を適用しました。レベル: {log_level_to_set}, 有効: {log_enabled_to_set}", level="DEBUG")
     # --- ロガー設定完了 ---
+
+    # --- Numbaキャッシュのクリア ---
+    try:
+        numba_cache_dir_path_str = numba.config.CACHE_DIR
+        if numba_cache_dir_path_str:
+            numba_cache_dir = Path(numba_cache_dir_path_str)
+            if numba_cache_dir.exists() and numba_cache_dir.is_dir():
+                logger.log(f"Numbaキャッシュディレクトリをクリアします: {numba_cache_dir}", level="INFO")
+                shutil.rmtree(numba_cache_dir)
+                logger.log(f"Numbaキャッシュディレクトリをクリアしました。", level="INFO")
+            else:
+                logger.log(f"Numbaキャッシュディレクトリが見つからないか、ディレクトリではありません: {numba_cache_dir}", level="INFO")
+        else:
+            logger.log(f"Numbaキャッシュディレクトリが設定されていません (numba.config.CACHE_DIR is None)。", level="INFO")
+    except ImportError:
+        logger.log("Numbaまたはshutilモジュールが見つからないため、Numbaキャッシュをクリアできません。", level="WARNING")
+    except Exception as e:
+        logger.log(f"Numbaキャッシュディレクトリのクリア中にエラーが発生しました: {e}", level="WARNING")
+    # --- Numbaキャッシュのクリア完了 ---
 
     # モデル・コントローラーの作成
     # FractalEngineにプロジェクトルートパスとSettingsManagerを渡す

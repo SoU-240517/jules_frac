@@ -5,7 +5,7 @@ from plugins.base_fractal_plugin import FractalPlugin
 from logger.custom_logger import CustomLogger # logger がプロジェクトルート/loggerにあると仮定
 
 logger = CustomLogger()
-@jit(nopython=True) # Numba JITコンパイラを適用します。
+@jit(nopython=True, cache=True) # Numba JITコンパイラを適用し、キャッシュを有効にします。
 def _calculate_julia_point_jit(z_real_start, z_imag_start, c_real_const, c_imag_const, max_iters, escape_radius_sq):
     """
     ジュリア集合の単一の点に対する計算をJITコンパイルで実行します。
@@ -35,7 +35,7 @@ def _calculate_julia_point_jit(z_real_start, z_imag_start, c_real_const, c_imag_
         z_imag = new_z_imag
     return max_iters, z_real, z_imag # 収束したか、最大反復回数に到達した
 
-@jit(nopython=True) # Numba JITコンパイラを適用します。
+@jit(nopython=True, cache=True) # Numba JITコンパイラを適用し、キャッシュを有効にします。
 def _compute_julia_grid_jit(width_px, height_px, min_x, max_x, min_y, max_y,
                             c_real_const, c_imag_const, max_iters, escape_radius_sq):
     """
