@@ -157,4 +157,12 @@ if __name__ == '__main__':
     # パフォーマンス向上のため、キャッシュの自動クリアは無効化されています。
     # app.aboutToQuit.connect(clear_numba_cache_on_exit)
 
+    def save_engine_settings_on_exit():
+        logger.log("アプリケーション終了前にエンジン設定を保存します...", level="INFO")
+        engine_config = fractal_engine.save_settings()
+        settings_manager.set_setting("engine_settings", engine_config, auto_save=False) # auto_save=Falseにして最後にまとめて保存
+        settings_manager.save_settings()
+        logger.log("エンジン設定を保存しました。", level="INFO")
+
+    app.aboutToQuit.connect(save_engine_settings_on_exit)
     sys.exit(app.exec())
