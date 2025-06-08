@@ -38,7 +38,7 @@ class FractalController(QObject):
 
         self.current_exporter: ImageExporter | None = None
         self.thread_pool = QThreadPool.globalInstance()
-        self.current_renderer_task: FractalRenderer | None = None
+        self.current_renderer_task = None
         self.active_coloring_target_type: str = 'divergent' # Default target type
         # オプション: 必要に応じて同時エクスポート数を制限します。例: self.thread_pool.setMaxThreadCount(1)
 

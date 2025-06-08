@@ -60,7 +60,7 @@ def _compute_mandelbrot_grid_jit(width_px, height_px, min_x, max_x, min_y, max_y
     pixel_width_complex = (max_x - min_x) / width_px
     pixel_height_complex = (max_y - min_y) / height_px
 
-    for y_idx in range(height_px):
+    for y_idx in prange(height_px): # prangeを使用して並列化を明示
         c_imag = min_y + y_idx * pixel_height_complex
         for x_idx in range(width_px):
             c_real = min_x + x_idx * pixel_width_complex
