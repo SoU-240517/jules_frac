@@ -20,8 +20,8 @@ class PluginManager:
     def __init__(self,
                  project_root_path: Path,
                  fractal_plugin_folder_path: str = "plugins/fractals", # project_root_path からの相対パス
-                 divergent_coloring_plugin_folder_path: str = "plugins/coloring/divergent", # project_root_path からの相対パス
-                 non_divergent_coloring_plugin_folder_path: str = "plugins/coloring/non_divergent"): # project_root_path からの相対パス
+                 divergent_coloring_plugin_folder_path: str = "plugins/coloring/divergent", # 同上
+                 non_divergent_coloring_plugin_folder_path: str = "plugins/coloring/non_divergent"): # 同上
         """
         PluginManager を初期化します。
         `fractal_plugin_folder_path`, `divergent_coloring_plugin_folder_path`,

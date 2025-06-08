@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import QApplication
 from views.main_window import MainWindow
 from models.fractal_engine import FractalEngine
 from controllers.fractal_controller import FractalController
-from utils.settings_manager import SettingsManager # SettingsManager クラスをインポート
+from utils.settings_manager import SettingsManager
 from PyQt6.QtCore import Qt
 
 from logger.custom_logger import CustomLogger
@@ -80,8 +80,7 @@ if __name__ == '__main__':
     # --- Numbaキャッシュのクリア完了 ---
 
     # モデル・コントローラーの作成
-    # FractalEngineにプロジェクトルートパスとSettingsManagerを渡す
-    fractal_engine = FractalEngine(project_root_path=_project_root, settings_manager=settings_manager) # プラグイン読み込みと設定読み込みのために渡す
+    fractal_engine = FractalEngine(project_root_path=_project_root, settings_manager=settings_manager)
     fractal_controller = FractalController(fractal_engine)
 
     # ダークテーマのスタイルシート

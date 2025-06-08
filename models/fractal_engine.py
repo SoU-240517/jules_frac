@@ -1,12 +1,16 @@
 import numpy as np
 import traceback
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from plugins.plugin_manager import PluginManager
 from plugins.base_fractal_plugin import FractalPlugin
 from plugins.base_coloring_plugin import ColoringAlgorithmPlugin
 from coloring.color_manager import ColorManager
 from logger.custom_logger import CustomLogger
+
+if TYPE_CHECKING:
+    from utils.settings_manager import SettingsManager
 
 logger = CustomLogger()
 
@@ -18,7 +22,7 @@ class FractalEngine:
     高解像度画像の出力機能も提供します。
     """
     def __init__(self, project_root_path: Path, image_width_px=800, image_height_px=600,
-                 settings_manager=None, fractal_plugin_folder="plugins/fractals",  # project_root_pathからの相対パス
+                 settings_manager: 'SettingsManager | None' = None, fractal_plugin_folder="plugins/fractals",  # project_root_pathからの相対パス
                  coloring_plugin_folder="plugins/coloring", # 同上
                  color_pack_folder="plugins/colorpacks"):   # 同上
         """
@@ -33,7 +37,7 @@ class FractalEngine:
             coloring_plugin_folder (str): `project_root_path` からのカラーリングプラグインフォルダへの相対パス。
             color_pack_folder (str): `project_root_path` からのカラーパックフォルダへの相対パス。
         """
-        self.settings_manager = settings_manager
+        self.settings_manager: 'SettingsManager | None' = settings_manager
         self.max_iterations = 100
         self.center_real = -0.5
         self.center_imag = 0.0
@@ -47,8 +51,8 @@ class FractalEngine:
         self.plugin_manager = PluginManager(
             project_root_path=project_root_path,
             fractal_plugin_folder_path=fractal_plugin_folder,
-            divergent_coloring_plugin_folder_path="plugins/coloring/divergent", # Changed
-            non_divergent_coloring_plugin_folder_path="plugins/coloring/non_divergent" # Changed
+            divergent_coloring_plugin_folder_path="plugins/coloring/divergent",
+            non_divergent_coloring_plugin_folder_path="plugins/coloring/non_divergent"
         )
         # ColorManagerもプロジェクトルートからの相対パスで初期化するのが望ましいです
         self.color_manager = ColorManager(color_packs_dir=str(project_root_path / color_pack_folder))
@@ -79,7 +83,6 @@ class FractalEngine:
                 self.load_settings(engine_saved_settings)
             else:
                 logger.log("保存されたエンジン設定が見つからないか、形式が不正です。デフォルト設定を使用します。", level="INFO")
-
 
     def _initialize_default_plugins_and_map(self):
         """
