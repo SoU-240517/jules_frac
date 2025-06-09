@@ -28,13 +28,14 @@
         "plugins"
     ],
     "language": "ja",
+    "save_engine_settings": false,
     "engine_settings": {
         "common_parameters": {
-            "center_real": -0.6820106158925321,
-            "center_imag": -0.1914102453413365,
-            "width": 1.205632716049383,
-            "height": 0.9202831695253999,
-            "max_iterations": 200,
+            "center_real": -0.5,
+            "center_imag": 0.0,
+            "width": 3.0,
+            "height": 2.2899590163934427,
+            "max_iterations": 100,
             "escape_radius": 2.0
         },
         "active_fractal_plugin_name": "Mandelbrot",
@@ -45,7 +46,7 @@
             "color_scale": 1.0
         },
         "color_pack_divergent_name": "デフォルト",
-        "color_map_divergent_name": "基本プライマリ",
+        "color_map_divergent_name": "グレースケール",
         "coloring_plugin_non_divergent_name": "複素ポテンシャル",
         "coloring_plugin_non_divergent_params": {},
         "color_pack_non_divergent_name": "デフォルト",

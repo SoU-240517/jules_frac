@@ -158,11 +158,18 @@ if __name__ == '__main__':
     # app.aboutToQuit.connect(clear_numba_cache_on_exit)
 
     def save_engine_settings_on_exit():
-        logger.log("アプリケーション終了前にエンジン設定を保存します...", level="INFO")
-        engine_config = fractal_engine.save_settings()
-        settings_manager.set_setting("engine_settings", engine_config, auto_save=False) # auto_save=Falseにして最後にまとめて保存
-        settings_manager.save_settings()
-        logger.log("エンジン設定を保存しました。", level="INFO")
+        # base_settings.json から save_engine_settings の値を取得
+        # デフォルト値は True (従来通りの動作)
+        should_save_engine_settings = settings_manager.get_setting("save_engine_settings", True)
+
+        if should_save_engine_settings:
+            logger.log("アプリケーション終了前にエンジン設定を保存します...", level="INFO")
+            engine_config = fractal_engine.save_settings()
+            settings_manager.set_setting("engine_settings", engine_config, auto_save=False) # auto_save=Falseにして最後にまとめて保存
+            settings_manager.save_settings() # ここでウィンドウ設定なども含めて全て保存
+            logger.log("エンジン設定を保存しました。", level="INFO")
+        else:
+            logger.log("エンジン設定の保存はスキップされました (save_engine_settings is false)。", level="INFO")
 
     app.aboutToQuit.connect(save_engine_settings_on_exit)
     sys.exit(app.exec())

@@ -79,7 +79,7 @@ class FractalEngine:
             engine_saved_settings = self.settings_manager.get_setting("engine_settings")
             if engine_saved_settings and isinstance(engine_saved_settings, dict):
                 self.load_settings(engine_saved_settings)
-                logger.log("保存されたエンジン設定を適用しました。", level="INFO")
+                logger.log("エンジン設定適用完了", level="INFO")
             else:
                 logger.log("保存されたエンジン設定が見つからないか形式が不正です。デフォルト設定を試みます。", level="INFO")
         else:
@@ -721,9 +721,9 @@ class FractalEngine:
             self.update_aspect_ratio() # Ensure 'height' (complex plane) is updated
 
             self.last_fractal_data_cache = None # Invalidate cache
-            logger.log("エンジン設定をロードしました。", level="INFO")
+            logger.log("エンジン設定読込完了", level="INFO")
         except Exception as e:
-            logger.log(f"エンジン設定のロード中にエラーが発生しました: {e}", level="ERROR")
+            logger.log(f"エンジン設定読込中にエラー発生: {e}", level="ERROR")
             traceback.print_exc()
 
 if __name__ == '__main__':
