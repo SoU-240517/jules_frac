@@ -79,8 +79,8 @@ class FractalEngine:
         if self.settings_manager:
             engine_saved_settings = self.settings_manager.get_setting("engine_settings")
             if engine_saved_settings and isinstance(engine_saved_settings, dict):
-                logger.log("保存されたエンジン設定をロードします。", level="INFO")
                 self.load_settings(engine_saved_settings)
+                logger.log("エンジン設定をロード完了: base_settings.json", level="INFO")
             else:
                 logger.log("保存されたエンジン設定が見つからないか、形式が不正です。デフォルト設定を使用します。", level="INFO")
 
@@ -273,14 +273,14 @@ class FractalEngine:
             self.current_coloring_plugin_parameters_divergent.clear()
             for p_def in plugin.get_parameters_definition():
                 self.current_coloring_plugin_parameters_divergent[p_def['name']] = p_def['default']
-            logger.log(f"発散部用カラーリングプラグインを '{plugin_name}' に設定", level="INFO")
+            logger.log(f"'{plugin_name}' に設定", level="INFO")
             return True
         elif target_type == 'non_divergent':
             self.current_coloring_plugin_non_divergent = plugin
             self.current_coloring_plugin_parameters_non_divergent.clear()
             for p_def in plugin.get_parameters_definition():
                 self.current_coloring_plugin_parameters_non_divergent[p_def['name']] = p_def['default']
-            logger.log(f"非発散部用カラーリングプラグインを '{plugin_name}' に設定", level="INFO")
+            logger.log(f"'{plugin_name}' に設定", level="INFO")
             return True
         else:
             logger.log(f"set_active_coloring_plugin のための無効なターゲットタイプ '{target_type}'", level="WARNING")

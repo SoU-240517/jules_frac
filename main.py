@@ -71,7 +71,7 @@ if __name__ == '__main__':
     logger.set_level(log_level_to_set) # 設定ファイルから読み込んだレベルを適用
     logger.set_enabled(log_enabled_to_set)
     # 実際にDEBUGレベルでログが出力されるかは、ファイル内の設定とここでの設定によります。
-    logger.log(f"ロガー設定を適用しました。レベル: {log_level_to_set}, 有効: {log_enabled_to_set}", level="DEBUG")
+    logger.log(f"ロガー設定適用 [レベル: {log_level_to_set}, 有効: {log_enabled_to_set}]", level="DEBUG")
     # --- ロガー設定完了 ---
 
     # --- Numbaキャッシュのクリア ---
