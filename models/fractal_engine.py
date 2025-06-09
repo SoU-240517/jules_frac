@@ -60,7 +60,7 @@ class FractalEngine:
         self.current_fractal_plugin: FractalPlugin | None = None
         self.current_fractal_plugin_parameters: dict = {}
 
-        self.active_coloring_target_type: str = 'divergent' # Default active target
+        self.active_coloring_target_type: str = 'divergent' # Default active target, may be overridden by loaded settings
 
         self.current_coloring_plugin_divergent: ColoringAlgorithmPlugin | None = None
         self.current_coloring_plugin_parameters_divergent: dict = {}
@@ -74,15 +74,19 @@ class FractalEngine:
 
         self.last_fractal_data_cache: dict | None = None
 
-        self._initialize_default_plugins_and_map()
-
+        # 設定のロードを試みる
         if self.settings_manager:
             engine_saved_settings = self.settings_manager.get_setting("engine_settings")
             if engine_saved_settings and isinstance(engine_saved_settings, dict):
                 self.load_settings(engine_saved_settings)
-                logger.log("エンジン設定をロード完了: base_settings.json", level="INFO")
+                logger.log("保存されたエンジン設定を適用しました。", level="INFO")
             else:
-                logger.log("保存されたエンジン設定が見つからないか、形式が不正です。デフォルト設定を使用します。", level="INFO")
+                logger.log("保存されたエンジン設定が見つからないか形式が不正です。デフォルト設定を試みます。", level="INFO")
+        else:
+            logger.log("SettingsManager が未提供のため、デフォルト設定を試みます。", level="INFO")
+
+        # デフォルトプラグインとカラーマップの初期化 (まだ設定されていない場合)
+        self._initialize_default_plugins_and_map()
 
     def _initialize_default_plugins_and_map(self):
         """
@@ -91,55 +95,65 @@ class FractalEngine:
         DivergentとNon-Divergentの両方のカラーリングコンテキストを初期化します。
         """
         # Fractal Plugin
-        available_fractal_plugins = self.get_available_fractal_plugin_names()
-        if available_fractal_plugins:
-            default_fractal = "Mandelbrot"
-            if default_fractal in available_fractal_plugins: self.set_active_fractal_plugin(default_fractal)
-            else: self.set_active_fractal_plugin(available_fractal_plugins[0])
-        else: logger.log("フラクタルプラグインが見つかりません。", level="WARNING")
+        if self.current_fractal_plugin is None:
+            available_fractal_plugins = self.get_available_fractal_plugin_names()
+            if available_fractal_plugins:
+                default_fractal = "Mandelbrot"
+                if default_fractal in available_fractal_plugins: self.set_active_fractal_plugin(default_fractal)
+                else: self.set_active_fractal_plugin(available_fractal_plugins[0])
+            else: logger.log("フラクタルプラグインが見つかりません。フラクタル機能のデフォルト設定をスキップします。", level="WARNING")
 
         # Divergent Coloring Plugin
-        available_div_plugins = self.get_available_coloring_plugin_names(target_type='divergent')
-        if available_div_plugins:
-            default_div_coloring = "グレースケール (標準)" # Assuming this is a divergent plugin
-            if default_div_coloring in available_div_plugins:
-                self.set_active_coloring_plugin(default_div_coloring, target_type='divergent')
-            elif "スムーズカラー" in available_div_plugins: # Assuming this is divergent
-                 self.set_active_coloring_plugin("スムーズカラー", target_type='divergent')
+        if self.current_coloring_plugin_divergent is None:
+            available_div_plugins = self.get_available_coloring_plugin_names(target_type='divergent')
+            if available_div_plugins:
+                default_div_coloring = "グレースケール (標準)"
+                if default_div_coloring in available_div_plugins:
+                    self.set_active_coloring_plugin(default_div_coloring, target_type='divergent')
+                elif "スムーズカラー" in available_div_plugins:
+                     self.set_active_coloring_plugin("スムーズカラー", target_type='divergent')
+                else:
+                    self.set_active_coloring_plugin(available_div_plugins[0], target_type='divergent')
             else:
-                self.set_active_coloring_plugin(available_div_plugins[0], target_type='divergent')
-        else:
-            logger.log("発散部カラーリングプラグインが見つかりません。", level="WARNING")
+                logger.log("発散部カラーリングプラグインが見つかりません。発散部カラーリングのデフォルト設定をスキップします。", level="WARNING")
 
         # Non-Divergent Coloring Plugin
-        available_nondiv_plugins = self.get_available_coloring_plugin_names(target_type='non_divergent')
-        if available_nondiv_plugins:
-            default_nondiv_coloring = "反復収束速度" # Assuming this is non-divergent
-            if default_nondiv_coloring in available_nondiv_plugins:
-                self.set_active_coloring_plugin(default_nondiv_coloring, target_type='non_divergent')
-            elif "複素ポテンシャル" in available_nondiv_plugins: # Assuming this is non-divergent
-                 self.set_active_coloring_plugin("複素ポテンシャル", target_type='non_divergent')
+        if self.current_coloring_plugin_non_divergent is None:
+            available_nondiv_plugins = self.get_available_coloring_plugin_names(target_type='non_divergent')
+            if available_nondiv_plugins:
+                default_nondiv_coloring = "反復収束速度"
+                if default_nondiv_coloring in available_nondiv_plugins:
+                    self.set_active_coloring_plugin(default_nondiv_coloring, target_type='non_divergent')
+                elif "複素ポテンシャル" in available_nondiv_plugins:
+                     self.set_active_coloring_plugin("複素ポテンシャル", target_type='non_divergent')
+                else:
+                    self.set_active_coloring_plugin(available_nondiv_plugins[0], target_type='non_divergent')
             else:
-                self.set_active_coloring_plugin(available_nondiv_plugins[0], target_type='non_divergent')
-        else:
-            logger.log("非発散部カラーリングプラグインが見つかりません。", level="WARNING")
+                logger.log("非発散部カラーリングプラグインが見つかりません。非発散部カラーリングのデフォルト設定をスキップします。", level="WARNING")
 
-        # Default Color Map (shared for now, or could be specific)
-        # For simplicity, let's use one set of color map controls that applies to the *active* target type.
-        # Or, we initialize both to the same default map. Let's initialize both.
+        # Default Color Maps
         available_color_packs = self.get_available_color_pack_names()
-        if available_color_packs:
-            pack_to_try = "デフォルト"
-            if pack_to_try not in available_color_packs: pack_to_try = available_color_packs[0]
-            maps_in_pack = self.get_available_color_map_names_in_pack(pack_to_try)
-            if maps_in_pack:
-                self.set_active_color_map(pack_to_try, maps_in_pack[0], target_type='divergent')
-                self.set_active_color_map(pack_to_try, maps_in_pack[0], target_type='non_divergent')
-        else: logger.log("カラーパックが見つかりません。", level="WARNING")
 
-        # Set the overall active target type (already defaults to 'divergent')
-        # self.active_coloring_target_type = 'divergent'
+        if self.current_color_pack_name_divergent is None or self.current_color_map_name_divergent is None:
+            if available_color_packs:
+                pack_to_try = "デフォルト"
+                if pack_to_try not in available_color_packs: pack_to_try = available_color_packs[0]
+                maps_in_pack = self.get_available_color_map_names_in_pack(pack_to_try)
+                if maps_in_pack:
+                    self.set_active_color_map(pack_to_try, maps_in_pack[0], target_type='divergent')
 
+        if self.current_color_pack_name_non_divergent is None or self.current_color_map_name_non_divergent is None:
+            if available_color_packs:
+                pack_to_try = "デフォルト"
+                if pack_to_try not in available_color_packs: pack_to_try = available_color_packs[0]
+                maps_in_pack = self.get_available_color_map_names_in_pack(pack_to_try)
+                if maps_in_pack:
+                    self.set_active_color_map(pack_to_try, maps_in_pack[0], target_type='non_divergent')
+
+        if not available_color_packs and \
+           (self.current_color_pack_name_divergent is None or self.current_color_map_name_divergent is None or \
+            self.current_color_pack_name_non_divergent is None or self.current_color_map_name_non_divergent is None):
+             logger.log("カラーパックが見つかりません。カラーマップのデフォルト設定の一部または全てをスキップしました。", level="WARNING")
 
     def update_image_size(self, image_width_px, image_height_px):
         """
