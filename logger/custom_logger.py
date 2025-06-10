@@ -73,7 +73,7 @@ class CustomLogger:
         try:
             # SettingsManager のインスタンス化時にロギングが発生する可能性があるため、
             # _initializing フラグが CustomLogger.log() でチェックされることが重要です。
-            settings_manager = SettingsManager(settings_filename="base_settings.json", _is_for_logger_init=True) # SettingsManager は自身のロガーを使用する可能性があります
+            settings_manager = SettingsManager(settings_filename="base_settings.jsonc", _is_for_logger_init=True) # SettingsManager は自身のロガーを使用する可能性があります
 
             # SettingsManagerから "logging" 設定を取得するためのデフォルト値を定義
             # このデフォルト値は、settings_manager.get_setting の第2引数として使用される
@@ -258,7 +258,7 @@ if __name__ == '__main__':
     print("--- CustomLogger __main__ テスト開始 ---", flush=True)
 
     # 1. SettingsManagerがデフォルト設定を使用する場合のロガーの初期化をテスト
-    # (base_settings.jsonが存在しないか、loggingセクションがない場合)
+    # (base_settings.jsoncが存在しないか、loggingセクションがない場合)
     print("\nステージ1: デフォルト設定でのロガー初期化テスト", flush=True)
     logger1 = CustomLogger()
     print(f"初期ログレベル (logger1): {CustomLogger._current_level_int} (期待値: INFO=20)", flush=True)
@@ -267,7 +267,7 @@ if __name__ == '__main__':
     logger1.log("デフォルトDEBUGレベルで表示されないはずのメッセージ (logger1)", level="DEBUG")
 
     # 2. SettingsManagerが特定のファイル設定を読み込むように準備
-    print("\nステージ2: base_settings.jsonを使用したロガー設定テストの準備", flush=True)
+    print("\nステージ2: base_settings.jsoncを使用したロガー設定テストの準備", flush=True)
     from utils.settings_manager import SettingsManager
     # テスト用の設定ファイルを作成
     settings_content = {
@@ -277,11 +277,11 @@ if __name__ == '__main__':
         },
         "other_setting": "value"
     }
-    # SettingsManagerは通常 ~/.fractalapp/base_settings.json を使用します
+    # SettingsManagerは通常 ~/.fractalapp/base_settings.jsonc を使用します
     # CustomLogger内でインスタンス化されるSettingsManagerがこのファイルを見つけるようにします
     settings_dir = Path.home() / ".fractalapp"
     settings_dir.mkdir(parents=True, exist_ok=True)
-    settings_file_path = settings_dir / "base_settings.json"
+    settings_file_path = settings_dir / "base_settings.jsonc"
 
     with open(settings_file_path, 'w', encoding='utf-8') as f:
         import json

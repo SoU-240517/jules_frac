@@ -54,7 +54,7 @@ if __name__ == '__main__':
 
     app = QApplication(sys.argv)
 
-    settings_file_name = "base_settings.json" # 設定ファイル名
+    settings_file_name = "base_settings.jsonc" # 設定ファイル名
     settings_file_path = _project_root / settings_file_name # SettingsManager で使用するための絶対パス
     settings_manager = SettingsManager(settings_filename=str(settings_file_path))
 
@@ -158,7 +158,7 @@ if __name__ == '__main__':
     # app.aboutToQuit.connect(clear_numba_cache_on_exit)
 
     def save_engine_settings_on_exit():
-        # base_settings.json から save_engine_settings の値を取得
+        # base_settings.jsonc から save_engine_settings の値を取得
         # デフォルト値は True (従来通りの動作)
         should_save_engine_settings = settings_manager.get_setting("save_engine_settings", True)
 
