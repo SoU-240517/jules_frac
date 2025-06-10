@@ -1,7 +1,7 @@
 from PyQt6.QtCore import QObject, QRunnable, pyqtSignal, QThreadPool
 import time
 import numpy as np
-from PIL import Image # Import Pillow
+from PIL import Image
 from pathlib import Path
 # Pillowをインポート
 # fractal_engine_refの型ヒント用
@@ -11,11 +11,29 @@ from logger.custom_logger import CustomLogger
 logger = CustomLogger()
 
 class ExporterSignals(QObject):
+    """画像エクスポーターの非同期処理のためのシグナルを定義するクラスです。
+
+    Attributes:
+        progress_updated (pyqtSignal): エクスポートの進捗を通知するシグナル (int: 0-100)。
+        export_finished (pyqtSignal): エクスポートの完了または失敗を通知するシグナル (bool: 成功フラグ, str: メッセージ/ファイルパス)。
+    """
     progress_updated = pyqtSignal(int)
     export_finished = pyqtSignal(bool, str)
 
 class ImageExporter(QRunnable):
+    """画像のエクスポート処理を別スレッドで実行するクラスです。QRunnableを継承しています。
+
+    高解像度のフラクタル画像をファイルに保存する機能を提供します。
+    Pillowライブラリを使用して各種画像形式に対応し、キャンセル処理もサポートします。
+    """
     def __init__(self, fractal_engine_ref, export_settings: dict):
+        """ImageExporter を初期化します。
+
+        Args:
+            fractal_engine_ref (FractalEngine): フラクタル計算エンジンの参照。
+            export_settings (dict): エクスポート設定を含む辞書。
+                主なキー: 'filepath', 'width', 'height', 'iterations', 'format', 'jpeg_quality', 'antialiasing_factor' など。
+        """
         super().__init__()
         self.fractal_engine = fractal_engine_ref
         self.export_settings = export_settings
@@ -23,6 +41,11 @@ class ImageExporter(QRunnable):
         self._is_cancelled = False
 
     def run(self):
+        """メインのエクスポート処理を実行します。
+
+        設定に基づいて画像を生成し、指定されたファイルパスに保存します。
+        進捗と完了/失敗はシグナルを通じて通知されます。
+        """
         filepath = self.export_settings.get('filepath', 'fractal_export.png') # exceptブロックで使用するために初期化
         try: # exceptブロックで使用するために初期化
             self.signals.progress_updated.emit(0)
@@ -38,7 +61,7 @@ class ImageExporter(QRunnable):
             }
             fractal_plugin_name_override = self.export_settings.get('fractal_plugin_name')
             fractal_plugin_params_override = self.export_settings.get('fractal_plugin_params')
-            coloring_algo_name_override = self.export_settings.get('coloring_algorithm_name') # Corrected key from dialog example
+            coloring_algo_name_override = self.export_settings.get('coloring_algorithm_name')
             coloring_algo_params_override = self.export_settings.get('coloring_algorithm_params') # ダイアログの例からキーを修正
             color_pack_name_override = self.export_settings.get('color_pack_name')
             color_map_name_override = self.export_settings.get('color_map_name')
@@ -105,7 +128,7 @@ class ImageExporter(QRunnable):
             elif format_str == 'JPEG':
                 save_options['quality'] = self.export_settings.get('jpeg_quality', 90)
                 save_options['optimize'] = True
-                # save_options['progressive'] = True # オプション
+                # save_options['progressive'] = True # オプション (プログレッシブJPEG)
                 if pil_image.mode == 'RGBA':
                     # JPEG用にRGBに変換する前に白い背景とブレンド
                     background = Image.new('RGB', pil_image.size, (255, 255, 255))
@@ -135,7 +158,7 @@ class ImageExporter(QRunnable):
                 self.signals.export_finished.emit(False, "エクスポートがキャンセルされました (保存直前)。")
                 return
 
-            logger.log(f"'{filepath}' に '{format_str}' として保存中 (オプション: {save_options})...", level="INFO")
+            logger.log(f"'{filepath}' に '{format_str}' として保存中です (オプション: {save_options})。", level="INFO")
             image_to_save.save(filepath, format=format_str, **save_options)
 
             self.signals.progress_updated.emit(100)
@@ -157,6 +180,7 @@ class ImageExporter(QRunnable):
             self.signals.export_finished.emit(False, error_msg)
 
     def cancel(self):
+        """現在進行中のエクスポート処理のキャンセルを試みます。"""
         logger.log("キャンセル要求を受け付けました。", level="INFO")
         self._is_cancelled = True
 
@@ -165,7 +189,7 @@ if __name__ == '__main__':
     # ... (前のステップからのMockFractalEngineとテストセットアップ、簡略化されている可能性あり)
     class MockFractalEngine:
         def generate_image_for_output(self, output_width, output_height, **kwargs):
-            logger.log(f"  モックエンジン: generate_image_for_output ({output_width}x{output_height}), AA: {kwargs.get('antialiasing_level')}", level="DEBUG")
+            logger.log(f"  モックエンジン: generate_image_for_output ({output_width}x{output_height})、アンチエイリアス: {kwargs.get('antialiasing_level')}", level="DEBUG")
             time.sleep(0.1) # 生成時間をシミュレート
             if exporter_for_test._is_cancelled: return None # テスト用に直接参照を使用
             return np.random.randint(0, 256, size=(output_height, output_width, 4), dtype=np.uint8)
