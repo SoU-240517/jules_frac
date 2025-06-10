@@ -98,7 +98,7 @@ if __name__ == '__main__':
             print(f"  プラグインパラメータ: {plugin_params}")
             print(f"  画像サイズ: {image_width_px}x{image_height_px}")
             # 期待される次元と型に一致する有効なnumpy配列が返されることを確認してください
-            # For testing, ensure the dictionary format is returned
+            # テストのため、辞書形式で返されることを確認してください
             return {
                 'iterations': np.zeros((image_height_px, image_width_px), dtype=np.int32),
                 'last_zn_values': np.zeros((image_height_px, image_width_px), dtype=np.complex128)
@@ -129,8 +129,8 @@ if __name__ == '__main__':
         image_width_px=80,
         image_height_px=60
     )
-    print(f"計算結果の 'iterations' 形状: {result_dict['iterations'].shape}, dtype: {result_dict['iterations'].dtype}")
-    print(f"計算結果の 'last_zn_values' 形状: {result_dict['last_zn_values'].shape}, dtype: {result_dict['last_zn_values'].dtype}")
+    print(f"計算結果 'iterations' の形状: {result_dict['iterations'].shape}, データ型: {result_dict['iterations'].dtype}")
+    print(f"計算結果 'last_zn_values' の形状: {result_dict['last_zn_values'].shape}, データ型: {result_dict['last_zn_values'].dtype}")
     assert result_dict['iterations'].shape == (60, 80)
     assert result_dict['iterations'].dtype == np.int32
     assert result_dict['last_zn_values'].shape == (60, 80)

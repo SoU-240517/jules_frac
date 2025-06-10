@@ -117,6 +117,11 @@ def _apply_smooth_coloring_jit(
 
 
 class SmoothColoringPlugin(ColoringAlgorithmPlugin):
+    """発散領域に対してスムーズなカラーグラデーションを適用するカラーリングプラグインです。
+
+    このプラグインは、フラクタル計算結果の反復回数と最終的な|Z|^2値を使用して、
+    連続的な色の変化を生成し、段階的な色の境界を滑らかにします。
+    """
     @property
     def name(self) -> str:
         """カラーリングアルゴリズムの名前を返します。"""
