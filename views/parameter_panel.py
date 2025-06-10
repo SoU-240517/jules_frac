@@ -523,7 +523,7 @@ class ParameterPanel(QScrollArea):
             item = specific_layout.takeAt(0)
             if item.widget(): item.widget().deleteLater()
 
-    @pyqtSlot(str, str) # Added target_type to slot signature, assuming it's passed by caller
+    @pyqtSlot(str, str) # 呼び出し元によって渡されると仮定して、スロット シグネチャに target_type を追加しました。
     def _update_coloring_plugin_specific_ui(self, algo_name: str, target_type: str):
         """
         指定されたカラーリングアルゴリズムの固有パラメータUIを構築・更新します。
@@ -533,9 +533,7 @@ class ParameterPanel(QScrollArea):
             algo_name (str): UIを更新する対象のカラーリングアルゴリズムの名前。
             target_type (str): 対象タイプ ('divergent' or 'non_divergent').
         """
-        self._clear_coloring_plugin_specific_ui(target_type) # Clear the specific UI first
-
-#        logger.log(f"ParameterPanel._update_coloring_plugin_specific_ui for algo: '{algo_name}', target: '{target_type}'", level="DEBUG")
+        self._clear_coloring_plugin_specific_ui(target_type) # まず特定のUIをクリアする
 
         plugin_widgets = None
         specific_group = None
@@ -546,7 +544,7 @@ class ParameterPanel(QScrollArea):
             specific_group = self.coloring_plugin_specific_group_divergent
             specific_layout = self.coloring_plugin_specific_layout_divergent
             if specific_layout is None:
-                logger.log(f"CRITICAL ERROR: self.coloring_plugin_specific_layout_divergent is None for target_type '{target_type}'", level="CRITICAL")
+                logger.log(f"CRITICAL ERROR: target_type '{target_type}' の self.coloring_plugin_specific_layout_divergent が None です", level="CRITICAL")
                 if specific_group: specific_group.setVisible(False)
                 return
         elif target_type == 'non_divergent':
@@ -554,22 +552,19 @@ class ParameterPanel(QScrollArea):
             specific_group = self.coloring_plugin_specific_group_non_divergent
             specific_layout = self.coloring_plugin_specific_layout_non_divergent
             if specific_layout is None:
-                logger.log(f"CRITICAL ERROR: self.coloring_plugin_specific_layout_non_divergent is None for target_type '{target_type}'", level="CRITICAL")
+                logger.log(f"CRITICAL ERROR: self.coloring_plugin_specific_layout_non_divergent は、target_type '{target_type}' では None です。", level="CRITICAL")
                 if specific_group: specific_group.setVisible(False)
                 return
         else:
-            logger.log(f"Error: Invalid target_type '{target_type}' in _update_coloring_plugin_specific_ui", level="ERROR")
+            logger.log(f"Error: _update_coloring_plugin_specific_ui の target_type '{target_type}' が無効です", level="ERROR")
             return
-
-        # ログブロックは完全に削除されました
 
         if not self.fractal_controller or not algo_name or algo_name == "N/A":
             if specific_group: specific_group.setVisible(False)
-            logger.log(f"No controller, algo_name, or algo_name is N/A. Hiding specific group for {target_type}.", level="DEBUG")
+            logger.log(f"コントローラーがないか、algo_name または algo_name が N/A です。{target_type} の特定のグループを非表示にしています。", level="DEBUG")
             return
 
         param_defs = self.fractal_controller.get_coloring_plugin_parameter_definitions_from_engine(algo_name, target_type=target_type)
-#        logger.log(f"param_defs for '{algo_name}' ({target_type}): {param_defs}", level="DEBUG") # param_defs の内容をログに出力
 
         if not param_defs:
             if specific_group: specific_group.setVisible(False)
@@ -578,7 +573,7 @@ class ParameterPanel(QScrollArea):
 
         if specific_group:
             specific_group.setVisible(True)
-            logger.log(f"{target_type} のカラーリングアルゴリズムは'{algo_name}'に設定されました。", level="DEBUG")
+            logger.log(f"起動時の {target_type} のカラーリングアルゴリズムを'{algo_name}'に設定。", level="DEBUG")
 
         target_display_name = "発散部" if target_type == 'divergent' else "非発散部"
         if specific_group: specific_group.setTitle(f"{algo_name} ({target_display_name}) 固有設定")
@@ -587,7 +582,7 @@ class ParameterPanel(QScrollArea):
 
         presets = self.fractal_controller.get_plugin_presets(algo_name, target_type=target_type)
         if presets:
-            logger.log(f"Presets found for '{algo_name}' ({target_type}): {list(presets.keys())}", level="DEBUG")
+            logger.log(f"'{algo_name}' ({target_type}) のプリセットが見つかりました: {list(presets.keys())}", level="DEBUG")
             preset_combo = QComboBox()
             preset_combo.addItem("カスタム")
             for preset_name in presets.keys(): preset_combo.addItem(preset_name)
@@ -597,9 +592,9 @@ class ParameterPanel(QScrollArea):
             if specific_layout: specific_layout.addRow(QLabel("プリセット:"), preset_combo)
             if plugin_widgets: plugin_widgets['_coloring_preset_combo'] = preset_combo
         else:
-            logger.log(f"No presets found for '{algo_name}' ({target_type}).", level="DEBUG")
+            logger.log(f"'{algo_name}' のプリセットがありません。", level="DEBUG")
 
-        logger.log(f"Looping through param_defs for '{algo_name}' ({target_type}). Number of defs: {len(param_defs) if param_defs else 0}", level="DEBUG")
+        logger.log(f"'{algo_name}' の param_defs をループ処理中です。定義の数: {len(param_defs) if param_defs else 0}", level="DEBUG")
         for p_def in param_defs:
             name = p_def['name'] # name を先に取得
             lbl_text = p_def.get('label', name)
@@ -608,7 +603,7 @@ class ParameterPanel(QScrollArea):
             current_val = current_vals.get(name, default_val)
             widget = None
 
-            logger.log(f"Processing p_def: name='{name}', type='{p_type}', label='{lbl_text}', default='{default_val}', current_val_from_engine='{current_vals.get(name)}', final_val_for_widget='{current_val}'", level="DEBUG")
+            logger.log(f"p_defの処理: name='{name}', type='{p_type}', label='{lbl_text}', default='{default_val}', current_val_from_engine='{current_vals.get(name)}', final_val_for_widget='{current_val}'", level="DEBUG")
 
             if p_type == 'float':
                 widget = QDoubleSpinBox()
@@ -618,13 +613,13 @@ class ParameterPanel(QScrollArea):
                 widget.setDecimals(p_def.get('decimals',3))
                 widget.setSingleStep(p_def.get('step',0.01))
                 widget.setValue(current_val if current_val is not None else 0.0)
-                logger.log(f"Created QDoubleSpinBox for '{name}' with value {widget.value()}", level="DEBUG")
+                logger.log(f"'{name}' の QDoubleSpinBox を値 {widget.value()} で作成しました", level="DEBUG")
             elif p_type == 'int':
                 widget = QSpinBox()
                 widget.setRange(p_def.get('range',(-2**31,2**31-1))[0], p_def.get('range',(-2**31,2**31-1))[1])
                 widget.setSingleStep(p_def.get('step',1))
                 widget.setValue(current_val if current_val is not None else 0)
-                logger.log(f"Created QSpinBox for '{name}' with value {widget.value()}", level="DEBUG")
+                logger.log(f"'{name}' の QSpinBox を値 {widget.value()} で作成しました", level="DEBUG")
 
             if widget:
                 if 'tooltip' in p_def:
@@ -636,7 +631,7 @@ class ParameterPanel(QScrollArea):
                     # logger.log(f"CRITICAL ERROR: specific_layout is None for {target_type} when trying to add widget for {name}.", level="CRITICAL")
 
                 if plugin_widgets is not None:
-                    # Note: This is simplified. If sliders are re-introduced, this needs adjustment.
+                    # 注: これは簡略化されたものです。スライダーが再導入された場合は調整が必要になります。
                     plugin_widgets[(name, target_type)] = (widget, None)
 
                 # シグナル接続

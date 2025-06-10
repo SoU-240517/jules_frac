@@ -292,7 +292,6 @@ class FractalController(QObject):
                   エンジンが未設定の場合は空の辞書を返します。
         """
         if not self.fractal_engine: return {}
-        # tt = target_type if target_type is not None else self.active_coloring_target_type # 不要になりました
         return self.fractal_engine.get_coloring_plugin_parameters(target_type=target_type)
 
     def set_active_coloring_plugin_and_recolor(self, plugin_name: str, target_type: str):

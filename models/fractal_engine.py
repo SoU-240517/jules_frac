@@ -344,7 +344,7 @@ class FractalEngine:
         else:
             logger.log(f"パラメータ '{name}' をターゲットタイプ '{target_type}' に設定できませんでした。", level="WARNING")
 
-    def get_coloring_plugin_parameters(self, target_type: str) -> dict: # target_type を追加
+    def get_coloring_plugin_parameters(self, target_type: str) -> dict:
         if target_type == 'divergent':
             return self.current_coloring_plugin_parameters_divergent.copy()
         elif target_type == 'non_divergent':

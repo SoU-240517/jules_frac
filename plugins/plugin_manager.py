@@ -146,7 +146,6 @@ class PluginManager:
             if plugin.target_type == target_type:
                 pass # プラグインが見つかり、タイプも一致
             else:
-                # logger.log(f"PluginManager.get_coloring_plugin: Plugin '{name}' found, but target_type mismatch (expected '{target_type}', got '{plugin.target_type}').", level="DEBUG") # このログは重複するので削除
                 return None # 名前は一致したが、タイプが異なる
 
         if plugin:
