@@ -13,12 +13,27 @@ from PyQt6.QtWidgets import QMessageBox # accept時のエラー表示用
 from utils.settings_manager import SettingsManager # SettingsManager をインポート
 
 class HighResOutputDialog(QDialog):
+    """高解像度画像出力の設定を行うダイアログクラスです。
+
+    ファイル形式、解像度、反復回数、アンチエイリアスなどの設定をユーザーに提供し、
+    設定値を取得する機能も持ちます。SettingsManagerと連携して設定の読み書きを行います。
+    """
     SETTINGS_SECTION_NAME = "high_res_export_defaults" # 設定セクションキー
 
     def __init__(self, settings_manager: SettingsManager,
                  current_dialog_defaults: dict | None = None, # 以前の current_export_settings
                  current_view_params: dict | None = None,
                  parent=None):
+        """HighResOutputDialogを初期化します。
+
+        Args:
+            settings_manager (SettingsManager): 設定の読み書きを行うためのSettingsManagerインスタンス。
+            current_dialog_defaults (dict | None, optional): ダイアログの初期値として使用する設定の辞書。
+                                                              保存された設定や前回使用された設定を反映します。
+            current_view_params (dict | None, optional): 現在のビュー（例: メインウィンドウの描画エリア）の
+                                                         パラメータ。プリセットの「現在の表示」などに使用されます。
+            parent (QWidget, optional): 親ウィジェット。
+        """
         super().__init__(parent)
         self.settings_manager = settings_manager
         self.setWindowTitle("高解像度出力設定")
@@ -126,6 +141,7 @@ class HighResOutputDialog(QDialog):
         return button_box
 
     def _connect_signals(self):
+        """ダイアログ内のウィジェットのシグナルを対応するスロットに接続します。"""
         self.format_combo.currentTextChanged.connect(self._on_format_changed)
         self.jpeg_quality_slider.valueChanged.connect(self._on_jpeg_quality_changed)
         self.preset_combo.currentTextChanged.connect(self._on_preset_changed)
@@ -135,6 +151,7 @@ class HighResOutputDialog(QDialog):
         self.aspect_ratio_check.stateChanged.connect(self._on_aspect_ratio_toggled)
 
     def _load_settings(self): # _load_initial_settings から名前変更
+        """保存された設定またはデフォルト値をダイアログの各ウィジェットに読み込み、表示します。"""
         self.updates_enabled = False # 読み込み中は更新を無効化
 
         saved_settings = self.settings_manager.get_setting(self.SETTINGS_SECTION_NAME, {})
@@ -187,6 +204,7 @@ class HighResOutputDialog(QDialog):
 
     @pyqtSlot()
     def _browse_filepath(self):
+        """「参照...」ボタンがクリックされたときに呼び出され、ファイル保存ダイアログを開いて保存パスをユーザーに選択させます。"""
         current_path = self.filepath_edit.text()
         if not current_path:
             current_path = os.getcwd()
@@ -224,13 +242,41 @@ class HighResOutputDialog(QDialog):
             elif not ext: # 拡張子がなかった場合
                  self.filepath_edit.setText(current_path + new_ext)
 
+    @pyqtSlot(str)
+    def _on_format_changed(self, format_str: str):
+        """ファイル形式コンボボックスの選択が変更されたときに呼び出されます。
+
+        PNG形式の場合のみ透過オプションを有効にし、JPEG形式の場合のみ品質スライダーを有効にします。
+        また、ファイルパスの拡張子を自動的に更新します。
+        """
+        is_png = (format_str == "PNG")
+        is_jpeg = (format_str == "JPEG")
+        self.png_transparent_check.setEnabled(is_png)
+        if not is_png: self.png_transparent_check.setChecked(False)
+        for widget in self.jpeg_quality_widgets:
+            widget.setEnabled(is_jpeg)
+        # ユーザーが入力していない場合、パス内のファイル拡張子を更新
+        current_path = self.filepath_edit.text()
+        if current_path:
+            name, ext = os.path.splitext(current_path)
+            new_ext = f".{format_str.lower()}"
+            if ext.lower() in ['.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp'] and ext.lower() != new_ext:
+                 self.filepath_edit.setText(name + new_ext)
+            elif not ext: # 拡張子がなかった場合
+                 self.filepath_edit.setText(current_path + new_ext)
+
 
     @pyqtSlot(int)
     def _on_jpeg_quality_changed(self, value: int):
+        """JPEG品質スライダーの値が変更されたときに呼び出され、品質表示ラベルを更新します。"""
         self.jpeg_quality_value_label.setText(f"{value}%")
 
     @pyqtSlot(str)
     def _on_preset_changed(self, preset_text: str):
+        """解像度プリセットコンボボックスの選択が変更されたときに呼び出されます。
+
+        選択されたプリセットに応じて幅と高さの入力フィールドを更新し、編集可否を切り替えます。
+        """
         if preset_text == "カスタム":
             self.width_spinbox.setEnabled(True)
             self.height_spinbox.setEnabled(True)
@@ -255,6 +301,10 @@ class HighResOutputDialog(QDialog):
 
     @pyqtSlot(int) # state は QCheckBox.stateChanged の int です
     def _on_aspect_ratio_toggled(self, state_int: int):
+        """「アスペクト比を維持」チェックボックスの状態が変更されたときに呼び出されます。
+
+        アスペクト比維持の有効/無効状態を更新します。
+        """
         self.keep_aspect_ratio_enabled = (state_int == Qt.CheckState.Checked.value)
         # 「カスタム」プリセットでアスペクト比がチェックされている場合、幅/高さのいずれかを無効にする必要があります。
         # ここでは、ユーザーが一方を変更すると、チェックされていればもう一方が追従すると仮定します。
@@ -266,6 +316,12 @@ class HighResOutputDialog(QDialog):
 
     @pyqtSlot(str) # 引数 'changed_source' は "width" または "height" になります
     def _on_dimension_changed(self, changed_source: str):
+        """幅または高さのスピンボックスの値が変更されたときに呼び出されます。
+
+        「アスペクト比を維持」が有効な場合、もう一方の寸法を自動的に更新します。
+        また、プリセットを「カスタム」に切り替えます。
+        引数 `changed_source` は "width" または "height" を取ります。
+        """
         if not self.keep_aspect_ratio_enabled or not self.updates_enabled: return
 
         self.updates_enabled = False # 再帰的な更新を防ぐ
@@ -294,6 +350,7 @@ class HighResOutputDialog(QDialog):
 
 
     def _update_memory_usage_label(self):
+        """現在の解像度とアンチエイリアス設定に基づいて、予測されるメモリ使用量を計算し、ラベルに表示します。"""
         width = self.width_spinbox.value(); height = self.height_spinbox.value()
         bytes_per_pixel = 4 # RGBA
         ssaa_text = self.antialiasing_combo.currentText(); ssaa_factor = 1
@@ -303,6 +360,10 @@ class HighResOutputDialog(QDialog):
         self.memory_usage_label.setText(f"予測メモリ使用量: {mem_mb:.2f} MB")
 
     def accept(self): # 設定を保存するために accept をオーバーライド
+        """「出力開始」ボタンが押されたとき、またはダイアログが承認されたときに呼び出されます。
+
+        現在のUI設定を保存し、ダイアログを閉じます。ファイルパスが未指定の場合は警告を表示します。
+        """
         current_settings = self.get_export_settings()
         if not current_settings.get('filepath'):
             QMessageBox.warning(self, "入力エラー", "ファイルパスを指定してください。")
@@ -313,6 +374,13 @@ class HighResOutputDialog(QDialog):
 
 
     def get_export_settings(self) -> dict:
+        """現在のダイアログのUI設定値を取得し、辞書として返します。
+
+        アンチエイリアス設定は、エンジンが期待する係数 (`antialiasing_factor`) に変換されます。
+
+        Returns:
+            dict: エクスポート設定を含む辞書。
+        """
         # UIからすべての関連設定が収集されていることを確認する
         s = {
             'filepath': self.filepath_edit.text(),

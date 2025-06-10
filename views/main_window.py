@@ -265,7 +265,7 @@ class MainWindow(QMainWindow):
             else:
                 QMessageBox.warning(self, "出力エラー", "ファイルパスが指定されていません。")
         else:
-            logger.log("Export dialog cancelled.", level="INFO")
+            logger.log("エクスポートダイアログがキャンセルされました。", level="INFO")
 
     @pyqtSlot()
     def _on_export_started(self):
