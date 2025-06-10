@@ -18,7 +18,7 @@ class SettingsManager:
             SettingsManager._logger_instance = CustomLogger()
         return SettingsManager._logger_instance
 
-    def __init__(self, settings_filename: str = "base_settings.jsonc", _is_for_logger_init: bool = False):
+    def __init__(self, settings_filename: str = "settings.jsonc", _is_for_logger_init: bool = False):
         """
         SettingsManagerを初期化します。
 
@@ -62,7 +62,7 @@ class SettingsManager:
             try:
                 with open(self.filepath, 'r', encoding='utf-8') as f:
                     self.settings = json.load(f)
-                self._get_logger().log("base_settings.jsonc 読込完了", level="INFO")
+                self._get_logger().log("設定ファイル読込完了", level="INFO")
             except (json.JSONDecodeError, IOError, Exception) as e: # より一般的な例外もキャッチします
                 self._get_logger().log(f"設定ファイルの読込失敗: {e}。デフォルト設定を使用します。", level="ERROR")
                 self.settings = {}
