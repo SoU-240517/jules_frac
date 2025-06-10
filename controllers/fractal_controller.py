@@ -437,7 +437,6 @@ class FractalController(QObject):
             is_preview (bool, optional): True の場合、プレビュー品質 (低解像度) でレンダリングします。Defaults to False.
         """
         # このログ記録行を追加
-        # このログ記録行を追加
         self.logger.log(f"発信元: {traceback.format_stack()[-2].strip()}", level="DEBUG")
 
         if not self.fractal_engine:
