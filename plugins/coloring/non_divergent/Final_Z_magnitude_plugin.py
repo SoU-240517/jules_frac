@@ -24,6 +24,21 @@ def _apply_final_z_abs_coloring_jit(
     color_map_array: np.ndarray | None, # カラーマップ用のNumPy配列、またはNone
     use_color_map: bool
 ) -> None:
+    """最終Z値の絶対値に基づいて色を付けるJITコンパイル済み関数。
+
+    非発散点に対して、最終的なZ値の絶対値を正規化し、ガンマ補正を適用した後、
+    グレースケールまたは指定されたカラーマップに基づいて色を決定します。
+
+    Args:
+        iterations (np.ndarray): 各点の反復回数を格納した配列。
+        last_zn_values (np.ndarray): 各点の最終Z値を格納した複素数型配列。
+        max_iterations (int): 最大反復回数。
+        escape_radius (float): 発散半径。正規化に使用されます。
+        gamma (float): ガンマ補正値。
+        img_array_rgb (np.ndarray): 色を書き込む先のRGB画像配列 (高さx幅x3)。
+        color_map_array (np.ndarray | None): カラーマップとして使用するNumPy配列 (Nx3)。Noneの場合はグレースケール。
+        use_color_map (bool): カラーマップを使用するかどうかのフラグ。
+    """
     height, width = iterations.shape
 
     for r_idx in range(height):
@@ -119,13 +134,16 @@ class FinalZMagnitudeColoringPlugin(ColoringAlgorithmPlugin):
 
     @property
     def name(self) -> str:
+        """カラーリングアルゴリズムの表示名を返します。"""
         return "最終Z絶対値"
 
     @property
     def target_type(self) -> str:
+        """このプラグインが対象とする領域タイプ（非発散）を返します。"""
         return "non_divergent"
 
     def get_parameters_definition(self) -> list:
+        """このカラーリングアルゴリズムのパラメータ定義リストを返します。"""
         return [
             {
                 "name": "gamma",
@@ -143,6 +161,17 @@ class FinalZMagnitudeColoringPlugin(ColoringAlgorithmPlugin):
         algorithm_params: dict,
         color_map_data: list[tuple[int, int, int]] | None
     ) -> np.ndarray:
+        """提供されたデータに最終Z値の絶対値に基づくカラーリングを適用します。
+
+        Args:
+            fractal_data (dict): 'iterations' と 'last_zn_values' を含むフラクタルデータ。
+            common_fractal_params (dict): 'max_iterations', 'escape_radius' などを含む共通パラメータ。
+            algorithm_params (dict): 'gamma' を含むアルゴリズム固有パラメータ。
+            color_map_data (list[tuple[int, int, int]] | None): 使用するカラーマップ。
+
+        Returns:
+            np.ndarray: RGBA形式のカラーリング済み画像データ (uint8)。
+        """
         iterations = fractal_data.get('iterations')
         last_zn_values = fractal_data.get('last_zn_values')
 
@@ -332,7 +361,7 @@ if __name__ == '__main__':
 
     tc1_common_params = {'max_iterations': tc1_max_iters, 'height': tc1_height, 'width': tc1_width, 'escape_radius': tc1_escape_radius}
 
-    # z_abs_values for logging and calculation
+    # ログ記録および計算用のz_abs値
     z_abs_values = [np.abs(z) for z in tc1_last_zn[0]]
 
     gammas_to_test = [0.5, 1.0, 2.0]

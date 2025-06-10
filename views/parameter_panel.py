@@ -3,12 +3,16 @@ from PyQt6.QtWidgets import (
     QLabel, QSpinBox, QDoubleSpinBox, QComboBox, QPushButton,
     QListWidget, QListWidgetItem, QAbstractSpinBox
 )
-from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize, QTimer, QEvent # Added QEvent
+from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize, QTimer, QEvent # QEvent を追加
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QLinearGradient, QIcon
 from functools import partial
-from logger.custom_logger import CustomLogger # Ensure this is present
+from logger.custom_logger import CustomLogger # これが存在することを確認
+from typing import TYPE_CHECKING
 
-logger = CustomLogger() # Add this line
+if TYPE_CHECKING:
+    from controllers.fractal_controller import FractalController # 型ヒント用にインポート
+
+logger = CustomLogger() # この行を追加
 
 class ParameterPanel(QScrollArea):
     """
@@ -22,12 +26,12 @@ class ParameterPanel(QScrollArea):
     parameters_changed_in_ui_signal = pyqtSignal(int)
     """共通パラメータ (中心実部, 中心虚部, 幅, 最大反復回数) がUIで変更されたときに発行されるシグナル。"""
 
-    def __init__(self, fractal_controller, parent=None):
+    def __init__(self, fractal_controller: 'FractalController', parent=None):
         """
         ParameterPanel を初期化します。
 
         Args:
-            fractal_controller (FractalController): パラメータの管理と更新を行うコントローラー。
+            fractal_controller (FractalController): パラメータの管理と更新を行うコントローラー。 # 型ヒントを FractalController に変更
             parent (QWidget, optional): 親ウィジェット。 Defaults to None.
         """
         super().__init__(parent)
@@ -60,27 +64,27 @@ class ParameterPanel(QScrollArea):
 
             self.fractal_controller.parameters_updated_externally.connect(self.update_ui_from_controller_parameters)
             self.fractal_controller.active_fractal_plugin_ui_needs_update.connect(self._update_fractal_plugin_specific_ui)
-            # active_coloring_plugin_ui_needs_update might need to provide more info or be replaced
-            # For now, assume it updates the UI for the currently selected target_type's active plugin.
-            # The more specific signal below is preferred for changing target_type.
+            # active_coloring_plugin_ui_needs_update は、より多くの情報を提供する必要があるか、置き換えられる可能性があります
+            # 現時点では、現在選択されている target_type のアクティブなプラグインのUIを更新すると仮定します。
+            # ターゲットタイプを変更する場合は、以下のより具体的なシグナルが推奨されます。
             self.fractal_controller.active_coloring_plugin_ui_needs_update.connect(
-                lambda algo_name: self._update_coloring_plugin_specific_ui(algo_name, None) # Pass None for target_type to use current UI selection
+                lambda algo_name: self._update_coloring_plugin_specific_ui(algo_name, None) # target_type に None を渡し、現在のUI選択を使用します
             )
-            # Connect to the actual signal name from FractalController
+            # FractalController からの実際のシグナル名に接続
             if hasattr(self.fractal_controller, 'active_coloring_target_and_plugin_changed_externally'):
                 self.fractal_controller.active_coloring_target_and_plugin_changed_externally.connect(
                     self.update_active_coloring_target_and_plugin_from_controller
                 )
             else:
-                logger.log("Warning: FractalController does not have 'active_coloring_target_and_plugin_changed_externally' signal.", level="WARNING")
+                logger.log("警告: FractalController に 'active_coloring_target_and_plugin_changed_externally' シグナルが存在しません。", level="WARNING")
 
             if hasattr(self.fractal_controller, 'active_color_map_changed_externally'):
                 self.fractal_controller.active_color_map_changed_externally.connect(
                     self._update_color_selection_from_controller
                 )
             else:
-                logger.log("Warning: FractalController does not have 'active_color_map_changed_externally' signal.", level="WARNING")
-            # self.fractal_controller.rendering_state_changed.connect(self._on_rendering_state_changed) # This line is moved to MainWindow
+                logger.log("警告: FractalController に 'active_color_map_changed_externally' シグナルが存在しません。", level="WARNING")
+            # self.fractal_controller.rendering_state_changed.connect(self._on_rendering_state_changed) # この行は MainWindow に移動されました
         else:
             # コントローラーが利用できない場合のフォールバックUI設定
             self._set_ui_values(100)
@@ -269,7 +273,7 @@ class ParameterPanel(QScrollArea):
         if plugin_names:
             self.fractal_combo.addItems(plugin_names)
             if active_name and active_name in plugin_names: self.fractal_combo.setCurrentText(active_name)
-            elif plugin_names: self.fractal_combo.setCurrentText(plugin_names[0])
+            elif plugin_names: self.fractal_combo.setCurrentText(plugin_names[0]) # アクティブなものがないか、アクティブなものがリストにない場合は最初のものを選択
         else: self.fractal_combo.addItem("プラグインなし"); self.fractal_combo.setEnabled(False)
         self.fractal_combo.blockSignals(False)
 
@@ -288,7 +292,7 @@ class ParameterPanel(QScrollArea):
             logger.log("ParameterPanel._on_fractal_type_changed: Fractal type change blocked, rendering in progress.", level="DEBUG")
             return
 
-        # Detailed logs about combo box state
+        # コンボボックスの状態に関する詳細ログ
         if hasattr(self, 'fractal_combo'):
             logger.log(f"ParameterPanel._on_fractal_type_changed: fractal_combo.isEnabled() = {self.fractal_combo.isEnabled()}", level="DEBUG")
             logger.log(f"ParameterPanel._on_fractal_type_changed: fractal_combo.isVisible() = {self.fractal_combo.isVisible()}", level="DEBUG")
@@ -469,7 +473,7 @@ class ParameterPanel(QScrollArea):
             target_type (str): 'divergent' または 'non_divergent'.
         """
         if not self.fractal_controller or not algo_name or algo_name == "N/A":
-            # Potentially clear specific UI if algo is N/A
+            # algo が N/A の場合、特定のUIをクリアする可能性があります
             if algo_name == "N/A":
                 self._clear_coloring_plugin_specific_ui(target_type)
                 group_to_hide = self.coloring_plugin_specific_group_divergent if target_type == 'divergent' else self.coloring_plugin_specific_group_non_divergent
@@ -479,14 +483,14 @@ class ParameterPanel(QScrollArea):
         # Check if this algo is already active for this target type
         if algo_name == self.fractal_controller.get_active_coloring_plugin_name_from_engine(target_type=target_type):
              logger.log(f"ParameterPanel._on_coloring_algorithm_changed: Algo '{algo_name}' for target '{target_type}' already active. Triggering UI update.", level="DEBUG")
-             # Still update UI, as switching between targets might require UI refresh even if algo name is same for both
+             # アルゴリズム名が両方で同じであっても、ターゲットを切り替えるとUIの更新が必要になる場合があるため、UIを更新します。
              self._update_coloring_plugin_specific_ui(algo_name, target_type)
              return
 
         self.fractal_controller.set_active_coloring_plugin_and_recolor(plugin_name=algo_name, target_type=target_type)
-        # The controller should emit active_coloring_plugin_ui_needs_update which is connected to _update_coloring_plugin_specific_ui
-        # or active_coloring_target_and_plugin_changed_externally for a more holistic update.
-        # If direct update is needed: self._update_coloring_plugin_specific_ui(algo_name, target_type)
+        # コントローラーは、_update_coloring_plugin_specific_ui に接続されている active_coloring_plugin_ui_needs_update を発行するか、
+        # より包括的な更新のために active_coloring_target_and_plugin_changed_externally を発行する必要があります。
+        # 直接更新が必要な場合: self._update_coloring_plugin_specific_ui(algo_name, target_type)
 
 
     # _on_coloring_target_changed は coloring_target_combo が削除されたため不要。
@@ -510,7 +514,7 @@ class ParameterPanel(QScrollArea):
             logger.log(f"Error: Invalid target_type '{target_type}' in _clear_coloring_plugin_specific_ui", level="ERROR")
             return
 
-        if plugin_widgets is None or specific_layout is None: # Should not happen if logic is correct
+        if plugin_widgets is None or specific_layout is None: # ロジックが正しければ発生すべきではありません
             logger.log(f"Error: plugin_widgets or specific_layout is None for {target_type}", level="ERROR")
             return
 
@@ -565,7 +569,7 @@ class ParameterPanel(QScrollArea):
             return
 
         param_defs = self.fractal_controller.get_coloring_plugin_parameter_definitions_from_engine(algo_name, target_type=target_type)
-        logger.log(f"param_defs for '{algo_name}' ({target_type}): {param_defs}", level="DEBUG") # Log param_defs content
+#        logger.log(f"param_defs for '{algo_name}' ({target_type}): {param_defs}", level="DEBUG") # param_defs の内容をログに出力
 
         if not param_defs:
             if specific_group: specific_group.setVisible(False)
@@ -574,12 +578,12 @@ class ParameterPanel(QScrollArea):
 
         if specific_group:
             specific_group.setVisible(True)
-            logger.log(f"Specific group for {target_type} set to visible for algo '{algo_name}'.", level="DEBUG")
+            logger.log(f"{target_type} のカラーリングアルゴリズムは'{algo_name}'に設定されました。", level="DEBUG")
 
         target_display_name = "発散部" if target_type == 'divergent' else "非発散部"
         if specific_group: specific_group.setTitle(f"{algo_name} ({target_display_name}) 固有設定")
         current_vals = self.fractal_controller.get_current_coloring_plugin_parameters_from_engine(target_type=target_type)
-        logger.log(f"Current values for {target_type} specific params: {current_vals}", level="DEBUG")
+        logger.log(f"{target_type} 固有のパラメータの現在の値: {current_vals}", level="DEBUG")
 
         presets = self.fractal_controller.get_plugin_presets(algo_name, target_type=target_type)
         if presets:
@@ -642,7 +646,7 @@ class ParameterPanel(QScrollArea):
                     widget.installEventFilter(self)
                 # `if plugin_widgets: plugin_widgets[name] = widget` の重複行を削除 (既に上で登録済み)
             else:
-                logger.log(f"Warning: Widget not created for param '{name}' of type '{p_type}' for algo '{algo_name}' ({target_type}).", level="WARNING")
+                logger.log(f"警告: アルゴリズム '{algo_name}' ({target_type}) のタイプ '{p_type}' のパラメータ '{name}' のウィジェットが作成されませんでした。", level="WARNING")
 
     def _on_coloring_plugin_parameter_changed(self, value, param_name: str, target_type: str):
         """
@@ -688,8 +692,8 @@ class ParameterPanel(QScrollArea):
 
         if widget_tuple and isinstance(widget_tuple[0], (QSpinBox, QDoubleSpinBox)):
             widget = widget_tuple[0]
-            # The key for focused_value_store should be consistent with how it's set in eventFilter
-            focus_key = widget # In the new logic, the widget itself is the key
+            # focused_value_store のキーは、eventFilter での設定方法と一致している必要があります
+            focus_key = widget # 新しいロジックでは、ウィジェット自体がキーです
             original_value = self._focused_value_store.pop(focus_key, None)
             current_value = widget.value()
 
@@ -717,8 +721,8 @@ class ParameterPanel(QScrollArea):
 
         combo_box = self.color_pack_combo_divergent if target_type == 'divergent' else self.color_pack_combo_non_divergent
 
-        pack_names = self.fractal_controller.get_available_color_pack_names_from_engine() # Packs are global, not target_type specific
-        active_pack = self.fractal_controller.get_active_color_pack_name_from_engine(target_type=target_type) # Active pack can be per target
+        pack_names = self.fractal_controller.get_available_color_pack_names_from_engine() # パックはグローバルであり、target_type に固有ではありません
+        active_pack = self.fractal_controller.get_active_color_pack_name_from_engine(target_type=target_type) # アクティブなパックはターゲットごとに設定可能
 
         combo_box.blockSignals(True); combo_box.clear()
         if pack_names:
@@ -751,9 +755,9 @@ class ParameterPanel(QScrollArea):
         if map_list_widget.count() > 0:
             first_map_item = map_list_widget.item(0)
             if first_map_item:
-                map_list_widget.setCurrentItem(first_map_item) # This will trigger _on_color_map_changed
-                # If setCurrentItem doesn't trigger if it's already selected, or for other reasons,
-                # ensure the controller is updated if the state is inconsistent.
+                map_list_widget.setCurrentItem(first_map_item) # これにより _on_color_map_changed がトリガーされます
+                # setCurrentItem が既に選択されている場合にトリガーされない、またはその他の理由でトリガーされない場合は、
+                # 状態が矛盾している場合にコントローラーが更新されることを確認してください。
                 if self.fractal_controller.get_active_color_map_name_from_engine(target_type=target_type) != first_map_item.text() or \
                    self.fractal_controller.get_active_color_pack_name_from_engine(target_type=target_type) != pack_name:
                      self.fractal_controller.set_active_color_map_and_recolor(pack_name, first_map_item.text(), target_type=target_type)
@@ -773,7 +777,7 @@ class ParameterPanel(QScrollArea):
         if not self.fractal_controller or not pack_name:
             map_list_widget.setEnabled(False); map_list_widget.blockSignals(False); return
 
-        map_names = self.fractal_controller.get_color_map_names_in_pack_from_engine(pack_name) # Maps are global within a pack
+        map_names = self.fractal_controller.get_color_map_names_in_pack_from_engine(pack_name) # マップはパック内でグローバルです
         active_map_name = self.fractal_controller.get_active_color_map_name_from_engine(target_type=target_type)
         # Active pack for this target, to ensure we are only setting current item if pack is also correct
         active_pack_for_target = self.fractal_controller.get_active_color_pack_name_from_engine(target_type=target_type)
@@ -976,8 +980,8 @@ class ParameterPanel(QScrollArea):
             elif self.coloring_algorithm_combo_divergent.count() > 0:
                 first_algo_div = self.coloring_algorithm_combo_divergent.itemText(0)
                 if first_algo_div and first_algo_div != "N/A":
-                    self.coloring_algorithm_combo_divergent.setCurrentText(first_algo_div) # This will trigger _on_coloring_algorithm_changed
-                    # Controller update will happen in _on_coloring_algorithm_changed if text actually changes
+                    self.coloring_algorithm_combo_divergent.setCurrentText(first_algo_div) # これにより _on_coloring_algorithm_changed がトリガーされます
+                    # テキストが実際に変更された場合、コントローラーの更新は _on_coloring_algorithm_changed で行われます
 
             active_pack_div = self.fractal_controller.get_active_color_pack_name_from_engine(target_type='divergent')
             active_map_div = self.fractal_controller.get_active_color_map_name_from_engine(target_type='divergent')
@@ -991,10 +995,10 @@ class ParameterPanel(QScrollArea):
                     if self.color_map_listwidget_divergent.item(i).text() == active_map_div:
                         self.color_map_listwidget_divergent.setCurrentRow(i)
                         break
-            elif self.color_pack_combo_divergent.count() > 0: # if no active, select first pack and map
+            elif self.color_pack_combo_divergent.count() > 0: # アクティブなものがない場合は、最初のパックとマップを選択
                  first_pack_div = self.color_pack_combo_divergent.itemText(0)
                  if first_pack_div and first_pack_div != "N/A":
-                    self.color_pack_combo_divergent.setCurrentText(first_pack_div) # Triggers pack changed -> populates map list & selects first map
+                    self.color_pack_combo_divergent.setCurrentText(first_pack_div) # パック変更をトリガー -> マップリストを生成し最初のマップを選択
 
 
             # Non-Divergent
@@ -1034,6 +1038,11 @@ class ParameterPanel(QScrollArea):
         if self.fractal_controller:
             self._set_ui_values(params['max_iterations'])
     def _set_ui_values(self, iterations: int): # 他の共通パラメータも引数に追加する可能性あり
+        """UIの共通パラメータ値を設定します。現在は最大反復回数のみを設定します。
+
+        Args:
+            iterations (int): 設定する最大反復回数。
+        """
         self.iter_spinbox.blockSignals(True)
         self.iter_spinbox.setValue(iterations)
         self.iter_spinbox.blockSignals(False)
@@ -1097,8 +1106,8 @@ class ParameterPanel(QScrollArea):
 
         selected_vals = presets_data.get(preset_name)
         if selected_vals:
-            # Verify the currently selected algorithm in the UI matches the plugin_name for this preset.
-            # This is a sanity check.
+            # UIで現在選択されているアルゴリズムが、このプリセットのプラグイン名と一致することを確認します。
+            # これは念のための確認です。
             current_ui_algo_name = algo_combo.currentText()
             if current_ui_algo_name != plugin_name:
                 logger.log(f"プラグイン '{plugin_name}' のプリセット選択ですが、UI は {target_type} 用に '{current_ui_algo_name}' を表示しています。プリセットの適用を中止します。", level="WARNING")
@@ -1110,19 +1119,19 @@ class ParameterPanel(QScrollArea):
             for p_name, val in selected_vals.items():
                 if p_name in plugin_widgets_dict:
                     widget = plugin_widgets_dict[p_name]
-                    widget.blockSignals(True) # Block signals while setting value to prevent immediate feedback loops
+                    widget.blockSignals(True) # 即時のフィードバックループを防ぐために、値を設定中はシグナルをブロックします
                     if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
                         widget.setValue(val)
-                        # Clear any stored focus-in value for this widget to ensure that if the user
-                        # clicks away without changing, it doesn't revert or trigger unwanted renders.
+                        # ユーザーが変更せずにクリックして離れた場合に、元に戻ったり不要なレンダリングがトリガーされたりしないように、
+                        # このウィジェットに保存されているフォーカスイン値をクリアします。
                         if widget in self._focused_value_store:
                             del self._focused_value_store[widget]
-                    # TODO: Add support for other widget types if necessary (e.g., QComboBox for enums)
+                    # TODO: 必要であれば他のウィジェットタイプ（例：列挙型用のQComboBox）のサポートを追加
                     else:
                         logger.log(f"Widget '{p_name}' for preset is not a SpinBox/DoubleSpinBox. Type: {type(widget)}. Value not set from preset.", level="WARNING")
 
-                    widget.blockSignals(False) # Unblock signals
-                    params_to_set_in_controller[p_name] = val # Collect params for controller
+                    widget.blockSignals(False) # シグナルをアンブロック
+                    params_to_set_in_controller[p_name] = val # コントローラー用のパラメータを収集
                 else:
                     all_params_set_for_preset = False
                     logger.log(f"Widget for preset parameter '{p_name}' not found in {target_type} UI.", level="WARNING")
@@ -1148,15 +1157,15 @@ class ParameterPanel(QScrollArea):
             # This should already be the case as the user selected it, but good to be mindful.
             # The UI update for parameters should be handled by the controller signals if parameters changed there.
 
-    @pyqtSlot(str, str) # preset_name argument removed
-    def update_active_coloring_target_and_plugin_from_controller(self, target_type: str, plugin_name: str): # preset_name argument removed
+    @pyqtSlot(str, str) # preset_name 引数を削除
+    def update_active_coloring_target_and_plugin_from_controller(self, target_type: str, plugin_name: str): # preset_name 引数を削除
         """
         コントローラーからの指示でアクティブなカラーリングターゲットとプラグインを更新します。
         """
-        logger.log(f"ParameterPanel.update_active_coloring_target_and_plugin_from_controller: target='{target_type}', plugin='{plugin_name}'", level="DEBUG") # preset_name removed from log
+        logger.log(f"ParameterPanel.update_active_coloring_target_and_plugin_from_controller: target='{target_type}', plugin='{plugin_name}'", level="DEBUG") # preset_name をログから削除
 
         algo_combo = None
-        # plugin_widgets_dict = None # No longer needed for preset logic
+        # plugin_widgets_dict = None # プリセットロジックには不要になりました
 
         if target_type == 'divergent':
             algo_combo = self.coloring_algorithm_combo_divergent
@@ -1170,7 +1179,7 @@ class ParameterPanel(QScrollArea):
 
         if not algo_combo: return # Should not happen
 
-        # 1. Update algorithm combo box selection
+        # 1. アルゴリズムコンボボックスの選択を更新
         algo_combo.blockSignals(True)
         current_algo_text = algo_combo.currentText()
         if current_algo_text != plugin_name:
@@ -1181,10 +1190,10 @@ class ParameterPanel(QScrollArea):
             algo_combo.setCurrentText(plugin_name)
         algo_combo.blockSignals(False)
 
-        # 2. Update the plugin specific UI for the new algorithm
+        # 2. 新しいアルゴリズム用にプラグイン固有のUIを更新
         self._update_coloring_plugin_specific_ui(plugin_name, target_type)
 
-        # 3. Preset related logic removed
+        # 3. プリセット関連ロジックを削除
         # if preset_name:
         #     ...
         # else:

@@ -1,8 +1,8 @@
 import time
 import inspect
 from pathlib import Path
-import sys # Added for exc_info fallback
-import traceback # Added for exc_info
+import sys # exc_infoフォールバック用に追加
+import traceback # exc_info用に追加
 # SettingsManagerのインポートは _initialize_singleton_attrs メソッド内で行い、循環インポートを避けます。
 
 class CustomLogger:
@@ -34,6 +34,7 @@ class CustomLogger:
     _current_level_int: int
     _is_enabled: bool
     _log_file_path: Path | None = None
+    _project_root_path: Path | None = None # プロジェクトルートパスを保持するクラス変数
 
     def __new__(cls, *args, **kwargs):
         """シングルトンインスタンスを作成または返します。初回作成時に初期化を行います。"""
@@ -134,7 +135,12 @@ class CustomLogger:
         """ロガーの有効/無効状態を設定します。"""
         CustomLogger._is_enabled = enabled
 
-    def log(self, message, level="INFO", exc_info=None): # New signature
+    @classmethod
+    def set_project_root(cls, project_root: Path):
+        """プロジェクトのルートパスを設定します。ログ出力時のパス表示に使用されます。"""
+        cls._project_root_path = project_root.resolve() if project_root else None
+
+    def log(self, message, level="INFO", exc_info=None): # 新しいシグネチャ
         """指定されたレベルでログメッセージを記録します。"""
         # 初期化中のロギング呼び出しをチェック (循環依存を避けるため)
         if hasattr(CustomLogger, '_initializing') and CustomLogger._initializing:
@@ -157,8 +163,30 @@ class CustomLogger:
             return
 
         frame = inspect.currentframe().f_back
-        filepath = frame.f_code.co_filename
+        filepath_abs = Path(frame.f_code.co_filename).resolve()
         lineno = frame.f_lineno
+
+        # コンソール表示用のパス文字列を決定
+        display_path_str = str(filepath_abs) # デフォルトは絶対パス
+        if CustomLogger._project_root_path:
+            try:
+                # Python 3.9+ の場合: Path.is_relative_to を使用
+                if hasattr(Path, "is_relative_to"):
+                    if filepath_abs.is_relative_to(CustomLogger._project_root_path):
+                        display_path_str = str(filepath_abs.relative_to(CustomLogger._project_root_path))
+                # Python < 3.9 の場合: Path.relative_to を試し、ValueError をキャッチ
+                else:
+                    try:
+                        # filepath_abs が _project_root_path の子孫でない場合 ValueError
+                        possible_relative_path = filepath_abs.relative_to(CustomLogger._project_root_path)
+                        display_path_str = str(possible_relative_path)
+                    except ValueError:
+                        # _project_root_path の下にない場合は、絶対パスのまま
+                        pass
+            except Exception:
+                # 予期せぬエラーが発生した場合も安全のため絶対パスを使用
+                pass # display_path_str は絶対パスのまま
+
 
         func_name = frame.f_code.co_name
         qualname_parts = []
@@ -179,7 +207,7 @@ class CustomLogger:
         # ログレベル文字列の最大長を考慮してフォーマット (例: CRITICAL は 8 文字)
         # 左寄せで8文字の幅を確保
         formatted_level_str = f"{message_level_str:<8}"
-        clickable_path = f"{filepath}:{lineno}"
+        clickable_path = f"{display_path_str}:{lineno}" # 表示用パスを使用
 
         level_color_code = CustomLogger.LOG_COLORS.get(message_level_str, "") # ログレベルの色
         dim_color_code = CustomLogger.LOG_COLORS.get("DIM_GRAY", "")      # 暗い色のコード
@@ -195,35 +223,35 @@ class CustomLogger:
             log_message_file = (f"{formatted_elapsed_time_ms}ms: "
                                 f"{formatted_level_str} "
                                 f"{message} "
-                                f"[{filepath}:{lineno}:{log_context}]") # clickable_path はファイルでは不要
+                                f"[{filepath_abs}:{lineno}:{log_context}]") # ファイルログは絶対パス
             try:
                 with open(CustomLogger._log_file_path, "a", encoding="utf-8") as f:
                     f.write(log_message_file + "\n")
                     if exc_info:
-                        # If exc_info is True, format_exc() gets current exception.
-                        # If exc_info is an exception tuple, format_exception(*exc_info) should be used.
-                        # For simplicity with typical logging usage, assume exc_info=True is the primary use case here.
+                        # exc_infoがTrueの場合、format_exc()は現在の例外を取得します。
+                        # exc_infoが例外タプルの場合、format_exception(*exc_info)を使用する必要があります。
+                        # 一般的なロギングの使用方法を簡潔にするため、ここではexc_info=Trueが主な使用例であると仮定します。
                         if exc_info is True:
                             traceback_str = traceback.format_exc()
-                            if traceback_str and traceback_str != "None\n": # format_exc returns "None\n" if no exception
+                            if traceback_str and traceback_str != "None\n": # format_exc は例外がない場合 "None\n" を返します
                                 f.write(traceback_str)
                         elif isinstance(exc_info, tuple):
                             traceback_str = "".join(traceback.format_exception(*exc_info))
                             if traceback_str:
                                 f.write(traceback_str)
-                        # else: exc_info might be an exception instance, could format that too if needed.
+                        # else: exc_infoは例外インスタンスである可能性があり、必要であればそれもフォーマットできます。
             except Exception as e:
                 # ファイル書き込みエラーはコンソールに出力 (無限ループを避けるため、ここではlog()を呼び出さない)
                 print(f"[CRITICAL] CustomLogger: ログファイルへの書き込みに失敗しました: {CustomLogger._log_file_path}, Error: {e}", flush=True)
 
-        # Console output for exc_info (after main message, similar to file logging)
+        # exc_infoのコンソール出力（メインメッセージの後、ファイルロギングと同様）
         if exc_info:
-            # This will print to stderr by default if exc_info is True or an exception tuple.
+            # exc_infoがTrueまたは例外タプルの場合、これはデフォルトでstderrに出力されます。
             if exc_info is True:
-                traceback.print_exc() # Prints to sys.stderr
+                traceback.print_exc() # sys.stderrに出力します
             elif isinstance(exc_info, tuple):
-                 traceback.print_exception(*exc_info) # Prints to sys.stderr
-            # else: could handle exception instance directly if needed
+                 traceback.print_exception(*exc_info) # sys.stderrに出力します
+            # else: 必要であれば例外インスタンスを直接処理できます
 
 
 if __name__ == '__main__':

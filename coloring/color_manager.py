@@ -11,7 +11,7 @@ class ColorManager:
         logger.log("ColorManager初期化中...", level="DEBUG")
         # color_packs_dir はプロジェクトルートからの相対パスを想定しています
         self.color_packs_dir = Path(color_packs_dir)
-        self.color_packs = {}  # {パック名: {マップ名: RGBタプルのリスト, ...}}
+        self.color_packs = {}  # {カラーパック名: {カラーマップ名: RGBタプルのリスト, ...}}
         self.load_color_packs()
 
     def _generate_gradient_colors(self, gradient_points: list[dict], num_colors: int) -> list[tuple[int, int, int]]:
@@ -137,7 +137,7 @@ class ColorManager:
         return list(self.color_packs.get(pack_name, {}).keys())
 
     def get_color_map_data(self, pack_name: str, map_name: str) -> list[tuple[int, int, int]] | None:
-        """指定されたカラーパックとマップ名に対応するカラーデータのリスト (RGBタプルのリスト) を返す。"""
+        """指定されたカラーパックとマップ名に対応するカラーデータのリスト (RGBタプルのリスト) を返します。"""
         return self.color_packs.get(pack_name, {}).get(map_name)
 
 if __name__ == '__main__':
@@ -169,7 +169,7 @@ if __name__ == '__main__':
     with open(temp_dir / "custom_test.json", "w", encoding="utf-8") as f:
         json.dump(custom_pack_content, f, indent=4)
 
-    logger.log(f"ColorManager テスト: 一時ディレクトリ '{temp_dir}' を使用中", level="INFO")
+    logger.log(f"ColorManager のテスト: 一時ディレクトリ '{temp_dir}' を使用しています。", level="INFO")
     manager = ColorManager(color_packs_dir=str(temp_dir)) # 一時ディレクトリのパスを渡す
 
     pack_names = manager.get_available_color_pack_names()
@@ -209,4 +209,4 @@ if __name__ == '__main__':
     except Exception as e:
         logger.log(f"一時ディレクトリ '{temp_dir}' のクリーンアップ中にエラーが発生しました: {e}", level="ERROR")
 
-    logger.log("ColorManager テスト終了。", level="INFO")
+    logger.log("ColorManager のテストが終了しました。", level="INFO")

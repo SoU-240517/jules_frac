@@ -154,12 +154,17 @@ class PluginManager:
                 params = plugin.get_parameters_definition()
                 logger.log(f"'{getattr(plugin, 'target_type', 'N/A')}'用プラグインあり: '{plugin.name}'", level="DEBUG")
             except Exception as e:
-                logger.log(f"Error getting params for '{plugin.name}': {e}", level="ERROR")
+                logger.log(f"'{plugin.name}' のパラメータ取得中にエラー: {e}", level="ERROR")
         else:
-            logger.log(f"No plugin found for name '{name}' and target '{target_type}'.", level="WARNING")
+            logger.log(f"名前 '{name}' およびターゲット '{target_type}' に該当するプラグインが見つかりません。", level="WARNING")
         return plugin
 
     def reload_all_plugins(self):
+        """すべてのプラグインをディスクから再読み込みします。
+
+        既存のプラグインリストはクリアされ、再度プラグインフォルダをスキャンして読み込みます。
+        プラグインファイルの変更をアプリケーション実行中に反映させたい場合などに使用します。
+        """
         logger.log("すべてのプラグインを再読み込み中...", level="INFO")
         self.load_all_plugins()
 
@@ -186,7 +191,7 @@ class FractalPlugin(ABC):
     @abstractmethod
     def name(self) -> str: pass
     @property
-    def target_type(self) -> str: return 'divergent' # Add target_type to mock
+    def target_type(self) -> str: return 'divergent' # モックに target_type を追加
     @abstractmethod
     def get_parameters_definition(self) -> list: pass
     @abstractmethod
@@ -241,7 +246,7 @@ import numpy as np
 class TestGrayDivergent(ColoringAlgorithmPlugin):
     @property
     def name(self): return "TestGrayscaleDivergent"
-    # target_type will use default 'divergent'
+    # target_type はデフォルトの 'divergent' を使用します
     def get_parameters_definition(self): return []
     def apply_coloring(self,fd,cfp,ap,cm): return np.zeros((fd['iterations'].shape[0],fd['iterations'].shape[1],4),dtype=np.uint8)
 """
@@ -258,7 +263,7 @@ class TestColorNonDivergent(ColoringAlgorithmPlugin):
     @property
     def name(self): return "TestColorNonDivergent"
     @property
-    def target_type(self): return 'non_divergent' # Override target_type
+    def target_type(self): return 'non_divergent' # target_type を上書き
     def get_parameters_definition(self): return []
     def apply_coloring(self,fd,cfp,ap,cm): return np.zeros((fd['iterations'].shape[0],fd['iterations'].shape[1],4),dtype=np.uint8)
 """

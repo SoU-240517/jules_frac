@@ -112,11 +112,11 @@ if __name__ == '__main__':
                             img_array[r_idx, c_idx, 0:3] = [gray_val, gray_val, gray_val]
             return img_array
 
-    print("DummyColoringPlugin のテスト中...")
+    print("DummyColoringPlugin のテストを実行中...")
     dummy_plugin = DummyColoringPlugin()
     print(f"カラーリングプラグイン名: {dummy_plugin.name}")
-    print(f"ターゲットタイプ: {dummy_plugin.target_type}") # Check the new property
-    assert dummy_plugin.target_type == 'divergent' # Verify default value
+    print(f"ターゲットタイプ: {dummy_plugin.target_type}") # 新しいプロパティを確認
+    assert dummy_plugin.target_type == 'divergent' # デフォルト値を確認
     print(f"パラメータ定義: {dummy_plugin.get_parameters_definition()}")
 
     # テスト用データ作成

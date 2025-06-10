@@ -23,6 +23,7 @@ from PyQt6.QtCore import Qt
 from logger.custom_logger import CustomLogger
 
 logger = CustomLogger()
+logger.set_project_root(_project_root) # プロジェクトルートを設定
 
 def clear_numba_cache_on_exit():
     """Numbaのキャッシュディレクトリを安全に削除する。"""
