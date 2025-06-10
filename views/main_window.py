@@ -404,10 +404,17 @@ class MainWindow(QMainWindow):
         render_width = self.render_area.width()
         render_height = self.render_area.height()
 
-        logger.log(f"RenderAreaサイズ ({render_width}x{render_height}) で初回描画を実行します.", level="DEBUG")
-        self.fractal_controller.trigger_render(render_width, render_height)
-        self._initial_render_done = True
-        logger.log("初回描画完了", level="INFO")
+        # ウィジェットがまだ適切なサイズを持っていない可能性があるため、チェックします。
+        # 0x0 は無効なサイズとみなします。
+        if render_width > 1 and render_height > 1:
+            logger.log(f"RenderAreaサイズ ({render_width}x{render_height}) で初回描画を実行します.", level="DEBUG")
+            self.fractal_controller.trigger_render(render_width, render_height)
+            self._initial_render_done = True # 描画がトリガーされたらフラグを立てる
+            logger.log("初回描画完了", level="INFO")
+        elif self._initial_render_attempts < 5:
+            # 失敗した場合、少し待ってから再試行します。
+            logger.log(f"RenderArea のサイズがまだ有効ではありません ({render_width}x{render_height})。再試行します...", level="WARNING")
+            QTimer.singleShot(200, self._perform_initial_render)
 
 
 if __name__ == '__main__':

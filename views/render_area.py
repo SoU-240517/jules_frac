@@ -45,6 +45,8 @@ class RenderArea(QLabel):
         self.last_mouse_pos = None
         self.setMouseTracking(True)
 
+        self.initial_render_complete = False
+
         self.is_interactive_mode = False
         self.high_quality_render_timer = QTimer(self)
         self.high_quality_render_timer.setSingleShot(True)
@@ -58,6 +60,10 @@ class RenderArea(QLabel):
         self.setText("フラクタル画像がここに表示されます。\nパラメータを設定し描画処理を開始してください。")
         self.setStyleSheet("background-color: #333333; color: #AAAAAA; border: 1px solid #454545; padding: 10px;")
         self.setWordWrap(True)
+
+    def set_initial_render_complete(self):
+        """MainWindowから呼び出され、初回描画が完了したことを示す。"""
+        self.initial_render_complete = True
 
     def _request_high_quality_render(self):
         """タイマーによって呼び出され、高品質な再描画を要求する。"""
@@ -78,6 +84,9 @@ class RenderArea(QLabel):
             image_data_np (np.ndarray | None): RGBA 形式 (高さ x 幅 x 4) の画像データ。
                                                None または空のデータの場合、デフォルトの背景が表示されます。
         """
+        if not self.initial_render_complete:
+            self.initial_render_complete = True
+
         if image_data_np is None or image_data_np.size == 0:
             # print("RenderArea: 画像データを受信しませんでした。デフォルトの背景を表示します。")
             # 画像データが受信されなかった場合はデフォルト背景を表示
@@ -151,6 +160,9 @@ class RenderArea(QLabel):
         super().resizeEvent(event)
         if self._original_pixmap and not self._original_pixmap.isNull():
             self._display_scaled_pixmap()
+
+        if not self.initial_render_complete:
+            return
 
         # ウィンドウリサイズ後に高品質レンダリングを要求
         self.is_interactive_mode = True # 一時的にインタラクティブモードに
