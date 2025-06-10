@@ -31,6 +31,7 @@ class SettingsManager:
                                         Trueの場合、ファイルI/Oや複雑なパス解決を避け、
                                         ロガーの循環依存を防ぐための最小限の初期化を行います。
         """
+        print(f"SettingsManagerの初期化: settings_filename={settings_filename}, _is_for_logger_init={_is_for_logger_init}")
         if _is_for_logger_init:
             # CustomLogger初期化中の呼び出し: CWDのシンプルなパスを使用し、ファイルI/Oを避けます。
             # CustomLoggerはデフォルト値で初期化され、その後、アプリケーションのメインの
@@ -40,11 +41,13 @@ class SettingsManager:
         else:
             # 通常の初期化パス
             self.filepath = Path(settings_filename)
+            print(f"接待パスの判定: {self.filepath.is_absolute()}")
             if not self.filepath.is_absolute():
                 try:
                     home_dir = Path.home()
                     app_data_dir = home_dir / ".fractalapp"
                     app_data_dir.mkdir(parents=True, exist_ok=True)
+                    print(f"ホームディレクトリ: {home_dir}, アプリデータディレクトリ: {app_data_dir}")
                     self.filepath = app_data_dir / settings_filename
                 except Exception as e:
                     self._get_logger().log(f"ホームに設定ディレクトリを作成できませんでした。CWD を使用します。エラー: {e}", level="WARNING")

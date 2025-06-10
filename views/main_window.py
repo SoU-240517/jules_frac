@@ -38,7 +38,6 @@ class MainWindow(QMainWindow):
             HighResOutputDialog.SETTINGS_SECTION_NAME, {}
         )
 
-
         # UI初期化
         self._create_actions()
         self._create_menu_bar() # メニューを作成しアクションを追加
