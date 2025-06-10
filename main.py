@@ -1,3 +1,4 @@
+from math import log
 import sys
 from pathlib import Path
 import shutil
@@ -57,6 +58,7 @@ if __name__ == '__main__':
 
     settings_file_name = "base_settings.json" # 設定ファイル名
     settings_file_path = _project_root / settings_file_name # SettingsManager で使用するための絶対パス
+    print("SettingsManagerのインスタンスを作成開始...")
     settings_manager = SettingsManager(settings_filename=str(settings_file_path))
 
     # --- ロガー設定のロードと適用 ---
