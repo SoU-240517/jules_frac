@@ -169,6 +169,10 @@ class PluginManager:
 
 if __name__ == '__main__':
     logger.log("PluginManager スタンドアロンテスト", level="INFO")
+    #
+    # このテストは古いです。
+    # 現在は「Grayscale」のカラーリングアルゴリズムはありません。
+    #
     # このテストは、スクリプト実行場所からの相対的な特定のディレクトリ構造、
     # またはデフォルトパス "src/app/plugins/fractals" および "src/app/plugins/coloring" が存在し、
     # 有効なプラグインとその基底クラスが含まれていることを前提としています。

@@ -592,7 +592,7 @@ class ParameterPanel(QScrollArea):
             if specific_layout: specific_layout.addRow(QLabel("プリセット:"), preset_combo)
             if plugin_widgets: plugin_widgets['_coloring_preset_combo'] = preset_combo
         else:
-            logger.log(f"'{algo_name}' のプリセットがありません。", level="DEBUG")
+            logger.log(f"'{algo_name}' のプリセットはありません。", level="DEBUG")
 
         logger.log(f"'{algo_name}' の param_defs をループ処理中です。定義の数: {len(param_defs) if param_defs else 0}", level="DEBUG")
         for p_def in param_defs:

@@ -153,7 +153,7 @@ class MainWindow(QMainWindow):
         コントローラーからレンダリングタスク開始のシグナルを受信したときに呼び出されます。
         ステータスバーのアニメーションを開始します。
         """
-        self.logger.log("レンダリングタスクが開始されました。アニメーションを開始します。", level="DEBUG")
+        self.logger.log("レンダリングタスク開始。", level="DEBUG")
         self.status_bar_animator.start_animation()
 
     def update_status_bar(self, message: str):
@@ -381,7 +381,7 @@ class MainWindow(QMainWindow):
             return
 
         self._initial_render_attempts += 1
-        logger.log(f"初回描画を試みます (試行: {self._initial_render_attempts}).", level="DEBUG")
+        logger.log(f"初回描画を試みます (試行: {self._initial_render_attempts}).", level="INFO")
 
         # 重要なコンポーネントが初期化され、RenderArea が有効なサイズを持っているか確認
         if not hasattr(self, 'render_area') or self.render_area is None or \

@@ -91,7 +91,7 @@ class FractalEngine:
     def _initialize_default_plugins_and_map(self):
         """
         利用可能なプラグインとカラーマップから、デフォルトのものを選択して初期設定します。
-        MandelbrotやGrayscaleなど、一般的なものが優先的に選択されます。
+        Mandelbrotやスムーズカラーなど、一般的なものが優先的に選択されます。
         DivergentとNon-Divergentの両方のカラーリングコンテキストを初期化します。
         """
         # フラクタルプラグイン
@@ -107,11 +107,9 @@ class FractalEngine:
         if self.current_coloring_plugin_divergent is None:
             available_div_plugins = self.get_available_coloring_plugin_names(target_type='divergent')
             if available_div_plugins:
-                default_div_coloring = "グレースケール (標準)"
+                default_div_coloring = "スムーズカラー"
                 if default_div_coloring in available_div_plugins:
                     self.set_active_coloring_plugin(default_div_coloring, target_type='divergent')
-                elif "スムーズカラー" in available_div_plugins:
-                     self.set_active_coloring_plugin("スムーズカラー", target_type='divergent')
                 else:
                     self.set_active_coloring_plugin(available_div_plugins[0], target_type='divergent')
             else:
@@ -121,11 +119,9 @@ class FractalEngine:
         if self.current_coloring_plugin_non_divergent is None:
             available_nondiv_plugins = self.get_available_coloring_plugin_names(target_type='non_divergent')
             if available_nondiv_plugins:
-                default_nondiv_coloring = "反復収束速度"
+                default_nondiv_coloring = "複素ポテンシャル"
                 if default_nondiv_coloring in available_nondiv_plugins:
                     self.set_active_coloring_plugin(default_nondiv_coloring, target_type='non_divergent')
-                elif "複素ポテンシャル" in available_nondiv_plugins:
-                     self.set_active_coloring_plugin("複素ポテンシャル", target_type='non_divergent')
                 else:
                     self.set_active_coloring_plugin(available_nondiv_plugins[0], target_type='non_divergent')
             else:
@@ -757,7 +753,7 @@ if __name__ == '__main__':
             # 他の共通パラメータは、上書きされない限りエンジンの現在の状態を使用します
         }
 
-        # 高解像度出力のテスト (例: Mandelbrot と Grayscale)
+        # 高解像度出力のテスト
         logger.log("\n160x120 画像を 2x2 SSAA で生成中...", level="INFO")
         output_image = engine.generate_image_for_output(
             output_width=160, output_height=120,

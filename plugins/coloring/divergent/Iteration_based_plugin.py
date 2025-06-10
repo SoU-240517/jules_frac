@@ -24,7 +24,7 @@ try:
     logger = CustomLogger()
 except ImportError:
     # loggerをインポートできない場合のフォールバック (例: 特定の実行コンテキストでのパスの問題など)
-    print("警告: grayscale_coloring_plugin.py で CustomLogger をインポートできませんでした。標準のprintを使用します。")
+    print("警告: Iteration_based_plugin.py で CustomLogger をインポートできませんでした。標準のprintを使用します。")
     class PrintLogger: # シンプルなフォールバックロガーを定義
         def log(self, message, level="INFO"): print(f"[{level}] {message}") # ログレベルとメッセージを出力
     logger = PrintLogger()
@@ -32,7 +32,7 @@ except ImportError:
 
 # Numba JITコンパイル済みヘルパー関数
 @jit(nopython=True)
-def _apply_grayscale_coloring_jit(
+def _apply_iteration_based_coloring_jit(
     iterations_array: np.ndarray,
     max_iters: int,
     color_map: np.ndarray,
@@ -96,7 +96,7 @@ def _apply_grayscale_coloring_jit(
     return colored_image_rgba
 
 
-class GrayscaleColoringPlugin(ColoringAlgorithmPlugin):
+class IterationBasedColoringPlugin(ColoringAlgorithmPlugin):
     """
     エスケープ時間に基づいてグレースケールを適用するシンプルなカラーリングプラグインです。
     """
@@ -155,12 +155,12 @@ class GrayscaleColoringPlugin(ColoringAlgorithmPlugin):
         else:
             color_map_np = np.array(color_map_data, dtype=np.uint8)
 
-        colored_image = _apply_grayscale_coloring_jit(iterations, max_iters, color_map_np, color_scale_from_plugin)
+        colored_image = _apply_iteration_based_coloring_jit(iterations, max_iters, color_map_np, color_scale_from_plugin)
         return colored_image
 
 if __name__ == '__main__':
-    logger.log("GrayscaleColoringPlugin のテストを開始します...", level="INFO")
-    plugin = GrayscaleColoringPlugin()
+    logger.log("IterationBasedColoringPlugin のテストを開始します...", level="INFO")
+    plugin = IterationBasedColoringPlugin()
     logger.log(f"プラグイン名: {plugin.name}", level="INFO")
     logger.log(f"パラメータ定義: {plugin.get_parameters_definition()}", level="INFO")
 
@@ -234,4 +234,4 @@ if __name__ == '__main__':
     assert np.array_equal(result_image_data[0,2,:3], [0,0,255])
 
     logger.log("  カラーマップありのテスト完了。", level="INFO")
-    logger.log("\nGrayscaleColoringPlugin のテストが正常に完了しました。", level="INFO")
+    logger.log("\nIterationBasedColoringPlugin のテストが正常に完了しました。", level="INFO")

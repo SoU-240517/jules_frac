@@ -532,7 +532,7 @@ if __name__ == '__main__':
     # apply_coloring で use_color_map_flag が False になるため、グレースケールで計算される
     expected_invalid_map_color = calculate_expected_color(1.0, 2.0, 1.0, False, 50, 50, None) # グレースケール期待値
     assert np.array_equal(img_invalid_map[0,0,:3], expected_invalid_map_color), \
-        f"Invalid CM: Expected {expected_invalid_map_color} (grayscale fallback), got {img_invalid_map[0,0,:3]}"
+        f"無効な CM: {expected_invalid_map_color} が必要ですが、{img_invalid_map[0,0,:3]} を取得しました"
     logger.log("Test 6.2: 不正な形式のカラーマップテスト合格 (グレースケールフォールバックを期待)", level="INFO")
 
 

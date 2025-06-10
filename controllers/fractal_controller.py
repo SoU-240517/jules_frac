@@ -499,13 +499,11 @@ class FractalController(QObject):
         レンダリング状態を更新し、関連するシグナルを発行します。
         """
         self.logger.log("信号受信", level="DEBUG")
-        self.logger.log("self.is_rendering を True に設定する前。", level="DEBUG")
         self.is_rendering = True
-        self.logger.log(f"self.is_rendering を設定した後: {self.is_rendering}", level="DEBUG")
+        self.logger.log(f"self.is_rendering を設定した直後: {self.is_rendering}", level="DEBUG")
         self.rendering_task_started.emit()
-        self.logger.log("self.rendering_state_changed を発行する直前: emit(True)", level="DEBUG")
         self.rendering_state_changed.emit(True)
-        self.logger.log("self.rendering_state_changed を発行した後: emit(True)", level="DEBUG")
+        self.logger.log("self.rendering_state_changed を発行した直後後: emit(True)", level="DEBUG")
 
     @pyqtSlot(object, float, float)
     def _on_renderer_finished(self, colored_image, compute_time_ms, coloring_time_ms):
@@ -518,18 +516,15 @@ class FractalController(QObject):
             compute_time_ms (float): フラクタル計算にかかった時間 (ミリ秒)。
             coloring_time_ms (float): カラーリング処理にかかった時間 (ミリ秒)。
         """
-        self.logger.log(f"レンダータスク完了。計算時間: {compute_time_ms:.1f}ms, 着色時間: {coloring_time_ms:.1f}ms", level="INFO")
         self.last_compute_time_ms = compute_time_ms
         self.last_coloring_time_ms = coloring_time_ms
         self.image_rendered.emit(colored_image)
         self.update_status_display() # 最終ステータスメッセージを生成して発行
         self.current_renderer_task = None
-        self.logger.log("self.is_rendering を False に設定する前。", level="DEBUG")
         self.is_rendering = False
-        self.logger.log(f"self.is_rendering を設定した後: {self.is_rendering}", level="DEBUG")
-        self.logger.log("self.rendering_state_changed を発行する直前: emit(False)", level="DEBUG")
+        self.logger.log(f"self.is_rendering を設定した直後: {self.is_rendering}", level="DEBUG")
         self.rendering_state_changed.emit(False)
-        self.logger.log("self.rendering_state_changed を発行した後: emit(False)", level="DEBUG")
+        self.logger.log("self.rendering_state_changed を発行した直後: emit(False)", level="DEBUG")
 
     @pyqtSlot(str)
     def _on_renderer_failed(self, error_message):

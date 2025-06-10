@@ -45,7 +45,7 @@ class StatusBarAnimator(QObject):
         """ステータスバーでのアニメーションを開始します。既に実行中の場合は何もしません。"""
         if self.is_running:
             return
-        self.logger.log("StatusBarAnimator: アニメーションを開始します。", level="DEBUG")
+        self.logger.log("ステータスバーアニメーションを開始します。", level="DEBUG")
         self.num_dots = 0
         self.status_bar.showMessage(self.base_message)  # 初期メッセージ
         self.animation_timer.start(self.animation_interval_ms)

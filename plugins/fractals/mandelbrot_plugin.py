@@ -118,7 +118,7 @@ class MandelbrotPlugin(FractalPlugin):
 
         logger.log(f"計算開始 - 画像: {image_width_px}x{image_height_px}px, "
               f"複素領域: 実数部 ({min_x:.4f} から {max_x:.4f}), 虚数部 ({min_y:.4f} から {max_y:.4f}), "
-              f"最大反復回数: {max_iterations}", level="DEBUG")
+              f"最大反復回数: {max_iterations}", level="INFO")
 
         iter_array, last_z_real_array, last_z_imag_array = _compute_mandelbrot_grid_jit(
             image_width_px, image_height_px,

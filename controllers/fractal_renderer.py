@@ -41,7 +41,7 @@ class FractalRenderer(QRunnable):
     def run(self):
         """メインのレンダリング処理を実行します。フラクタル計算、カラーリングを行い、結果のシグナルを発行します。"""
         self.signals.rendering_started.emit()
-        self.logger.log("レンダリング開始", level="DEBUG")
+        self.logger.log("レンダリング開始", level="INFO")
 
         try:
             self.fractal_engine.image_width_px = self.image_width_px

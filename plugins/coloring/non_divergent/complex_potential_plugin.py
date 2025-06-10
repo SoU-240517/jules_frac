@@ -246,10 +246,10 @@ class ComplexPotentialColoringPlugin(ColoringAlgorithmPlugin):
             try:
                 color_map_np_array = np.array(color_map_data, dtype=np.uint8)
                 if color_map_np_array.ndim != 2 or color_map_np_array.shape[1] != 3:
-                    logger.log(f"apply_coloring: 無効なカラーマップデータです。Nx3形式を期待しましたが、形状 {color_map_np_array.shape} を受け取りました。グレースケールを使用します。", level="ERROR")
+                    logger.log(f"apply_coloring: 無効なカラーマップデータです。Nx3形式を期待しましたが、形状 {color_map_np_array.shape} を受け取りました。", level="ERROR")
                     use_color_map_flag = False; color_map_np_array = None
             except Exception as e:
-                logger.log(f"apply_coloring: Error converting color_map to NumPy array: {e}. Using grayscale.", level="ERROR")
+                logger.log(f"apply_coloring: color_map を NumPy 配列に変換中にエラーが発生しました: {e}。", level="ERROR")
                 use_color_map_flag = False; color_map_np_array = None
 
         _normalize_and_color_jit(
