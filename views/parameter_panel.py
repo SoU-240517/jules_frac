@@ -7,6 +7,10 @@ from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize, QTimer, QEvent # QEven
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QLinearGradient, QIcon
 from functools import partial
 from logger.custom_logger import CustomLogger # これが存在することを確認
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from controllers.fractal_controller import FractalController # 型ヒント用にインポート
 
 logger = CustomLogger() # この行を追加
 
@@ -22,12 +26,12 @@ class ParameterPanel(QScrollArea):
     parameters_changed_in_ui_signal = pyqtSignal(int)
     """共通パラメータ (中心実部, 中心虚部, 幅, 最大反復回数) がUIで変更されたときに発行されるシグナル。"""
 
-    def __init__(self, fractal_controller, parent=None):
+    def __init__(self, fractal_controller: 'FractalController', parent=None):
         """
         ParameterPanel を初期化します。
 
         Args:
-            fractal_controller (FractalController): パラメータの管理と更新を行うコントローラー。
+            fractal_controller (FractalController): パラメータの管理と更新を行うコントローラー。 # 型ヒントを FractalController に変更
             parent (QWidget, optional): 親ウィジェット。 Defaults to None.
         """
         super().__init__(parent)
@@ -565,7 +569,7 @@ class ParameterPanel(QScrollArea):
             return
 
         param_defs = self.fractal_controller.get_coloring_plugin_parameter_definitions_from_engine(algo_name, target_type=target_type)
-        logger.log(f"param_defs for '{algo_name}' ({target_type}): {param_defs}", level="DEBUG") # param_defs の内容をログに出力
+#        logger.log(f"param_defs for '{algo_name}' ({target_type}): {param_defs}", level="DEBUG") # param_defs の内容をログに出力
 
         if not param_defs:
             if specific_group: specific_group.setVisible(False)
@@ -574,12 +578,12 @@ class ParameterPanel(QScrollArea):
 
         if specific_group:
             specific_group.setVisible(True)
-            logger.log(f"Specific group for {target_type} set to visible for algo '{algo_name}'.", level="DEBUG")
+            logger.log(f"{target_type} のカラーリングアルゴリズムは'{algo_name}'に設定されました。", level="DEBUG")
 
         target_display_name = "発散部" if target_type == 'divergent' else "非発散部"
         if specific_group: specific_group.setTitle(f"{algo_name} ({target_display_name}) 固有設定")
         current_vals = self.fractal_controller.get_current_coloring_plugin_parameters_from_engine(target_type=target_type)
-        logger.log(f"Current values for {target_type} specific params: {current_vals}", level="DEBUG")
+        logger.log(f"{target_type} 固有のパラメータの現在の値: {current_vals}", level="DEBUG")
 
         presets = self.fractal_controller.get_plugin_presets(algo_name, target_type=target_type)
         if presets:

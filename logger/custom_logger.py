@@ -34,6 +34,7 @@ class CustomLogger:
     _current_level_int: int
     _is_enabled: bool
     _log_file_path: Path | None = None
+    _project_root_path: Path | None = None # プロジェクトルートパスを保持するクラス変数
 
     def __new__(cls, *args, **kwargs):
         """シングルトンインスタンスを作成または返します。初回作成時に初期化を行います。"""
@@ -134,6 +135,11 @@ class CustomLogger:
         """ロガーの有効/無効状態を設定します。"""
         CustomLogger._is_enabled = enabled
 
+    @classmethod
+    def set_project_root(cls, project_root: Path):
+        """プロジェクトのルートパスを設定します。ログ出力時のパス表示に使用されます。"""
+        cls._project_root_path = project_root.resolve() if project_root else None
+
     def log(self, message, level="INFO", exc_info=None): # 新しいシグネチャ
         """指定されたレベルでログメッセージを記録します。"""
         # 初期化中のロギング呼び出しをチェック (循環依存を避けるため)
@@ -157,8 +163,30 @@ class CustomLogger:
             return
 
         frame = inspect.currentframe().f_back
-        filepath = frame.f_code.co_filename
+        filepath_abs = Path(frame.f_code.co_filename).resolve()
         lineno = frame.f_lineno
+
+        # コンソール表示用のパス文字列を決定
+        display_path_str = str(filepath_abs) # デフォルトは絶対パス
+        if CustomLogger._project_root_path:
+            try:
+                # Python 3.9+ の場合: Path.is_relative_to を使用
+                if hasattr(Path, "is_relative_to"):
+                    if filepath_abs.is_relative_to(CustomLogger._project_root_path):
+                        display_path_str = str(filepath_abs.relative_to(CustomLogger._project_root_path))
+                # Python < 3.9 の場合: Path.relative_to を試し、ValueError をキャッチ
+                else:
+                    try:
+                        # filepath_abs が _project_root_path の子孫でない場合 ValueError
+                        possible_relative_path = filepath_abs.relative_to(CustomLogger._project_root_path)
+                        display_path_str = str(possible_relative_path)
+                    except ValueError:
+                        # _project_root_path の下にない場合は、絶対パスのまま
+                        pass
+            except Exception:
+                # 予期せぬエラーが発生した場合も安全のため絶対パスを使用
+                pass # display_path_str は絶対パスのまま
+
 
         func_name = frame.f_code.co_name
         qualname_parts = []
@@ -179,7 +207,7 @@ class CustomLogger:
         # ログレベル文字列の最大長を考慮してフォーマット (例: CRITICAL は 8 文字)
         # 左寄せで8文字の幅を確保
         formatted_level_str = f"{message_level_str:<8}"
-        clickable_path = f"{filepath}:{lineno}"
+        clickable_path = f"{display_path_str}:{lineno}" # 表示用パスを使用
 
         level_color_code = CustomLogger.LOG_COLORS.get(message_level_str, "") # ログレベルの色
         dim_color_code = CustomLogger.LOG_COLORS.get("DIM_GRAY", "")      # 暗い色のコード
@@ -195,7 +223,7 @@ class CustomLogger:
             log_message_file = (f"{formatted_elapsed_time_ms}ms: "
                                 f"{formatted_level_str} "
                                 f"{message} "
-                                f"[{filepath}:{lineno}:{log_context}]") # clickable_path はファイルでは不要
+                                f"[{filepath_abs}:{lineno}:{log_context}]") # ファイルログは絶対パス
             try:
                 with open(CustomLogger._log_file_path, "a", encoding="utf-8") as f:
                     f.write(log_message_file + "\n")
