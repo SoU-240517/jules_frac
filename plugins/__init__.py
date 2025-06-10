@@ -1,7 +1,7 @@
-# This file can be empty.
-# It tells Python that the 'plugins' directory is a package.
+# このファイルは空でも構いません。
+# Pythonに対して 'plugins' ディレクトリがパッケージであることを示します。
 
-# Make base plugin classes easily accessible
+# 基本プラグインクラスを簡単にアクセスできるようにする
 from .base_fractal_plugin import FractalPlugin
 from .base_coloring_plugin import ColoringAlgorithmPlugin
 

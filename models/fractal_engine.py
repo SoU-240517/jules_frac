@@ -60,7 +60,7 @@ class FractalEngine:
         self.current_fractal_plugin: FractalPlugin | None = None
         self.current_fractal_plugin_parameters: dict = {}
 
-        self.active_coloring_target_type: str = 'divergent' # Default active target, may be overridden by loaded settings
+        self.active_coloring_target_type: str = 'divergent' # デフォルトのアクティブターゲット、ロードされた設定によって上書きされる場合があります
 
         self.current_coloring_plugin_divergent: ColoringAlgorithmPlugin | None = None
         self.current_coloring_plugin_parameters_divergent: dict = {}
@@ -94,7 +94,7 @@ class FractalEngine:
         MandelbrotやGrayscaleなど、一般的なものが優先的に選択されます。
         DivergentとNon-Divergentの両方のカラーリングコンテキストを初期化します。
         """
-        # Fractal Plugin
+        # フラクタルプラグイン
         if self.current_fractal_plugin is None:
             available_fractal_plugins = self.get_available_fractal_plugin_names()
             if available_fractal_plugins:
@@ -103,7 +103,7 @@ class FractalEngine:
                 else: self.set_active_fractal_plugin(available_fractal_plugins[0])
             else: logger.log("フラクタルプラグインが見つかりません。フラクタル機能のデフォルト設定をスキップします。", level="WARNING")
 
-        # Divergent Coloring Plugin
+        # 発散部カラーリングプラグイン
         if self.current_coloring_plugin_divergent is None:
             available_div_plugins = self.get_available_coloring_plugin_names(target_type='divergent')
             if available_div_plugins:
@@ -117,7 +117,7 @@ class FractalEngine:
             else:
                 logger.log("発散部カラーリングプラグインが見つかりません。発散部カラーリングのデフォルト設定をスキップします。", level="WARNING")
 
-        # Non-Divergent Coloring Plugin
+        # 非発散部カラーリングプラグイン
         if self.current_coloring_plugin_non_divergent is None:
             available_nondiv_plugins = self.get_available_coloring_plugin_names(target_type='non_divergent')
             if available_nondiv_plugins:
@@ -131,7 +131,7 @@ class FractalEngine:
             else:
                 logger.log("非発散部カラーリングプラグインが見つかりません。非発散部カラーリングのデフォルト設定をスキップします。", level="WARNING")
 
-        # Default Color Maps
+        # デフォルトカラーマップ
         available_color_packs = self.get_available_color_pack_names()
 
         if self.current_color_pack_name_divergent is None or self.current_color_map_name_divergent is None:
@@ -206,18 +206,18 @@ class FractalEngine:
                 'max_iterations': self.max_iterations, 'escape_radius': self.escape_radius}
 
     def set_active_fractal_plugin(self, plugin_name: str) -> bool:
+        """指定された名前のフラクタルプラグインをアクティブにします。
+
+        成功した場合、プラグインのデフォルトビューパラメータをエンジンに適用し、
+        プラグイン固有のパラメータをデフォルト値で初期化します。
+
+        Args:
+            plugin_name (str): アクティブにするフラクタルプラグインの名前。
+        Returns:
+            bool: プラグインの設定に成功した場合はTrue、そうでない場合はFalse。
+        """
         plugin = self.plugin_manager.get_fractal_plugin(plugin_name)
         if plugin:
-            """
-            指定された名前のフラクタルプラグインをアクティブにします。
-            成功した場合、プラグインのデフォルトビューパラメータをエンジンに適用し、
-            プラグイン固有のパラメータをデフォルト値で初期化します。
-
-            Args:
-                plugin_name (str): アクティブにするフラクタルプラグインの名前。
-            Returns:
-                bool: プラグインの設定に成功した場合はTrue、そうでない場合はFalse。
-            """
             self.current_fractal_plugin = plugin
             defaults = plugin.get_default_view_parameters()
             self.center_real = defaults.get('center_real', self.center_real)
@@ -301,6 +301,13 @@ class FractalEngine:
             return False
 
     def get_active_coloring_plugin(self, target_type: str) -> ColoringAlgorithmPlugin | None:
+        """指定されたターゲットタイプで現在アクティブなカラーリングプラグインのインスタンスを返します。
+
+        Args:
+            target_type (str): 'divergent' または 'non_divergent'。
+        Returns:
+            ColoringAlgorithmPlugin | None: アクティブなカラーリングプラグイン。見つからない場合はNone。
+        """
         if target_type == 'divergent':
             return self.current_coloring_plugin_divergent
         elif target_type == 'non_divergent':
@@ -312,14 +319,14 @@ class FractalEngine:
         """指定されたターゲットタイプで利用可能なカラーリングプラグインの名前のリストを返します。"""
         return [p.name for p in self.plugin_manager.get_available_coloring_plugins(target_type=target_type)]
 
-    def get_current_coloring_plugin_parameter_definitions(self, target_type: str) -> list: # Added target_type
+    def get_current_coloring_plugin_parameter_definitions(self, target_type: str) -> list: # target_type を追加
         """
         指定されたターゲットタイプでアクティブなカラーリングプラグインのパラメータ定義リストを返します。
         """
         plugin = self.get_active_coloring_plugin(target_type)
         return plugin.get_parameters_definition() if plugin else []
 
-    def set_coloring_plugin_parameter(self, name: str, value: any, target_type: str): # Added target_type
+    def set_coloring_plugin_parameter(self, name: str, value: any, target_type: str): # target_type を追加
         """
         指定されたターゲットタイプのアクティブなカラーリングプラグインのパラメータ値を設定します。
         """
@@ -337,7 +344,7 @@ class FractalEngine:
         else:
             logger.log(f"パラメータ '{name}' をターゲットタイプ '{target_type}' に設定できませんでした。", level="WARNING")
 
-    def get_coloring_plugin_parameters(self, target_type: str) -> dict: # Added target_type
+    def get_coloring_plugin_parameters(self, target_type: str) -> dict: # target_type を追加
         if target_type == 'divergent':
             return self.current_coloring_plugin_parameters_divergent.copy()
         elif target_type == 'non_divergent':
@@ -345,7 +352,7 @@ class FractalEngine:
         logger.log(f"無効なターゲットタイプ '{target_type}' が指定されました。", level="WARNING")
         return {}
 
-    def set_active_color_map(self, pack_name: str, map_name: str, target_type: str) -> bool: # Added target_type
+    def set_active_color_map(self, pack_name: str, map_name: str, target_type: str) -> bool: # target_type を追加
         """
         指定されたターゲットタイプのアクティブなカラーマップを設定します。
         """
@@ -377,7 +384,7 @@ class FractalEngine:
         """
         return self.color_manager.get_color_maps_in_pack(pack_name)
 
-    def get_current_color_map_selection(self, target_type: str) -> tuple[str | None, str | None]: # Added target_type
+    def get_current_color_map_selection(self, target_type: str) -> tuple[str | None, str | None]: # target_type を追加
         """
         指定されたターゲットタイプで現在選択されているカラーパック名とカラーマップ名をタプルで返します。
         """
@@ -555,11 +562,11 @@ class FractalEngine:
             final_coloring_algo_params[p_def['name']] = p_def['default']
 
         current_engine_cp_params = self.get_coloring_plugin_parameters(active_target_type_for_output)
-        # Check if the plugin for override is the same as the one active for the target type
+        # 上書き用のプラグインがターゲットタイプに対してアクティブなものと同じかどうかを確認
         active_plugin_for_current_target = self.get_active_coloring_plugin(active_target_type_for_output)
         if active_plugin_for_current_target and active_coloring_plugin.name == active_plugin_for_current_target.name :
-             final_coloring_algo_params.update(current_engine_cp_params) # Start with current params if same plugin
-        if coloring_algo_params_override: # Then apply specific overrides
+             final_coloring_algo_params.update(current_engine_cp_params) # 同じプラグインであれば現在のパラメータで開始
+        if coloring_algo_params_override: # 次に特定の上書きを適用
             final_coloring_algo_params.update(coloring_algo_params_override)
 
 
@@ -621,7 +628,7 @@ class FractalEngine:
         logger.log(f"高解像度画像が正常に生成されました ({output_width}x{output_height})。", level="INFO")
         return downsampled_image_rgba
 
-    # --- Save/Load Settings ---
+    # --- 設定の保存/読み込み ---
     def save_settings(self) -> dict:
         """現在のエンジンの設定を辞書としてシリアライズします。"""
         settings = {
@@ -641,7 +648,7 @@ class FractalEngine:
             "color_pack_non_divergent_name": self.current_color_pack_name_non_divergent,
             "color_map_non_divergent_name": self.current_color_map_name_non_divergent,
 
-            # image size is part of common_parameters if needed, or can be saved separately
+            # 画像サイズは必要に応じてcommon_parametersの一部とするか、別途保存できます
             "image_width_px": self.image_width_px,
             "image_height_px": self.image_height_px,
         }
@@ -666,13 +673,13 @@ class FractalEngine:
 
             fp_name = settings.get("active_fractal_plugin_name")
             if fp_name:
-                if self.set_active_fractal_plugin(fp_name): # This also sets default plugin params
+                if self.set_active_fractal_plugin(fp_name): # これによりデフォルトのプラグインパラメータも設定されます
                     fp_params = settings.get("fractal_plugin_parameters")
-                    if fp_params and isinstance(fp_params, dict): # Override defaults with saved params
+                    if fp_params and isinstance(fp_params, dict): # 保存されたパラメータでデフォルトを上書き
                         for name, value in fp_params.items():
                             self.set_fractal_plugin_parameter(name, value)
 
-            # Restore coloring settings for divergent
+            # 発散部のカラーリング設定を復元
             cpd_name = settings.get("coloring_plugin_divergent_name")
             if cpd_name:
                 if self.set_active_coloring_plugin(cpd_name, target_type='divergent'):
@@ -684,14 +691,14 @@ class FractalEngine:
             cpd_pack = settings.get("color_pack_divergent_name")
             cpd_map = settings.get("color_map_divergent_name")
             if cpd_pack and cpd_map:
-                # Make sure the pack and map exist before trying to set them
+                # 設定する前にパックとマップが存在することを確認
                 if cpd_pack in self.get_available_color_pack_names() and \
                    cpd_map in self.get_available_color_map_names_in_pack(cpd_pack):
                     self.set_active_color_map(cpd_pack, cpd_map, target_type='divergent')
                 else:
                     logger.log(f"発散部: 保存されたカラーマップ {cpd_pack}/{cpd_map} が見つかりません。", level="WARNING")
 
-            # Restore coloring settings for non-divergent
+            # 非発散部のカラーリング設定を復元
             cpnd_name = settings.get("coloring_plugin_non_divergent_name")
             if cpnd_name:
                 if self.set_active_coloring_plugin(cpnd_name, target_type='non_divergent'):
@@ -709,18 +716,18 @@ class FractalEngine:
                 else:
                     logger.log(f"非発散部: 保存されたカラーマップ {cpnd_pack}/{cpnd_map} が見つかりません。", level="WARNING")
 
-            # Restore active target type AFTER specific types are loaded
+            # 特定のタイプがロードされた後にアクティブなターゲットタイプを復元
             self.active_coloring_target_type = settings.get("active_coloring_target_type", self.active_coloring_target_type)
 
-            # Restore image size (optional, could be handled by UI)
-            # Ensure these are positive before setting
+            # 画像サイズを復元（オプション、UIで処理可能）
+            # 設定前にこれらが正であることを確認
             loaded_width = settings.get("image_width_px", self.image_width_px)
             if loaded_width > 0: self.image_width_px = loaded_width
             loaded_height = settings.get("image_height_px", self.image_height_px)
             if loaded_height > 0: self.image_height_px = loaded_height
-            self.update_aspect_ratio() # Ensure 'height' (complex plane) is updated
+            self.update_aspect_ratio() # 'height'（複素平面）が更新されることを確認
 
-            self.last_fractal_data_cache = None # Invalidate cache
+            self.last_fractal_data_cache = None # キャッシュを無効化
             logger.log("エンジン設定読込完了", level="INFO")
         except Exception as e:
             logger.log(f"エンジン設定読込中にエラー発生: {e}", level="ERROR")
@@ -735,7 +742,7 @@ if __name__ == '__main__':
     logger.log(f"  テスト用のプロジェクトルート: {test_project_root}", level="INFO")
     engine = FractalEngine(project_root_path=test_project_root, image_width_px=80, image_height_px=60) # 画面表示用の小さなデフォルト値
 
-    if not engine.get_active_fractal_plugin() or not engine.get_active_coloring_plugin('divergent'): # Check for divergent
+    if not engine.get_active_fractal_plugin() or not engine.get_active_coloring_plugin('divergent'): # 発散部を確認
         logger.log("デフォルトプラグインが読み込まれていません。パスまたはプラグインの可用性を確認してください。テストを完全に続行できません。", level="WARNING")
     else:
         logger.log(f"アクティブなフラクタルプラグイン: {engine.get_active_fractal_plugin().name}", level="INFO")
@@ -766,6 +773,6 @@ if __name__ == '__main__':
         else:
             logger.log("  高解像度画像の生成に失敗しました。", level="ERROR")
 
-    # TODO: Add save_settings and load_settings tests here once implemented
+    # TODO: save_settings と load_settings のテストを実装したらここに追加
 
     logger.log("\nFractalEngine テストが完了しました。", level="INFO")

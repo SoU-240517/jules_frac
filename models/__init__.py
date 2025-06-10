@@ -1,5 +1,5 @@
-# Make FractalEngine available when importing the models package
+# modelsパッケージをインポートする際にFractalEngineを利用可能にする
 from .fractal_engine import FractalEngine
 
-# You can also define __all__ if you want to be explicit about what's exported
+# エクスポートされるものを明示したい場合は __all__ を定義することもできます
 __all__ = ['FractalEngine']
