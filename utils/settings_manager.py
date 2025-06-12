@@ -41,7 +41,7 @@ class SettingsManager:
         else:
             # 通常の初期化パス
             self.filepath = Path(settings_filename)
-            print(f"接待パスの判定: {self.filepath.is_absolute()}")
+            print(f"設定ファイルの絶対パスの判定: {self.filepath.is_absolute()}")
             if not self.filepath.is_absolute():
                 try:
                     home_dir = Path.home()
