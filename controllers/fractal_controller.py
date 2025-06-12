@@ -601,7 +601,7 @@ class FractalController(QObject):
         # active_target_cp_params = self.fractal_engine.get_coloring_plugin_parameters(target_type=self.active_coloring_target_type)
         # if active_target_cp_params:
         #     param_label = "D_CP" if self.active_coloring_target_type == 'divergent' else "ND_CP"
-        #     status_parts.append(f"{param_label}:[{', '.join([f'{k}:{v:.3f}' if isinstance(v,float) else f'{k}:{v}' for k,v in active_target_cp_params.items()])}]")
+        #     status_parts.append(f"{param_label}:[{', '.join([f'{k}:{v:.2f}' if isinstance(v,float) else f'{k}:{v}' for k,v in active_target_cp_params.items()])}]")
 
 
         status_parts.append(f"{self.fractal_engine.image_width_px}x{self.fractal_engine.image_height_px}px")

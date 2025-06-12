@@ -610,7 +610,7 @@ class ParameterPanel(QScrollArea):
                 widget.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
                 widget.setRange(p_def.get('range',(-1e9,1e9))[0], p_def.get('range',(-1e9,1e9))[1])
                 # setValue と setSingleStep/setDecimals の順序をプラグイン固有UIと合わせる
-                widget.setDecimals(p_def.get('decimals',3))
+                widget.setDecimals(p_def.get('decimals',2))
                 widget.setSingleStep(p_def.get('step',0.01))
                 widget.setValue(current_val if current_val is not None else 0.0)
                 logger.log(f"'{name}' の QDoubleSpinBox を値 {widget.value()} で作成しました", level="DEBUG")
