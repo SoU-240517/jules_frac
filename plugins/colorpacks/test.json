@@ -1,0 +1,50 @@
+{
+    "pack_name": "test",
+    "maps": [
+        {
+            "map_name": "hsv",
+            "type": "gradient",
+            "gradient_points": [
+                {"pos": 0.0, "color": [255, 0, 0]},
+                {"pos": 0.14118, "color": [255, 212, 0]},
+                {"pos": 0.28627, "color": [78, 255, 0]},
+                {"pos": 0.42745, "color": [0, 255, 133]},
+                {"pos": 0.57255, "color": [0, 157, 255]},
+                {"pos": 0.71373, "color": [54, 0, 255]},
+                {"pos": 0.85882, "color": [255, 0, 236]},
+                {"pos": 1.0, "color": [255, 0, 23]}
+            ],
+            "num_colors": 256
+        },
+        {
+            "map_name": "twilight",
+            "type": "gradient",
+            "gradient_points": [
+                {"pos": 0.0, "color": [225, 216, 226]},
+                {"pos": 0.14118, "color": [137, 172, 196]},
+                {"pos": 0.28627, "color": [95, 96, 179]},
+                {"pos": 0.42745, "color": [73, 21, 100]},
+                {"pos": 0.57255, "color": [81, 20, 68]},
+                {"pos": 0.71373, "color": [164, 66, 79]},
+                {"pos": 0.85882, "color": [201, 153, 125]},
+                {"pos": 1.0, "color": [225, 216, 225]}
+            ],
+            "num_colors": 256
+        },
+        {
+            "map_name": "twilight_shifted",
+            "type": "gradient",
+            "gradient_points": [
+                {"pos": 0.0, "color": [47, 19, 55]},
+                {"pos": 0.14118, "color": [91, 52, 153]},
+                {"pos": 0.28627, "color": [105, 137, 190]},
+                {"pos": 0.42745, "color": [188, 202, 209]},
+                {"pos": 0.57255, "color": [213, 192, 180]},
+                {"pos": 0.71373, "color": [188, 107, 89]},
+                {"pos": 0.85882, "color": [125, 33, 80]},
+                {"pos": 1.0, "color": [47, 20, 54]}
+            ],
+            "num_colors": 256
+        }
+    ]
+}
