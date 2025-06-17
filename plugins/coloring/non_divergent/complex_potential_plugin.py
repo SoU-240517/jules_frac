@@ -64,7 +64,9 @@ def _normalize_and_color_jit(
     default_outside_color_r: np.uint8, # 集合外の点のデフォルト色 (R)。Numbaのために型を明示
     default_outside_color_g: np.uint8, # 集合外の点のデフォルト色 (G)
     default_outside_color_b: np.uint8, # 集合外の点のデフォルト色 (B)
-    color_scale: float # 色のスケール
+    color_scale: float, # 色のスケール
+    potential_offset: float, # ポテンシャルオフセット
+    potential_scale: float # ポテンシャルスケール
 ) -> None:
     """
     ポテンシャル値を正規化し、カラーマップまたはグレースケールで色付けするJITコンパイル済み関数。
@@ -80,6 +82,8 @@ def _normalize_and_color_jit(
         default_outside_color_g (np.uint8): 集合外の点のG値。
         default_outside_color_b (np.uint8): 集合外の点のB値。
         color_scale (float): 色のスケール。
+        potential_offset (float): ポテンシャル値に加算するオフセット。
+        potential_scale (float): ポテンシャル値のスケール。
     """
     height, width = potentials.shape
     potential_range_norm = max_potential_norm - min_potential_norm
@@ -96,7 +100,9 @@ def _normalize_and_color_jit(
                 if current_potential == -np.inf: # ポテンシャルが-infinityの場合 (log(|Z_n|~0))
                     norm_potential = 0.0
                 else:
-                    norm_potential = (current_potential - min_potential_norm) / potential_range_norm
+                    # ポテンシャル値にオフセットとスケールを適用
+                    adjusted_potential = (current_potential + potential_offset) * potential_scale
+                    norm_potential = (adjusted_potential - min_potential_norm) / potential_range_norm
 
                 norm_potential = max(0.0, min(1.0, norm_potential)) # [0, 1] の範囲にクランプ
 
@@ -159,7 +165,27 @@ class ComplexPotentialColoringPlugin(ColoringAlgorithmPlugin):
                 "label": "色のスケール",
                 "type": "float",
                 "default": 1.0,
-                "range": (0.1, 5.0)
+                "range": (0.1, 5.0),
+                "step": 0.1,
+                "tooltip": "色の変化の速さを調整します。大きいほど色が細かく変化します。"
+            },
+            {
+                "name": "potential_offset",
+                "label": "ポテンシャルオフセット",
+                "type": "float",
+                "default": 0.0,
+                "range": (-10.0, 10.0),
+                "step": 0.1,
+                "tooltip": "ポテンシャル値に加算するオフセット値です。色の分布を全体的にシフトさせます。"
+            },
+            {
+                "name": "potential_scale",
+                "label": "ポテンシャルスケール",
+                "type": "float",
+                "default": 1.0,
+                "range": (0.1, 10.0),
+                "step": 0.1,
+                "tooltip": "ポテンシャル値のスケールを調整します。値が大きいほどポテンシャルの変化が強調されます。"
             }
         ]
 
@@ -268,7 +294,9 @@ class ComplexPotentialColoringPlugin(ColoringAlgorithmPlugin):
             self.DEFAULT_OUTSIDE_COLOR[0],
             self.DEFAULT_OUTSIDE_COLOR[1],
             self.DEFAULT_OUTSIDE_COLOR[2],
-            color_scale  # 色のスケールを渡す
+            color_scale,  # 色のスケールを渡す
+            algorithm_params.get("potential_offset", 0.0),  # ポテンシャルオフセットを渡す
+            algorithm_params.get("potential_scale", 1.0)  # ポテンシャルスケールを渡す
         )
         return img_array
 

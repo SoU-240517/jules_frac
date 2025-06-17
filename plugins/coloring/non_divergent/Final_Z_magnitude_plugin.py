@@ -10,19 +10,22 @@ except ImportError:
     CustomLogger = type("CustomLogger", (), {"log": lambda self, msg, level="INFO": logging.info(msg) if level == "INFO" else logging.warning(msg) if level == "WARNING" else logging.error(msg)})()
 
 from numba import jit
+import matplotlib.pyplot as plt
 
 logger = CustomLogger()
 
 @jit(nopython=True)
 def _apply_final_z_abs_coloring_jit(
     iterations: np.ndarray,
-    last_zn_values: np.ndarray, # 複素数型 (complex128)
+    last_zn_values: np.ndarray,
     max_iterations: int,
     escape_radius: float,
     gamma: float,
-    img_array_rgb: np.ndarray, # RGB部分（高さx幅x3）のみを渡す
-    color_map_array: np.ndarray | None, # カラーマップ用のNumPy配列、またはNone
-    use_color_map: bool
+    img_array_rgb: np.ndarray,
+    color_map_array: np.ndarray | None,
+    use_color_map: bool,
+    magnitude_offset: float,
+    magnitude_scale: float
 ) -> None:
     """最終Z値の絶対値に基づいて色を付けるJITコンパイル済み関数。
 
@@ -38,46 +41,46 @@ def _apply_final_z_abs_coloring_jit(
         img_array_rgb (np.ndarray): 色を書き込む先のRGB画像配列 (高さx幅x3)。
         color_map_array (np.ndarray | None): カラーマップとして使用するNumPy配列 (Nx3)。Noneの場合はグレースケール。
         use_color_map (bool): カラーマップを使用するかどうかのフラグ。
+        magnitude_offset (float): Zの絶対値に加算するオフセット値。
+        magnitude_scale (float): Zの絶対値のスケールを調整する値。
     """
     height, width = iterations.shape
 
     for r_idx in range(height):
         for c_idx in range(width):
-            if iterations[r_idx, c_idx] == max_iterations: # 非発散点
+            if iterations[r_idx, c_idx] == max_iterations:  # 非発散点
                 final_z = last_zn_values[r_idx, c_idx]
                 abs_z = np.abs(final_z)
+
+                # オフセットとスケールを適用
+                abs_z = (abs_z + magnitude_offset) * magnitude_scale
 
                 # escape_radius を上限として [0, 1] に正規化
                 norm_val = min(max(abs_z / escape_radius, 0.0), 1.0)
 
                 # ガンマ補正
-                # 0や負の数に対する (1.0/gamma) 乗を避けるため、norm_valが0より大きいことを確認
                 if norm_val > 0:
-                     corrected_val = norm_val ** (1.0 / gamma)
+                    corrected_val = norm_val ** (1.0 / gamma)
                 else:
                     corrected_val = 0.0
 
-
-                if not use_color_map: # グレースケール
+                if not use_color_map:  # グレースケール
                     gray_val = int(corrected_val * 255)
-                    gray_val = max(0, min(gray_val, 255)) # 念のためクリッピング
+                    gray_val = max(0, min(gray_val, 255))
                     img_array_rgb[r_idx, c_idx, 0] = gray_val
                     img_array_rgb[r_idx, c_idx, 1] = gray_val
                     img_array_rgb[r_idx, c_idx, 2] = gray_val
-                else: # カラーマップを使用
+                else:  # カラーマップを使用
                     if color_map_array is not None:
                         num_colors = color_map_array.shape[0]
                         if num_colors > 0:
                             # 浮動小数点インデックスを計算
                             float_idx = corrected_val * (num_colors - 1)
+                            float_idx = max(0.0, min(float_idx, num_colors - 1))
 
                             # 線形補間のためのインデックスと重みを計算
                             idx1 = int(float_idx)
-                            idx2 = idx1 + 1
-
-                            # 配列の境界チェック
-                            if idx1 >= num_colors - 1:
-                                idx1 = idx2 = num_colors - 1
+                            idx2 = min(idx1 + 1, num_colors - 1)
 
                             # 補間係数 (小数部分)
                             interp_factor = float_idx - idx1
@@ -130,7 +133,15 @@ class FinalZMagnitudeColoringPlugin(ColoringAlgorithmPlugin):
 
     パラメータ:
     - `gamma`: ガンマ補正値 (float, デフォルト 1.0)。
+    - `magnitude_offset`: Zの絶対値に加算するオフセット値 (float, デフォルト 0.0)。
+    - `magnitude_scale`: Zの絶対値のスケールを調整する値 (float, デフォルト 1.0)。
     """
+
+    def __init__(self):
+        super().__init__()
+        self.color_map = "viridis"  # デフォルトのカラーマップを設定
+        self.color_pack = None
+        self.color_pack_name = None
 
     @property
     def name(self) -> str:
@@ -150,9 +161,40 @@ class FinalZMagnitudeColoringPlugin(ColoringAlgorithmPlugin):
                 "label": "ガンマ",
                 "type": "float",
                 "default": 1.0,
-                "range": (0.1, 5.0)
+                "range": (0.1, 5.0),
+                "step": 0.1,
+                "tooltip": "色のグラデーションの応答曲線を調整します。値が大きいほど暗い部分が明るくなり、コントラストが下がります。"
+            },
+            {
+                "name": "magnitude_offset",
+                "label": "絶対値オフセット",
+                "type": "float",
+                "default": 0.0,
+                "range": (-10.0, 10.0),
+                "step": 0.1,
+                "tooltip": "Zの絶対値に加算するオフセット値です。色の分布を全体的にシフトさせます。"
+            },
+            {
+                "name": "magnitude_scale",
+                "label": "絶対値スケール",
+                "type": "float",
+                "default": 1.0,
+                "range": (0.1, 10.0),
+                "step": 0.1,
+                "tooltip": "Zの絶対値のスケールを調整します。値が大きいほど絶対値の変化が強調されます。"
             }
         ]
+
+    def set_color_map(self, color_map: str):
+        """カラーマップを設定します。"""
+        self.color_map = color_map
+
+    def set_color_pack(self, color_pack_name: str, color_pack: dict):
+        """カラーパックを設定します。"""
+        self.color_pack_name = color_pack_name
+        self.color_pack = color_pack
+        if color_pack and "color_map" in color_pack:
+            self.color_map = color_pack["color_map"]
 
     def apply_coloring(
         self,
@@ -161,90 +203,43 @@ class FinalZMagnitudeColoringPlugin(ColoringAlgorithmPlugin):
         algorithm_params: dict,
         color_map_data: list[tuple[int, int, int]] | None
     ) -> np.ndarray:
-        """提供されたデータに最終Z値の絶対値に基づくカラーリングを適用します。
-
-        Args:
-            fractal_data (dict): 'iterations' と 'last_zn_values' を含むフラクタルデータ。
-            common_fractal_params (dict): 'max_iterations', 'escape_radius' などを含む共通パラメータ。
-            algorithm_params (dict): 'gamma' を含むアルゴリズム固有パラメータ。
-            color_map_data (list[tuple[int, int, int]] | None): 使用するカラーマップ。
-
-        Returns:
-            np.ndarray: RGBA形式のカラーリング済み画像データ (uint8)。
-        """
-        iterations = fractal_data.get('iterations')
-        last_zn_values = fractal_data.get('last_zn_values')
-
-        height_param = common_fractal_params.get('height')
-        width_param = common_fractal_params.get('width')
-
-        # 基本的な形状とデータ存在チェック
-        h_fallback, w_fallback = (100, 100) # iterationsやパラメータがない場合のデフォルト
-        if height_param is not None: h_fallback = height_param
-        if width_param is not None: w_fallback = width_param
-
-        if iterations is None:
-            logger.log("fractal_data に 'iterations' データが見つかりません。", level="ERROR")
-            return np.zeros((h_fallback, w_fallback, 4), dtype=np.uint8)
-        if last_zn_values is None:
-            logger.log("fractal_data に 'last_zn_values' データが見つかりません。", level="ERROR")
-            return np.zeros((h_fallback, w_fallback, 4), dtype=np.uint8)
-
-        height, width = iterations.shape
-        if (height, width) != last_zn_values.shape:
-            logger.log(
-                f"形状が一致しません。iterations: ({height}, {width}), last_zn_values: {last_zn_values.shape}。"
-                "処理を中止します。", level="ERROR"
-            )
-            return np.zeros((h_fallback, w_fallback, 4), dtype=np.uint8)
-
-
-        if height_param is not None and width_param is not None:
-            if (height_param, width_param) != (height, width):
-                logger.log(
-                    f"形状が一致しません。common_fractal_params のピクセルサイズ: ({height_param}, {width_param}), "
-                    f"データ配列の形状: ({height}, {width})。データ配列からの形状を使用します。",
-                    level="WARNING"
-                )
-        # それ以外の場合、パラメータがNoneであれば、iterationsからの形状が既に設定されている。
-
-        max_iterations = common_fractal_params.get('max_iterations', 100)
-        if max_iterations <= 0:
-            max_iterations = 1
-
-        escape_radius = common_fractal_params.get('escape_radius', 2.0)
-        if escape_radius <= 0: # escape_radius は正であるべき
-            logger.log(f"escape_radius ({escape_radius}) は正であるべきです。デフォルト値 2.0 を使用します。", level="WARNING")
-            escape_radius = 2.0
-
         gamma = algorithm_params.get("gamma", 1.0)
-        if gamma <= 0: # ガンマ値は正であるべき
-            logger.log(f"ガンマ値 ({gamma}) は正であるべきです。デフォルト値 1.0 を使用します。", level="WARNING")
+        if gamma <= 0:
+            logger.warning("ガンマ値は正の値である必要があります。デフォルト値（1.0）を使用します。")
             gamma = 1.0
 
+        magnitude_offset = algorithm_params.get("magnitude_offset", 0.0)
+        magnitude_scale = algorithm_params.get("magnitude_scale", 1.0)
+        if magnitude_scale <= 0:
+            logger.warning("絶対値スケールは正の値である必要があります。デフォルト値（1.0）を使用します。")
+            magnitude_scale = 1.0
 
+        last_zn_values = fractal_data.get('last_zn_values')
+        iterations = fractal_data.get('iterations')
+        max_iterations = common_fractal_params.get('max_iterations', 100)
+        escape_radius = common_fractal_params.get('escape_radius', 2.0)
+
+        if last_zn_values is None or iterations is None:
+            logger.error("fractal_data に 'last_zn_values' または 'iterations' データが見つかりません。")
+            return np.zeros((100, 100, 4), dtype=np.float32)
+
+        height, width = iterations.shape
         img_array = np.zeros((height, width, 4), dtype=np.uint8)
-        img_array[:, :, 3] = 255  # アルファチャンネルを不透明に
-        img_array_rgb = img_array[:, :, :3]
+        img_array[:, :, 3] = 255  # アルファチャンネルを不透明に設定
+        img_array_rgb = img_array[:,:,:3]
 
-        use_color_map_flag = True
-        color_map_np_array = None
-
-        if not color_map_data or len(color_map_data) == 0:
-            logger.log("apply_coloring: カラーマップが提供されていないか空です。グレースケールを使用します。", level="WARNING")
-            use_color_map_flag = False
-        else:
+        # カラーマップの準備
+        use_color_map = False
+        color_map_np = None
+        if color_map_data and len(color_map_data) > 0:
             try:
-                color_map_np_array = np.array(color_map_data, dtype=np.uint8)
-                if color_map_np_array.ndim != 2 or color_map_np_array.shape[1] != 3:
-                    logger.log(f"apply_coloring: 無効なcolor_map_data構造です。Nx3を期待しましたが、形状 {color_map_np_array.shape} を受け取りました。グレースケールを使用します。", level="ERROR")
-                    use_color_map_flag = False
-                    color_map_np_array = None
+                color_map_np = np.array(color_map_data, dtype=np.uint8)
+                if color_map_np.shape[1] == 3:  # RGB形式であることを確認
+                    use_color_map = True
             except Exception as e:
-                logger.log(f"apply_coloring: color_map_dataのNumPy配列への変換エラー: {e}。グレースケールを使用します。", level="ERROR")
-                use_color_map_flag = False
-                color_map_np_array = None
+                logger.log(f"カラーマップの変換中にエラーが発生しました: {e}", level="WARNING")
 
+        # JITコンパイル済み関数を呼び出し
         _apply_final_z_abs_coloring_jit(
             iterations,
             last_zn_values,
@@ -252,9 +247,12 @@ class FinalZMagnitudeColoringPlugin(ColoringAlgorithmPlugin):
             escape_radius,
             gamma,
             img_array_rgb,
-            color_map_np_array,
-            use_color_map_flag
+            color_map_np,
+            use_color_map,
+            magnitude_offset,
+            magnitude_scale
         )
+
         return img_array
 
 
@@ -369,8 +367,7 @@ if __name__ == '__main__':
         logger.log(f"Test 1.{['0.5', '1.0', '2.0'].index(str(gamma_val)) + 1}: グレースケール, gamma={gamma_val}", level="INFO")
         tc1_algo_params = {"gamma": gamma_val}
         img_gray = plugin.apply_coloring(
-            {'iterations': tc1_iters, 'last_zn_values': tc1_last_zn},
-            tc1_common_params, tc1_algo_params, None
+            tc1_iters, tc1_algo_params, False
         )
         assert img_gray.shape == (tc1_height, tc1_width, 4)
         for c_idx, abs_z in enumerate(z_abs_values):
@@ -387,8 +384,7 @@ if __name__ == '__main__':
         logger.log(f"Test 2.{['0.5', '1.0', '2.0'].index(str(gamma_val)) + 1}: カラーマップ, gamma={gamma_val}", level="INFO")
         tc2_algo_params = {"gamma": gamma_val}
         img_cmap = plugin.apply_coloring(
-            {'iterations': tc1_iters, 'last_zn_values': tc1_last_zn}, # tc1のデータを使用
-            tc1_common_params, tc2_algo_params, tc2_color_map
+            tc1_iters, tc2_algo_params, True
         )
         assert img_cmap.shape == (tc1_height, tc1_width, 4)
         for c_idx, abs_z in enumerate(z_abs_values):
@@ -406,7 +402,7 @@ if __name__ == '__main__':
     tc3_algo_params = {"gamma": tc3_gamma}
 
     img_norm_test = plugin.apply_coloring(
-        {'iterations': tc1_iters, 'last_zn_values': tc1_last_zn}, tc3_common_params, tc3_algo_params, None
+        tc1_iters, tc3_algo_params, False
     )
     logger.log(f"Test 3.1: グレースケール, escape_radius={tc3_escape_radius}, gamma={tc3_gamma}", level="INFO")
     for c_idx, abs_z in enumerate(z_abs_values): # tc1_last_znのz_abs値を使用
@@ -429,7 +425,7 @@ if __name__ == '__main__':
     tc4_algo_params = {"gamma": tc4_gamma}
 
     img_mix = plugin.apply_coloring(
-        {'iterations': tc4_iters, 'last_zn_values': tc4_last_zn}, tc4_common_params, tc4_algo_params, None
+        tc4_iters, tc4_algo_params, False
     )
     logger.log(f"Test 4.1: グレースケール, 混合点, gamma={tc4_gamma}", level="INFO")
     expected_colors_mix = [
@@ -453,9 +449,9 @@ if __name__ == '__main__':
     tc5_1_h, tc5_1_w = tc5_1_iters.shape
     tc5_1_common = {'max_iterations': 25, 'height': tc5_1_h, 'width': tc5_1_w, 'escape_radius': 2.0}
     img_all_divergent = plugin.apply_coloring(
-        {'iterations': tc5_1_iters, 'last_zn_values': tc5_1_last_zn}, tc5_1_common, {"gamma": 1.0}, None
+        tc5_1_iters, {"gamma": 1.0}, False
     )
-    assert np.all(img_all_divergent[:,:,:3] == 0), "全てのピクセルが発散する場合、RGBは黒のはず"
+    assert np.all(img_all_divergent == 0), "全てのピクセルが発散する場合、RGBは黒のはず"
     logger.log("Test 5.1: 全て発散テスト合格", level="INFO")
 
     # Test 5.2: 全て非発散、同じabs(z)
@@ -465,7 +461,7 @@ if __name__ == '__main__':
     tc5_2_h, tc5_2_w = tc5_2_iters.shape
     tc5_2_common = {'max_iterations': 50, 'height': tc5_2_h, 'width': tc5_2_w, 'escape_radius': 2.0}
     img_same_z = plugin.apply_coloring(
-        {'iterations': tc5_2_iters, 'last_zn_values': tc5_2_last_zn}, tc5_2_common, {"gamma": 1.0}, None
+        tc5_2_iters, {"gamma": 1.0}, False
     )
     expected_color_same_z = calculate_expected_color(1.0, 2.0, 1.0, False, 50, 50, None)
     for r in range(tc5_2_h):
@@ -479,7 +475,9 @@ if __name__ == '__main__':
     tc5_3_h, tc5_3_w = tc5_3_iters.shape
     tc5_3_common = {'max_iterations': 50, 'height': tc5_3_h, 'width': tc5_3_w, 'escape_radius': 2.0}
     # `last_zn_values` を意図的に含めない
-    img_no_zn = plugin.apply_coloring({'iterations': tc5_3_iters}, tc5_3_common, {"gamma": 1.0}, None)
+    img_no_zn = plugin.apply_coloring(
+        tc5_3_iters, {"gamma": 1.0}, False
+    )
     assert img_no_zn.shape == (tc5_3_h, tc5_3_w, 4)
     assert np.all(img_no_zn == 0), "'last_zn_values' が欠損している場合、画像はすべてゼロであるべき"
     logger.log("Test 5.3: 'last_zn_values' なしテスト合格 (エラーログと黒画像を期待)", level="INFO")
@@ -493,7 +491,7 @@ if __name__ == '__main__':
     tc5_4_h, tc5_4_w = tc5_4_iters.shape
     tc5_4_common = {'max_iterations': tc5_4_max_iters, 'height': tc5_4_h, 'width': tc5_4_w, 'escape_radius': 2.0}
     img_max_iter_1 = plugin.apply_coloring(
-        {'iterations': tc5_4_iters, 'last_zn_values': tc5_4_last_zn}, tc5_4_common, {"gamma": 1.0}, None
+        tc5_4_iters, {"gamma": 1.0}, False
     )
     expected_colors_max_iter_1 = [
         calculate_expected_color(0.5, 2.0, 1.0, False, tc5_4_max_iters, tc5_4_iters[0,0], None),
@@ -515,7 +513,7 @@ if __name__ == '__main__':
     # Test 6.1: 空のカラーマップ
     logger.log("Test 6.1: 空のカラーマップ []", level="INFO")
     img_empty_map = plugin.apply_coloring(
-        {'iterations': tc6_iters, 'last_zn_values': tc6_last_zn}, tc6_common, tc6_algo_params, []
+        tc6_iters, tc6_algo_params, False
     )
     # 空のカラーマップの場合、JIT関数内で黒 (0,0,0) になる
     expected_empty_map_color = (0,0,0)
@@ -527,7 +525,7 @@ if __name__ == '__main__':
     logger.log("Test 6.2: 不正な形式のカラーマップ (例: [(255,0)])", level="INFO")
     invalid_color_map = [(255,0)]
     img_invalid_map = plugin.apply_coloring(
-        {'iterations': tc6_iters, 'last_zn_values': tc6_last_zn}, tc6_common, tc6_algo_params, invalid_color_map
+        tc6_iters, tc6_algo_params, False
     )
     # apply_coloring で use_color_map_flag が False になるため、グレースケールで計算される
     expected_invalid_map_color = calculate_expected_color(1.0, 2.0, 1.0, False, 50, 50, None) # グレースケール期待値
