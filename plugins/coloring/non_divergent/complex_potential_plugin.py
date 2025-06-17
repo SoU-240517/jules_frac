@@ -63,26 +63,26 @@ def _normalize_and_color_jit(
     use_color_map: bool,
     default_outside_color_r: np.uint8, # 集合外の点のデフォルト色 (R)。Numbaのために型を明示
     default_outside_color_g: np.uint8, # 集合外の点のデフォルト色 (G)
-    default_outside_color_b: np.uint8  # 集合外の点のデフォルト色 (B)
+    default_outside_color_b: np.uint8, # 集合外の点のデフォルト色 (B)
+    color_scale: float # 色のスケール
 ) -> None:
     """
-    計算されたポテンシャル値を正規化し、それに基づいて画像に色を付けます。
+    ポテンシャル値を正規化し、カラーマップまたはグレースケールで色付けするJITコンパイル済み関数。
 
     Args:
         potentials (np.ndarray): 各点のポテンシャル値を格納した配列。
-        min_potential_norm (float): 正規化範囲の最小値。
-        max_potential_norm (float): 正規化範囲の最大値。
-        img_array_rgb (np.ndarray): 色付け結果を格納するRGB画像配列。
-        color_map_array (np.ndarray | None): 使用するカラーマップ。Noneの場合はグレースケール。
-        use_color_map (bool): カラーマップを使用するかどうかのフラグ。
+        min_potential_norm (float): 正規化に使用する最小ポテンシャル値。
+        max_potential_norm (float): 正規化に使用する最大ポテンシャル値。
+        img_array_rgb (np.ndarray): 色付け結果を格納する配列 (HxWx3)。
+        color_map_array (np.ndarray | None): カラーマップ配列 (Nx3) またはNone。
+        use_color_map (bool): カラーマップを使用するかどうか。
         default_outside_color_r (np.uint8): 集合外の点のR値。
         default_outside_color_g (np.uint8): 集合外の点のG値。
         default_outside_color_b (np.uint8): 集合外の点のB値。
+        color_scale (float): 色のスケール。
     """
     height, width = potentials.shape
     potential_range_norm = max_potential_norm - min_potential_norm
-    if potential_range_norm < 1e-9: # ゼロ除算を避ける
-        potential_range_norm = 1e-9
 
     for r in range(height):
         for c in range(width):
@@ -100,41 +100,35 @@ def _normalize_and_color_jit(
 
                 norm_potential = max(0.0, min(1.0, norm_potential)) # [0, 1] の範囲にクランプ
 
+                # 色のスケールを適用
+                norm_potential = norm_potential * color_scale
+
                 if not use_color_map: # グレースケール
-                    gray_val = np.uint8(norm_potential * 255)
+                    gray_val = np.uint8(min(255.0, norm_potential * 255.0))
                     img_array_rgb[r,c,0] = gray_val
                     img_array_rgb[r,c,1] = gray_val
                     img_array_rgb[r,c,2] = gray_val
                 else: # カラーマップを使用
                     if color_map_array is not None and color_map_array.shape[0] > 0:
-                        num_colors = color_map_array.shape[0]
-                        # 浮動小数点インデックスを計算
-                        float_idx = norm_potential * (num_colors - 1)
+                        # カラーマップのインデックスを計算
+                        color_idx = norm_potential * (color_map_array.shape[0] - 1)
+                        idx1 = int(color_idx)
+                        idx2 = min(idx1 + 1, color_map_array.shape[0] - 1)
+                        fraction = color_idx - idx1
 
-                        # 線形補間のためのインデックスと重みを計算
-                        idx1 = int(float_idx)
-                        idx2 = idx1 + 1
-
-                        # 配列の境界チェック
-                        if idx1 >= num_colors - 1:
-                            idx1 = idx2 = num_colors - 1
-
-                        # 補間係数 (小数部分)
-                        interp_factor = float_idx - idx1
-
-                        # 2つの色を取得
-                        c1_r, c1_g, c1_b = color_map_array[idx1]
-                        c2_r, c2_g, c2_b = color_map_array[idx2]
+                        # 2つの色を取得して補間
+                        c1 = color_map_array[idx1]
+                        c2 = color_map_array[idx2]
 
                         # 線形補間
-                        r_val = c1_r * (1.0 - interp_factor) + c2_r * interp_factor
-                        g_val = c1_g * (1.0 - interp_factor) + c2_g * interp_factor
-                        b_val = c1_b * (1.0 - interp_factor) + c2_b * interp_factor
+                        r_val = c1[0] * (1.0 - fraction) + c2[0] * fraction
+                        g_val = c1[1] * (1.0 - fraction) + c2[1] * fraction
+                        b_val = c1[2] * (1.0 - fraction) + c2[2] * fraction
 
-                        # 結果を代入
-                        img_array_rgb[r,c,0] = int(r_val)
-                        img_array_rgb[r,c,1] = int(g_val)
-                        img_array_rgb[r,c,2] = int(b_val)
+                        # 結果を代入（色のスケールは既にnorm_potentialに適用済み）
+                        img_array_rgb[r,c,0] = np.uint8(min(255.0, r_val))
+                        img_array_rgb[r,c,1] = np.uint8(min(255.0, g_val))
+                        img_array_rgb[r,c,2] = np.uint8(min(255.0, b_val))
                     else: # use_color_map=True であってもカラーマップが空またはNoneの場合のフォールバック
                         img_array_rgb[r,c,0] = 0; img_array_rgb[r,c,1] = 0; img_array_rgb[r,c,2] = 0;
 
@@ -159,7 +153,15 @@ class ComplexPotentialColoringPlugin(ColoringAlgorithmPlugin):
 
     def get_parameters_definition(self) -> list:
         """このカラーリングアルゴリズムに固有の調整可能なパラメータのリストを返します。"""
-        return []
+        return [
+            {
+                "name": "color_scale",
+                "label": "色のスケール",
+                "type": "float",
+                "default": 1.0,
+                "range": (0.1, 5.0)
+            }
+        ]
 
     def apply_coloring(
         self, fractal_data: dict, common_fractal_params: dict,
@@ -238,24 +240,35 @@ class ComplexPotentialColoringPlugin(ColoringAlgorithmPlugin):
         if max_potential_for_norm <= min_potential_for_norm: # ポテンシャルの範囲が非常に狭いか無効な場合
              max_potential_for_norm = min_potential_for_norm + 1.0
 
-        use_color_map_flag = True
-        color_map_np_array = None
-        if not color_map_data or len(color_map_data) == 0: # カラーマップが提供されていないか空の場合
-            use_color_map_flag = False
-        else:
-            try:
-                color_map_np_array = np.array(color_map_data, dtype=np.uint8)
-                if color_map_np_array.ndim != 2 or color_map_np_array.shape[1] != 3:
-                    logger.log(f"apply_coloring: 無効なカラーマップデータです。Nx3形式を期待しましたが、形状 {color_map_np_array.shape} を受け取りました。", level="ERROR")
-                    use_color_map_flag = False; color_map_np_array = None
-            except Exception as e:
-                logger.log(f"apply_coloring: color_map を NumPy 配列に変換中にエラーが発生しました: {e}。", level="ERROR")
-                use_color_map_flag = False; color_map_np_array = None
+        # 色のスケールを取得
+        color_scale = algorithm_params.get("color_scale", 1.0)
+        if color_scale <= 0:
+            logger.log(f"色のスケール ({color_scale}) は正であるべきです。デフォルト値 1.0 を使用します。", level="WARNING")
+            color_scale = 1.0
 
+        # カラーマップの準備
+        use_color_map = False
+        color_map_np = None
+        if color_map_data and len(color_map_data) > 0:
+            try:
+                color_map_np = np.array(color_map_data, dtype=np.uint8)
+                if color_map_np.shape[1] == 3:  # RGB形式であることを確認
+                    use_color_map = True
+            except Exception as e:
+                logger.log(f"カラーマップの変換中にエラーが発生しました: {e}", level="WARNING")
+
+        # JITコンパイル済み関数を呼び出して色付けを実行
         _normalize_and_color_jit(
-            potentials, min_potential_for_norm, max_potential_for_norm,
-            img_array_rgb, color_map_np_array, use_color_map_flag,
-            self.DEFAULT_OUTSIDE_COLOR[0], self.DEFAULT_OUTSIDE_COLOR[1], self.DEFAULT_OUTSIDE_COLOR[2]
+            potentials,
+            min_potential_for_norm,
+            max_potential_for_norm,
+            img_array_rgb,
+            color_map_np if use_color_map else None,
+            use_color_map,
+            self.DEFAULT_OUTSIDE_COLOR[0],
+            self.DEFAULT_OUTSIDE_COLOR[1],
+            self.DEFAULT_OUTSIDE_COLOR[2],
+            color_scale  # 色のスケールを渡す
         )
         return img_array
 
