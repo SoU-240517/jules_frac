@@ -106,9 +106,14 @@ class ParameterPanel(QScrollArea):
         self.content_widget.setLayout(self.main_layout)
 
         # フラクタル選択
+        # fractal_group = QGroupBox("フラクタル選択")
+        # fractal_layout = QVBoxLayout(); self.fractal_combo = QComboBox()
+        # fractal_layout.addWidget(self.fractal_combo); fractal_group.setLayout(fractal_layout)
         fractal_group = QGroupBox("フラクタル選択")
-        fractal_layout = QVBoxLayout(); self.fractal_combo = QComboBox()
-        fractal_layout.addWidget(self.fractal_combo); fractal_group.setLayout(fractal_layout)
+        fractal_form_layout = QFormLayout() # QVBoxLayout から QFormLayout に変更
+        self.fractal_combo = QComboBox()
+        fractal_form_layout.addRow(QLabel("タイプ:"), self.fractal_combo) # ラベルとウィジェットのペアとして追加
+        fractal_group.setLayout(fractal_form_layout)
         self.main_layout.addWidget(fractal_group)
         self.fractal_combo.currentTextChanged.connect(self._on_fractal_type_changed)
         # 共通パラメータ

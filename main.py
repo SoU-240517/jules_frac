@@ -140,6 +140,31 @@ if __name__ == '__main__':
         QSplitter::handle:horizontal { width: 2px; }
         QSplitter::handle:vertical { height: 2px; }
         QSplitter::handle:hover { background-color: #505050; }
+
+        QGroupBox {
+            font-weight: bold; /* グループのタイトルを太字に */
+            border: 1px solid #505050;
+            border-radius: 5px;
+            margin-top: 10px; /* グループボックスの上に少しマージン */
+            padding-top: 10px; /* タイトルと内容の間にスペースを確保 */
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin;
+            subcontrol-position: top center; /* タイトルを中央上部に */
+            padding: 0 5px 0 5px; /* タイトルの左右にパディング */
+            background-color: #3c3c3c; /* タイトルの背景を少し明るく、または QMenuBar と合わせる */
+            color: #e0e0e0;
+            border-radius: 3px; /* タイトルの角を少し丸める */
+        }
+        QDoubleSpinBox, QComboBox, QLineEdit { /* QLineEditも追加 */
+            padding: 4px; /* 少しパディングを増やす */
+            border: 1px solid #606060;
+            border-radius: 3px;
+            min-height: 22px; /* 高さを確保してクリックしやすく */
+        }
+        QDoubleSpinBox:focus, QComboBox:focus, QLineEdit:focus {
+            border: 1px solid #77aaff; /* フォーカス時に枠線を強調 */
+        }
     """)
 
     # MainWindowにSettingsManagerのインスタンスを渡す
