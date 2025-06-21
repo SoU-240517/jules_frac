@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QScrollArea, QWidget, QVBoxLayout, QGroupBox, QFormLayout,
-    QLabel, QSpinBox, QDoubleSpinBox, QComboBox, QPushButton,
+    QLabel, QSpinBox, QDoubleSpinBox, QComboBox, QPushButton, QTabWidget,
     QListWidget, QListWidgetItem, QAbstractSpinBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize, QTimer, QEvent # QEvent を追加
@@ -134,93 +134,95 @@ class ParameterPanel(QScrollArea):
         self.plugin_specific_group.setVisible(False)
 
         # カラーリング設定グループ
-        self.coloring_group = QGroupBox("カラーリング設定")
-        self.true_coloring_layout = QVBoxLayout() # このグループのメインレイアウト
-        self.coloring_group.setLayout(self.true_coloring_layout)
-        self.main_layout.addWidget(self.coloring_group)
+        coloring_group = QGroupBox("カラーリング設定")
+        coloring_layout = QVBoxLayout()
+        coloring_group.setLayout(coloring_layout)
+        self.main_layout.addWidget(coloring_group)
 
-        # 発散部カラーリング設定グループ
-        self.divergent_coloring_group = QGroupBox("発散部カラーリング設定")
-        divergent_coloring_layout = QVBoxLayout()
-        self.divergent_coloring_group.setLayout(divergent_coloring_layout)
-        self.true_coloring_layout.addWidget(self.divergent_coloring_group)
+        # カラーリング設定をタブで分ける
+        self.coloring_tabs = QTabWidget()
+        coloring_layout.addWidget(self.coloring_tabs)
 
-        # 発散部 - アルゴリズム選択
+        # --- 発散部タブ ---
+        divergent_tab = QWidget()
+        divergent_layout = QVBoxLayout(divergent_tab)
+        self.coloring_tabs.addTab(divergent_tab, "発散部")
+
+        # アルゴリズム選択
         divergent_algo_layout = QFormLayout()
         self.coloring_algorithm_combo_divergent = QComboBox()
         divergent_algo_layout.addRow(QLabel("アルゴリズム:"), self.coloring_algorithm_combo_divergent)
-        divergent_coloring_layout.addLayout(divergent_algo_layout)
+        divergent_layout.addLayout(divergent_algo_layout)
         self.coloring_algorithm_combo_divergent.currentTextChanged.connect(
             partial(self._on_coloring_algorithm_changed, target_type='divergent')
         )
 
-        # 発散部 - アルゴリズム固有設定
+        # アルゴリズム固有設定
         self.coloring_plugin_specific_group_divergent = QGroupBox("アルゴリズム固有設定")
         self.coloring_plugin_specific_layout_divergent = QFormLayout()
         self.coloring_plugin_specific_group_divergent.setLayout(self.coloring_plugin_specific_layout_divergent)
-        divergent_coloring_layout.addWidget(self.coloring_plugin_specific_group_divergent)
+        divergent_layout.addWidget(self.coloring_plugin_specific_group_divergent)
         self.coloring_plugin_specific_group_divergent.setVisible(False)
 
-        # 発散部 - カラーパック選択
+        # カラーパック選択
         divergent_pack_layout = QFormLayout()
         self.color_pack_combo_divergent = QComboBox()
         divergent_pack_layout.addRow(QLabel("カラーパック:"), self.color_pack_combo_divergent)
-        divergent_coloring_layout.addLayout(divergent_pack_layout)
+        divergent_layout.addLayout(divergent_pack_layout)
         self.color_pack_combo_divergent.currentTextChanged.connect(
             partial(self._on_color_pack_changed, target_type='divergent')
         )
 
-        # 発散部 - カラーマップ選択
+        # カラーマップ選択
         divergent_map_layout = QFormLayout()
         self.color_map_listwidget_divergent = QListWidget()
         self.color_map_listwidget_divergent.setIconSize(QSize(96, 18))
         self.color_map_listwidget_divergent.setSpacing(1)
         self.color_map_listwidget_divergent.setFixedHeight(120)
         divergent_map_layout.addRow(QLabel("カラーマップ:"), self.color_map_listwidget_divergent)
-        divergent_coloring_layout.addLayout(divergent_map_layout)
+        divergent_layout.addLayout(divergent_map_layout)
         self.color_map_listwidget_divergent.currentItemChanged.connect(
             lambda current, previous, target_type='divergent': self._on_color_map_changed(current, previous, target_type)
         )
 
-        # 非発散部カラーリング設定グループ
-        self.non_divergent_coloring_group = QGroupBox("非発散部カラーリング設定")
-        non_divergent_coloring_layout = QVBoxLayout()
-        self.non_divergent_coloring_group.setLayout(non_divergent_coloring_layout)
-        self.true_coloring_layout.addWidget(self.non_divergent_coloring_group)
+        # --- 非発散部タブ ---
+        non_divergent_tab = QWidget()
+        non_divergent_layout = QVBoxLayout(non_divergent_tab)
+        self.coloring_tabs.addTab(non_divergent_tab, "非発散部")
 
-        # 非発散部 - アルゴリズム選択
+        # アルゴリズム選択
         non_divergent_algo_layout = QFormLayout()
         self.coloring_algorithm_combo_non_divergent = QComboBox()
         non_divergent_algo_layout.addRow(QLabel("アルゴリズム:"), self.coloring_algorithm_combo_non_divergent)
-        non_divergent_coloring_layout.addLayout(non_divergent_algo_layout)
+        non_divergent_layout.addLayout(non_divergent_algo_layout)
         self.coloring_algorithm_combo_non_divergent.currentTextChanged.connect(
             partial(self._on_coloring_algorithm_changed, target_type='non_divergent')
         )
 
-        # 非発散部 - アルゴリズム固有設定
+        # アルゴリズム固有設定
         self.coloring_plugin_specific_group_non_divergent = QGroupBox("アルゴリズム固有設定")
         self.coloring_plugin_specific_layout_non_divergent = QFormLayout()
         self.coloring_plugin_specific_group_non_divergent.setLayout(self.coloring_plugin_specific_layout_non_divergent)
-        non_divergent_coloring_layout.addWidget(self.coloring_plugin_specific_group_non_divergent)
+        non_divergent_layout.addWidget(self.coloring_plugin_specific_group_non_divergent)
         self.coloring_plugin_specific_group_non_divergent.setVisible(False)
 
-        # 非発散部 - カラーパック選択
+        # カラーパック選択
         non_divergent_pack_layout = QFormLayout()
         self.color_pack_combo_non_divergent = QComboBox()
         non_divergent_pack_layout.addRow(QLabel("カラーパック:"), self.color_pack_combo_non_divergent)
-        non_divergent_coloring_layout.addLayout(non_divergent_pack_layout)
+        non_divergent_layout.addLayout(non_divergent_pack_layout)
         self.color_pack_combo_non_divergent.currentTextChanged.connect(
             partial(self._on_color_pack_changed, target_type='non_divergent')
         )
 
-        # 非発散部 - カラーマップ選択
+        # カラーマップ選択
         non_divergent_map_layout = QFormLayout()
         self.color_map_listwidget_non_divergent = QListWidget()
         self.color_map_listwidget_non_divergent.setIconSize(QSize(96, 18))
         self.color_map_listwidget_non_divergent.setSpacing(1)
         self.color_map_listwidget_non_divergent.setFixedHeight(120)
         non_divergent_map_layout.addRow(QLabel("カラーマップ:"), self.color_map_listwidget_non_divergent)
-        non_divergent_coloring_layout.addLayout(non_divergent_map_layout)
+        non_divergent_layout.addLayout(non_divergent_map_layout)
         self.color_map_listwidget_non_divergent.currentItemChanged.connect(
             lambda current, previous, target_type='non_divergent': self._on_color_map_changed(current, previous, target_type)
         )

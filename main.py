@@ -165,6 +165,26 @@ if __name__ == '__main__':
         QDoubleSpinBox:focus, QComboBox:focus, QLineEdit:focus {
             border: 1px solid #77aaff; /* フォーカス時に枠線を強調 */
         }
+        QTabWidget::pane { /* タブのコンテンツエリア */
+            border: 1px solid #505050;
+            border-top: 1px solid #3c3c3c; /* タブとの境界線を調整 */
+        }
+        QTabBar::tab { /* タブのボタン */
+            background: #3c3c3c;
+            border: 1px solid #505050;
+            border-bottom-color: #3c3c3c; /* 選択されていないタブの下線をコンテンツエリアと一体化 */
+            border-top-left-radius: 4px;
+            border-top-right-radius: 4px;
+            min-width: 8ex;
+            padding: 5px;
+            color: #b0b0b0; /* 非選択タブの文字色 */
+        }
+        QTabBar::tab:selected { /* 選択されているタブ */
+            background: #505050;
+            border-color: #505050;
+            border-bottom-color: #505050; /* 選択されているタブの下線をコンテンツエリアと一体化 */
+            color: #e0e0e0; /* 選択タブの文字色 */
+        }
     """)
 
     # MainWindowにSettingsManagerのインスタンスを渡す
