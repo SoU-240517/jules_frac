@@ -98,11 +98,6 @@ class MainWindow(QMainWindow):
             if hasattr(self.parameter_panel, 'render_button'): # ParameterPanel に描画ボタンがあると仮定
                 self.parameter_panel.render_button.clicked.connect(self.trigger_render_from_panel)
 
-            if hasattr(self.fractal_controller, 'parameters_updated_externally') and \
-               hasattr(self.parameter_panel, 'update_ui_from_controller_parameters'):
-                self.fractal_controller.parameters_updated_externally.connect(
-                    self.parameter_panel.update_ui_from_controller_parameters)
-
             if hasattr(self.fractal_controller, 'active_fractal_plugin_ui_needs_update') and \
                hasattr(self.parameter_panel, '_update_fractal_plugin_specific_ui'): # メソッド名を仮定
                 self.fractal_controller.active_fractal_plugin_ui_needs_update.connect(
@@ -314,43 +309,6 @@ class MainWindow(QMainWindow):
 
         if hasattr(self, 'export_action'): self.export_action.setEnabled(True) # 再度有効化
         self.update_status_bar(f"エクスポート完了: {message}" if success else f"エクスポート失敗: {message}")
-
-
-    @pyqtSlot()
-    def trigger_render_from_panel(self):
-        """
-        ParameterPanel の「描画実行」ボタンがクリックされたときに呼び出されるスロット。
-        現在のUIパラメータと RenderArea のサイズを使用してレンダリングをトリガーします。
-        """
-        if not self.fractal_controller:
-            logger.log("FractalController が利用できません。", level="ERROR")
-            return
-
-        logger.log("'描画'ボタンがクリックされました.", level="DEBUG")
-        if not hasattr(self, 'parameter_panel') or self.parameter_panel is None:
-            logger.log("parameter_panel が初期化されていません。", level="ERROR")
-            return
-
-        params = self.parameter_panel.get_current_ui_parameters()
-        # 描画トリガー前に現在のUI状態に基づいてエンジンパラメータを更新
-        self.fractal_controller.update_common_fractal_parameters(max_iterations=params['max_iterations']
-            # source="ui_button" # コントローラーで source 引数を使用する場合
-        )
-
-        if not hasattr(self, 'render_area') or self.render_area is None: # render_area の存在確認
-            logger.log("render_area が初期化されていません。", level="ERROR")
-            return
-
-        render_width = self.render_area.width()
-        render_height = self.render_area.height()
-
-        if render_width <= 0 or render_height <= 0:
-            logger.log("RenderAreaのサイズが不正です. デフォルトサイズで描画を試みます.", level="WARNING")
-            # コントローラーの現在 (おそらくデフォルト) の画像サイズ設定で描画をトリガー
-            self.fractal_controller.trigger_render()
-        else:
-            self.fractal_controller.trigger_render(render_width, render_height)
-        logger.log(f"描画をトリガーしました (要求解像度: {render_width}x{render_height}).", level="DEBUG")
 
     def showEvent(self, event):
         """

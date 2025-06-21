@@ -227,9 +227,6 @@ class ParameterPanel(QScrollArea):
             lambda current, previous, target_type='non_divergent': self._on_color_map_changed(current, previous, target_type)
         )
 
-        # 描画ボタン
-        self.render_button = QPushButton("描画実行")
-        self.main_layout.addWidget(self.render_button)
         self.main_layout.addStretch(1)
 
         # 再描画をトリガーするシグナル接続
