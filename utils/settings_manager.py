@@ -166,6 +166,24 @@ class SettingsManager:
         if auto_save:
             self.save_settings()
 
+    def get_presets(self) -> dict:
+        """保存されているすべてのプリセットを取得します。"""
+        return self.get_setting("presets", {})
+
+    def save_preset(self, name: str, config: dict):
+        """指定された名前でプリセットを保存します。"""
+        presets = self.get_presets()
+        presets[name] = config
+        self.set_setting("presets", presets)
+
+    def delete_preset(self, name: str):
+        """指定された名前のプリセットを削除します。"""
+        presets = self.get_presets()
+        if name in presets:
+            del presets[name]
+            self.set_setting("presets", presets)
+            self._get_logger().log(f"プリセット '{name}' を設定から削除しました。", "DEBUG")
+
 if __name__ == '__main__':
     # __main__ のテストでは、SettingsManager が自身のロガーをインスタンス化できるように、
     # CustomLogger が利用可能であると仮定します。

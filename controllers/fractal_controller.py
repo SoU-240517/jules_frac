@@ -18,6 +18,7 @@ class FractalController(QObject):
     active_coloring_plugin_ui_needs_update = pyqtSignal(str) # (プラグイン名) - 将来廃止されるか、より単純な更新に使用される可能性があります
     active_coloring_target_and_plugin_changed_externally = pyqtSignal(str, str) # (ターゲットタイプ, プラグイン名) - 変更された場合の順序に注意
     active_color_map_changed_externally = pyqtSignal(str, str, str) # パック名, マップ名, ターゲットタイプ
+    configuration_applied = pyqtSignal() # プリセット適用後にUIを更新するためのシグナル
     rendering_task_started = pyqtSignal() # 新しいシグナル
     rendering_state_changed = pyqtSignal(bool) # レンダリング開始時はTrue、終了時または失敗時はFalse
 
@@ -44,17 +45,12 @@ class FractalController(QObject):
         self.active_coloring_target_type: str = 'divergent' # デフォルトのターゲットタイプ
         # オプション: 必要に応じて同時エクスポート数を制限します。例: self.thread_pool.setMaxThreadCount(1)
 
-    def apply_configuration_from_settings(self):
-        """
-        SettingsManager から保存された設定を読み込み、FractalEngine に適用します。
-        このメソッドはUIの更新をトリガーしません。UIは別途初期化される必要があります。
-        """
-        config = self.settings_manager.get_setting("engine_settings")
-        if not config or not isinstance(config, dict):
-            logger.log("保存されたエンジン設定が見つからないか、無効です。デフォルトで起動します。", level="INFO")
+    def _apply_config_to_engine(self, config: dict):
+        """指定された設定辞書をエンジンに適用します。UI更新や再描画は行いません。"""
+        if not self.fractal_engine or not config or not isinstance(config, dict):
+            logger.log("設定適用スキップ: エンジン未設定、または無効な設定です。", "WARNING")
             return
 
-        logger.log("保存されたエンジン設定を読み込んで適用します...", level="INFO")
         try:
             # 1. フラクタルプラグイン
             fp_name = config.get('fractal_plugin_name')
@@ -67,10 +63,7 @@ class FractalController(QObject):
             # 2. 共通パラメータ (プラグインのデフォルトを上書きするためにプラグイン設定後に適用)
             common_params = config.get('common_parameters')
             if common_params:
-                # height は width とアスペクト比から計算される従属的な値なので、
-                # 設定から復元する際には除外する。
                 common_params.pop('height', None)
-                # set_common_parameters が辞書を受け入れることを想定
                 self.fractal_engine.set_common_parameters(**common_params)
 
             # 3. カラーリング設定 (Divergent / Non-Divergent)
@@ -78,26 +71,65 @@ class FractalController(QObject):
                 coloring_config = config.get(f'coloring_{target_type}', {})
                 if not coloring_config:
                     continue
-
-                # カラーリングプラグイン
                 cp_name = coloring_config.get('plugin_name')
                 if cp_name:
                     self.fractal_engine.set_active_coloring_plugin(cp_name, target_type=target_type)
                     cp_params = coloring_config.get('plugin_parameters', {})
                     for name, value in cp_params.items():
                         self.fractal_engine.set_coloring_plugin_parameter(name, value, target_type=target_type)
-
-                # カラーマップ
                 pack_name = coloring_config.get('pack_name')
                 map_name = coloring_config.get('map_name')
                 if pack_name and map_name:
                     self.fractal_engine.set_active_color_map(pack_name, map_name, target_type=target_type)
 
             self.fractal_engine.last_fractal_data_cache = None # 設定適用後はキャッシュをクリア
-            logger.log("エンジン設定の適用が完了しました。", level="INFO")
+            logger.log("エンジン設定の適用が完了しました。", "DEBUG")
 
         except Exception as e:
             logger.log(f"エンジン設定の適用中にエラーが発生しました: {e}", level="ERROR", exc_info=True)
+
+    def apply_configuration_from_settings(self):
+        """
+        SettingsManager から保存された設定を読み込み、FractalEngine に適用します。
+        このメソッドはUIの更新をトリガーしません。UIは別途初期化される必要があります。
+        """
+        config = self.settings_manager.get_setting("engine_settings")
+        if not config or not isinstance(config, dict):
+            logger.log("保存されたエンジン設定が見つからないか、無効です。デフォルトで起動します。", level="INFO")
+            return
+
+        logger.log("保存されたエンジン設定を読み込んで適用します...", level="INFO")
+        self._apply_config_to_engine(config)
+
+    def get_preset_names(self) -> list[str]:
+        """プリセット名の一覧を取得します。"""
+        return list(self.settings_manager.get_presets().keys())
+
+    def save_current_config_as_preset(self, name: str):
+        """現在の設定をプリセットとして保存します。"""
+        if not name:
+            self.logger.log("プリセット名が空のため、保存をキャンセルしました。", "WARNING")
+            return
+        config = self.get_full_configuration()
+        self.settings_manager.save_preset(name, config)
+        self.logger.log(f"プリセット '{name}' を保存しました。", "INFO")
+
+    def load_preset(self, name: str):
+        """プリセットを読み込み、適用します。"""
+        presets = self.settings_manager.get_presets()
+        config = presets.get(name)
+        if config:
+            self.logger.log(f"プリセット '{name}' を読み込んでいます...", "INFO")
+            self._apply_config_to_engine(config)
+            self.configuration_applied.emit() # UI更新を通知
+            self.trigger_render(full_recompute=True) # 再描画
+        else:
+            self.logger.log(f"プリセット '{name}' が見つかりませんでした。", "ERROR")
+
+    def delete_preset(self, name: str):
+        """プリセットを削除します。"""
+        self.settings_manager.delete_preset(name)
+        self.logger.log(f"プリセット '{name}' を削除しました。", "INFO")
 
     def set_main_window(self, main_window):
         """

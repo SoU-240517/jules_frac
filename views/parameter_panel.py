@@ -1,7 +1,8 @@
 from PyQt6.QtWidgets import (
     QScrollArea, QWidget, QVBoxLayout, QGroupBox, QFormLayout, QHBoxLayout,
     QLabel, QSpinBox, QDoubleSpinBox, QComboBox, QPushButton, QTabWidget,
-    QListWidget, QListWidgetItem, QAbstractSpinBox, QSlider
+    QListWidget, QListWidgetItem, QAbstractSpinBox, QSlider,
+    QInputDialog, QMessageBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize, QTimer, QEvent # QEvent を追加
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QLinearGradient, QIcon
@@ -79,12 +80,17 @@ class ParameterPanel(QScrollArea):
                 self.fractal_controller.active_color_map_changed_externally.connect(
                     self._update_color_selection_from_controller
                 )
+            # プリセット機能からのシグナル
+            if hasattr(self.fractal_controller, 'configuration_applied'):
+                self.fractal_controller.configuration_applied.connect(self.load_initial_parameters)
+
             else:
                 logger.log("警告: FractalController に 'active_color_map_changed_externally' シグナルが存在しません。", level="WARNING")
             # self.fractal_controller.rendering_state_changed.connect(self._on_rendering_state_changed) # この行は MainWindow に移動されました
         else:
             # コントローラーが利用できない場合のフォールバックUI設定
             self._set_ui_values(100)
+            if hasattr(self, 'preset_group_box'): self.preset_group_box.setEnabled(False)
             if hasattr(self, 'plugin_specific_group'): self.plugin_specific_group.setVisible(False)
             if hasattr(self, 'coloring_tabs'): self.coloring_tabs.setEnabled(False)
 
@@ -97,6 +103,8 @@ class ParameterPanel(QScrollArea):
         self.setWidget(self.content_widget)
         self.main_layout = QVBoxLayout(self.content_widget)
         self.content_widget.setLayout(self.main_layout)
+
+        self._init_preset_ui()
 
         # フラクタル選択
         # fractal_group = QGroupBox("フラクタル選択")
@@ -172,6 +180,30 @@ class ParameterPanel(QScrollArea):
         self.iter_slider.valueChanged.connect(self._on_common_parameter_changed_for_preview)
         # スピンボックスの値変更もプレビューをトリガーする
         self.iter_spinbox.valueChanged.connect(self._on_common_parameter_changed_for_preview)
+
+    def _init_preset_ui(self):
+        """プリセット管理用のUIを初期化します。"""
+        self.preset_group_box = QGroupBox("プリセット")
+        preset_layout = QVBoxLayout()
+
+        self.presets_combo_box = QComboBox()
+
+        preset_buttons_layout = QHBoxLayout()
+        self.load_preset_button = QPushButton("読み込み")
+        self.save_preset_button = QPushButton("保存")
+        self.delete_preset_button = QPushButton("削除")
+        preset_buttons_layout.addWidget(self.load_preset_button)
+        preset_buttons_layout.addWidget(self.save_preset_button)
+        preset_buttons_layout.addWidget(self.delete_preset_button)
+
+        preset_layout.addWidget(self.presets_combo_box)
+        preset_layout.addLayout(preset_buttons_layout)
+        self.preset_group_box.setLayout(preset_layout)
+        self.main_layout.addWidget(self.preset_group_box)
+
+        self.load_preset_button.clicked.connect(self._on_load_preset)
+        self.save_preset_button.clicked.connect(self._on_save_preset)
+        self.delete_preset_button.clicked.connect(self._on_delete_preset)
 
     def _create_coloring_tab(self, target_type: str) -> QWidget:
         """指定されたターゲットタイプ（'divergent' または 'non_divergent'）用のUIタブを作成します。"""
@@ -277,6 +309,54 @@ class ParameterPanel(QScrollArea):
             elif plugin_names: self.fractal_combo.setCurrentText(plugin_names[0]) # アクティブなものがないか、アクティブなものがリストにない場合は最初のものを選択
         else: self.fractal_combo.addItem("プラグインなし"); self.fractal_combo.setEnabled(False)
         self.fractal_combo.blockSignals(False)
+
+    def populate_presets_combo_box(self):
+        """プリセットのドロップダウンを更新します。"""
+        if not hasattr(self, 'presets_combo_box'): return
+        self.presets_combo_box.blockSignals(True)
+        current_text = self.presets_combo_box.currentText()
+        self.presets_combo_box.clear()
+        preset_names = self.fractal_controller.get_preset_names()
+        if preset_names:
+            self.presets_combo_box.addItems(sorted(preset_names))
+            if current_text in preset_names:
+                self.presets_combo_box.setCurrentText(current_text)
+        self.presets_combo_box.blockSignals(False)
+
+    @pyqtSlot()
+    def _on_load_preset(self):
+        """選択されたプリセットを読み込みます。"""
+        preset_name = self.presets_combo_box.currentText()
+        if preset_name:
+            self.fractal_controller.load_preset(preset_name)
+        else:
+            QMessageBox.warning(self, "プリセットなし", "読み込むプリセットが選択されていません。")
+
+    @pyqtSlot()
+    def _on_save_preset(self):
+        """現在の設定を新しいプリセットとして保存します。"""
+        preset_name, ok = QInputDialog.getText(self, "プリセットの保存", "プリセット名を入力してください:")
+        if ok and preset_name:
+            self.fractal_controller.save_current_config_as_preset(preset_name)
+            self.populate_presets_combo_box()
+            self.presets_combo_box.setCurrentText(preset_name)
+
+    @pyqtSlot()
+    def _on_delete_preset(self):
+        """選択されたプリセットを削除します。"""
+        preset_name = self.presets_combo_box.currentText()
+        if not preset_name:
+            QMessageBox.warning(self, "プリセットなし", "削除するプリセットが選択されていません。")
+            return
+
+        reply = QMessageBox.question(self, "プリセットの削除",
+                                     f"プリセット '{preset_name}' を本当に削除しますか？",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                     QMessageBox.StandardButton.No)
+
+        if reply == QMessageBox.StandardButton.Yes:
+            self.fractal_controller.delete_preset(preset_name)
+            self.populate_presets_combo_box()
 
     @pyqtSlot(str)
     def _on_fractal_type_changed(self, plugin_name: str):
@@ -914,6 +994,9 @@ class ParameterPanel(QScrollArea):
         フラクタル固有UIとカラーリング固有UIも更新します。
         """
         if self.fractal_controller:
+            # プリセットコンボボックスを更新
+            self.populate_presets_combo_box()
+
             params = self.fractal_controller.get_current_common_parameters()
             if params: self._set_ui_values(params.get('max_iterations',100))
 
