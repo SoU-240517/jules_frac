@@ -67,6 +67,9 @@ class FractalController(QObject):
             # 2. 共通パラメータ (プラグインのデフォルトを上書きするためにプラグイン設定後に適用)
             common_params = config.get('common_parameters')
             if common_params:
+                # height は width とアスペクト比から計算される従属的な値なので、
+                # 設定から復元する際には除外する。
+                common_params.pop('height', None)
                 # set_common_parameters が辞書を受け入れることを想定
                 self.fractal_engine.set_common_parameters(**common_params)
 
