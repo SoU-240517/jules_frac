@@ -1,12 +1,13 @@
 from PyQt6.QtWidgets import (
     QScrollArea, QWidget, QVBoxLayout, QGroupBox, QFormLayout, QHBoxLayout,
     QLabel, QSpinBox, QDoubleSpinBox, QComboBox, QPushButton, QTabWidget,
-    QListWidget, QListWidgetItem, QAbstractSpinBox, QSlider
+    QListWidget, QListWidgetItem, QAbstractSpinBox, QSlider, QListView
 )
-from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize, QTimer, QEvent # QEvent を追加
+from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize, QTimer, QEvent, QModelIndex # QEvent, QModelIndex を追加
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QLinearGradient, QIcon
 from functools import partial
 from logger.custom_logger import CustomLogger # これが存在することを確認
+from .color_map_model import ColorMapModel # 新しいモデルをインポート
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -211,13 +212,25 @@ class ParameterPanel(QScrollArea):
         map_layout = QFormLayout()
         map_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         map_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        widgets['map_list'] = QListWidget()
-        widgets['map_list'].setIconSize(QSize(96, 18))
-        widgets['map_list'].setSpacing(1)
-        widgets['map_list'].setFixedHeight(120)
+        widgets['map_list'] = QListView()
+        list_view = widgets['map_list']
+        list_view.setModel(ColorMapModel(list_view)) # モデルを早期に設定してselectionModelを確保
+        list_view.setViewMode(QListView.ViewMode.IconMode)
+        list_view.setFlow(QListView.Flow.LeftToRight)
+        list_view.setWrapping(True)
+        list_view.setResizeMode(QListView.ResizeMode.Adjust)
+        list_view.setSpacing(5)
+        icon_size = QSize(96, 18)
+        list_view.setIconSize(icon_size)
+        # グリッドサイズをアイコンとテキスト（下に表示される）に合わせて調整
+        list_view.setGridSize(QSize(icon_size.width() + 10, icon_size.height() + 25))
+        list_view.setFixedHeight(120)
+        list_view.setUniformItemSizes(True) # パフォーマンス向上のため
+
         map_layout.addRow(QLabel("カラーマップ:"), widgets['map_list'])
         layout.addLayout(map_layout)
-        widgets['map_list'].currentItemChanged.connect(
+        # QListViewではselectionModel().currentChangedを使用する
+        widgets['map_list'].selectionModel().currentChanged.connect(
             lambda current, previous, tt=target_type: self._on_color_map_changed(current, previous, tt)
         )
 
@@ -739,18 +752,20 @@ class ParameterPanel(QScrollArea):
         """
         if not self.fractal_controller or not pack_name or pack_name == "N/A": return
 
-        map_list_widget = self.coloring_widgets[target_type]['map_list']
+        map_list_widget: QListView = self.coloring_widgets[target_type]['map_list']
         self._populate_color_map_list(pack_name, target_type) # Pass target_type
 
-        if map_list_widget.count() > 0:
-            first_map_item = map_list_widget.item(0)
-            if first_map_item:
-                map_list_widget.setCurrentItem(first_map_item) # これにより _on_color_map_changed がトリガーされます
+        model = map_list_widget.model()
+        if model and model.rowCount() > 0:
+            first_map_index = model.index(0, 0)
+            if first_map_index.isValid():
+                map_list_widget.setCurrentIndex(first_map_index) # これにより _on_color_map_changed がトリガーされます
                 # setCurrentItem が既に選択されている場合にトリガーされない、またはその他の理由でトリガーされない場合は、
                 # 状態が矛盾している場合にコントローラーが更新されることを確認してください。
-                if self.fractal_controller.get_active_color_map_name_from_engine(target_type=target_type) != first_map_item.text() or \
+                first_map_item_name = first_map_index.data(Qt.ItemDataRole.DisplayRole)
+                if self.fractal_controller.get_active_color_map_name_from_engine(target_type=target_type) != first_map_item_name or \
                    self.fractal_controller.get_active_color_pack_name_from_engine(target_type=target_type) != pack_name:
-                     self.fractal_controller.set_active_color_map_and_recolor(pack_name, first_map_item.text(), target_type=target_type)
+                     self.fractal_controller.set_active_color_map_and_recolor(pack_name, first_map_item_name, target_type=target_type)
 
     def _populate_color_map_list(self, pack_name: str | None, target_type: str):
         """
@@ -760,47 +775,62 @@ class ParameterPanel(QScrollArea):
             pack_name (str | None): 表示するカラーマップが含まれるカラーパックの名前。Noneの場合はリストを無効化。
             target_type (str): 'divergent' または 'non_divergent'.
         """
-        map_list_widget = self.coloring_widgets[target_type]['map_list']
+        map_list_widget: QListView = self.coloring_widgets[target_type]['map_list']
 
         map_list_widget.blockSignals(True)
-        map_list_widget.clear()
+        # 以前のモデルをクリア
+        map_list_widget.setModel(None)
+
         if not self.fractal_controller or not pack_name:
-            map_list_widget.setEnabled(False); map_list_widget.blockSignals(False); return
+            map_list_widget.setEnabled(False)
+            map_list_widget.blockSignals(False)
+            return
 
         map_names = self.fractal_controller.get_color_map_names_in_pack_from_engine(pack_name) # マップはパック内でグローバルです
         active_map_name = self.fractal_controller.get_active_color_map_name_from_engine(target_type=target_type)
         # Active pack for this target, to ensure we are only setting current item if pack is also correct
         active_pack_for_target = self.fractal_controller.get_active_color_pack_name_from_engine(target_type=target_type)
 
-
         if map_names:
             map_list_widget.setEnabled(True)
-            for name_str in map_names:
+            map_items_data = []
+            current_item_index = -1
+            for i, name_str in enumerate(map_names):
                 map_data = self.fractal_controller.get_color_map_data_from_engine(pack_name, name_str)
-                list_item = QListWidgetItem(name_str)
+                icon = QIcon()
                 if map_data:
                     thumbnail = self._create_colormap_thumbnail(map_data)
-                    list_item.setIcon(QIcon(thumbnail))
-                map_list_widget.addItem(list_item)
+                    icon = QIcon(thumbnail)
+
+                map_items_data.append({'name': name_str, 'icon': icon})
+
                 if name_str == active_map_name and pack_name == active_pack_for_target:
-                    map_list_widget.setCurrentItem(list_item)
+                    current_item_index = i
+
+            model = ColorMapModel()
+            model.populate_data(map_items_data)
+            map_list_widget.setModel(model)
+
+            if current_item_index != -1:
+                index_to_select = model.index(current_item_index, 0)
+                map_list_widget.setCurrentIndex(index_to_select)
         else:
             map_list_widget.setEnabled(False)
         map_list_widget.blockSignals(False)
 
-    @pyqtSlot(QListWidgetItem, QListWidgetItem, str) # current, previous, target_type (from partial)
-    def _on_color_map_changed(self, current_item: QListWidgetItem, previous_item: QListWidgetItem, target_type: str):
+    @pyqtSlot(QModelIndex, QModelIndex, str) # current, previous, target_type
+    def _on_color_map_changed(self, current: QModelIndex, previous: QModelIndex, target_type: str):
         """
         カラーマップリストウィジェットの選択が変更されたときに呼び出されるスロット。
         コントローラーに選択されたカラーマップをアクティブにするよう通知します。
 
         Args:
-            current_item (QListWidgetItem): 新しく選択されたリストアイテム。
-            previous_item (QListWidgetItem): 以前選択されていたリストアイテム。
+            current (QModelIndex): 新しく選択されたモデルインデックス。
+            previous (QModelIndex): 以前選択されていたモデルインデックス。
             target_type (str): 'divergent' または 'non_divergent'.
         """
-        if not self.fractal_controller or not current_item: return
-        map_name = current_item.text()
+        if not self.fractal_controller or not current.isValid(): return
+        map_name = current.data(Qt.ItemDataRole.DisplayRole)
 
         pack_name = self.coloring_widgets[target_type]['pack_combo'].currentText()
 
@@ -828,7 +858,7 @@ class ParameterPanel(QScrollArea):
         try:
             widgets = self.coloring_widgets[target_type]
             pack_combo = widgets['pack_combo']
-            map_list_widget = widgets['map_list']
+            map_list_widget: QListView = widgets['map_list']
         except KeyError:
             logger.log(f"Error: Widgets for target_type '{target_type}' not found in _update_color_selection_from_controller.", level="ERROR")
             return
@@ -846,15 +876,23 @@ class ParameterPanel(QScrollArea):
             self._populate_color_map_list(pack_name, target_type) # Ensure map list is for the new pack
         else:
             # If pack hasn't changed, still ensure the map list is correctly populated (e.g., if it was empty before)
-            if map_list_widget.count() == 0 and pack_name and pack_name != "N/A":
+            model = map_list_widget.model()
+            if (not model or model.rowCount() == 0) and pack_name and pack_name != "N/A":
                 self._populate_color_map_list(pack_name, target_type)
 
+        model = map_list_widget.model()
+        if not model:
+            logger.log(f"Map list model for '{target_type}' is not available after trying to populate.", level="WARNING")
+            pack_combo.blockSignals(False)
+            map_list_widget.blockSignals(False)
+            return
 
         found = False
-        for i in range(map_list_widget.count()):
-            item = map_list_widget.item(i)
-            if item.text() == map_name:
-                map_list_widget.setCurrentItem(item)
+        for i in range(model.rowCount()):
+            index = model.index(i, 0)
+            item_name = index.data(Qt.ItemDataRole.DisplayRole)
+            if item_name == map_name:
+                map_list_widget.setCurrentIndex(index)
                 found = True
                 break
         if not found:
@@ -964,10 +1002,12 @@ class ParameterPanel(QScrollArea):
                     combo_pack.setCurrentText(active_pack)
                     combo_pack.blockSignals(False)
                     self._populate_color_map_list(active_pack, target_type=target_type)
-                    for i in range(list_map.count()):
-                        if list_map.item(i).text() == active_map:
-                            list_map.setCurrentRow(i)
-                            break
+                    model = list_map.model()
+                    if model:
+                        for i in range(model.rowCount()):
+                            if model.index(i, 0).data() == active_map:
+                                list_map.setCurrentIndex(model.index(i, 0))
+                                break
                 elif combo_pack.count() > 0:
                     first_pack = combo_pack.itemText(0)
                     if first_pack and first_pack != "N/A":
