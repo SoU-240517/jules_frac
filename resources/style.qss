@@ -1,0 +1,100 @@
+QWidget {
+    background-color: #2e2e2e;
+    color: #e0e0e0;
+    font-size: 10pt;
+}
+QMainWindow {
+    background-color: #252525;
+}
+QMenuBar {
+    background-color: #3c3c3c;
+}
+QMenuBar::item { /* メニュー項目の通常状態 */
+    background-color: #3c3c3c;
+    color: #e0e0e0;
+}
+QMenuBar::item::selected { /* メニュー項目のホバー時 */
+    background-color: #505050;
+}
+QMenuBar::item::pressed { /* クリック時 */
+    background-color: #555555;
+}
+QMenu {
+    background-color: #3c3c3c;
+    border: 1px solid #505050;
+    color: #e0e0e0;
+}
+QMenu::item::selected { /* サブメニュー項目のホバー時 */
+    background-color: #505050;
+    color: #ffffff;
+}
+QPushButton {
+    background-color: #505050;
+    border: 1px solid #606060;
+    padding: 5px;
+    min-width: 70px;
+}
+QPushButton:hover { /* ボタンのホバー時 */
+    background-color: #606060;
+}
+QPushButton:pressed { /* ボタンのクリック時 */
+    background-color: #404040;
+}
+QScrollArea {
+    border: 1px solid #3c3c3c;
+}
+QLabel {
+    color: #e0e0e0;
+}
+QSplitter::handle { /* スプリッターのハンドル */
+    background-color: #3c3c3c;
+    border: 1px solid #505050;
+}
+QSplitter::handle:horizontal { width: 2px; }
+QSplitter::handle:vertical { height: 2px; }
+QSplitter::handle:hover { background-color: #505050; }
+
+QGroupBox {
+    font-weight: bold; /* グループのタイトルを太字に */
+    border: 1px solid #505050;
+    border-radius: 5px;
+    margin-top: 10px; /* グループボックスの上に少しマージン */
+    padding-top: 10px; /* タイトルと内容の間にスペースを確保 */
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top center; /* タイトルを中央上部に */
+    padding: 0 5px 0 5px; /* タイトルの左右にパディング */
+    background-color: #3c3c3c; /* タイトルの背景を少し明るく、または QMenuBar と合わせる */
+    color: #e0e0e0;
+    border-radius: 3px; /* タイトルの角を少し丸める */
+}
+QDoubleSpinBox, QComboBox, QLineEdit { /* QLineEditも追加 */
+    padding: 4px; /* 少しパディングを増やす */
+    border: 1px solid #606060;
+    border-radius: 3px;
+    min-height: 22px; /* 高さを確保してクリックしやすく */
+}
+QDoubleSpinBox:focus, QComboBox:focus, QLineEdit:focus {
+    border: 1px solid #77aaff; /* フォーカス時に枠線を強調 */
+}
+QTabWidget::pane { /* タブのコンテンツエリア */
+    border: 1px solid #505050;
+    border-top: 1px solid #3c3c3c; /* タブとの境界線を調整 */
+}
+QTabBar::tab { /* タブのボタン */
+    background: #3c3c3c;
+    border: 1px solid #505050;
+    border-bottom-color: #3c3c3c; /* 選択されていないタブの下線をコンテンツエリアと一体化 */
+    border-top-left-radius: 4px;
+    border-top-right-radius: 4px;
+    min-width: 8ex;
+    padding: 5px;
+    color: #b0b0b0; /* 非選択タブの文字色 */
+}
+QTabBar::tab:selected { /* 選択されているタブ */
+    background: #505050;
+    border-color: #505050;
+    border-bottom-color: #505050; /* 選択されているタブの下線をコンテンツエリアと一体化 */
+    color: #e0e0e0; /* 選択タブの文字色 */
+}

@@ -1,6 +1,7 @@
 from pathlib import Path
 import sys
 import numba
+import shutil
 
 # Numbaのキャッシュ機能をグローバルに有効化する
 # この設定は、個々の @jit(cache=True) よりも優先されることを期待
@@ -20,6 +21,10 @@ from utils.settings_manager import SettingsManager
 from PyQt6.QtCore import Qt
 
 from logger.custom_logger import CustomLogger
+
+# --- 定数定義 ---
+SETTINGS_FILE_NAME = "settings.jsonc"
+STYLESHEET_PATH = "resources/style.qss" # スタイルシートのパス
 
 logger = CustomLogger()
 logger.set_project_root(_project_root) # プロジェクトルートを設定
@@ -46,178 +51,83 @@ def clear_numba_cache_on_exit():
     except Exception as e:
         logger.log(f"Numbaキャッシュディレクトリのクリア中にエラーが発生しました: {e}", level="WARNING")
 
-if __name__ == '__main__':
+def setup_application():
+    """QApplicationインスタンスを作成し、High DPI設定を適用する。"""
     if hasattr(Qt.ApplicationAttribute, 'AA_EnableHighDpiScaling'):
         QApplication.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling)
     if hasattr(Qt.ApplicationAttribute, 'AA_UseHighDpiPixmaps'):
         QApplication.setAttribute(Qt.ApplicationAttribute.AA_UseHighDpiPixmaps)
+    return QApplication(sys.argv)
 
-    app = QApplication(sys.argv)
+def apply_stylesheet(app, path):
+    """外部ファイルからスタイルシートを読み込み、アプリケーションに適用する。"""
+    stylesheet_path = Path(path)
+    if stylesheet_path.exists():
+        try:
+            with open(stylesheet_path, "r", encoding="utf-8") as f:
+                app.setStyleSheet(f.read())
+            logger.log(f"スタイルシートを適用しました: {stylesheet_path}", level="INFO")
+        except Exception as e:
+            logger.log(f"スタイルシートの読み込みまたは適用中にエラーが発生しました: {e}", level="ERROR")
+    else:
+        logger.log(f"スタイルシートファイルが見つかりません: {stylesheet_path}", level="WARNING")
 
-    settings_file_name = "settings.jsonc" # 設定ファイル名
-    settings_file_path = _project_root / settings_file_name # SettingsManager で使用するための絶対パス
-    settings_manager = SettingsManager(settings_filename=str(settings_file_path))
-
-    # --- ロガー設定のロードと適用 ---
-    # CustomLogger はシングルトンなので、モジュールレベルの `logger` インスタンスは SettingsManager の初期化時にデフォルトで作成されます。
-    # CustomLogger の初期化時には、SettingsManager から設定を読み込もうとしますが、
-    # その時点ではSettingsManagerが完全に初期化されていない可能性があるため、デフォルト値で起動します。
-    # ここで、完全に初期化されたSettingsManagerから設定を明示的に適用します。
-    # "logging" セクション全体を取得し、存在しない場合のデフォルト値を指定します。
+def setup_logging(settings_manager, logger_instance):
+    """設定ファイルからロギング設定を読み込み、ロガーに適用する。"""
     log_config = settings_manager.get_setting("logging", {"level": "INFO", "enabled": True})
-    log_level_to_set = log_config.get("level", "INFO")
-    log_enabled_to_set = log_config.get("enabled", True)
+    log_level = log_config.get("level", "INFO")
+    log_enabled = log_config.get("enabled", True)
 
-    logger.set_level(log_level_to_set) # 設定ファイルから読み込んだレベルを適用
-    logger.set_enabled(log_enabled_to_set)
-    # 実際にDEBUGレベルでログが出力されるかは、ファイル内の設定とここでの設定によります。
-    logger.log(f"ロガー設定適用 [レベル: {log_level_to_set}, 有効: {log_enabled_to_set}]", level="DEBUG")
-    # --- ロガー設定完了 ---
+    logger_instance.set_level(log_level)
+    logger_instance.set_enabled(log_enabled)
+    logger_instance.log(f"ロガー設定適用 [レベル: {log_level}, 有効: {log_enabled}]", level="DEBUG")
 
-    # --- Numbaキャッシュのクリア ---
-    # パフォーマンス向上のため、キャッシュの自動クリアは無効化されています。
-    # clear_numba_cache_on_exit()
-    # --- Numbaキャッシュのクリア完了 ---
+def main():
+    """アプリケーションのメインエントリーポイント。"""
+    app = setup_application()
 
-    # モデル・コントローラーの作成
+    # --- 設定とロガーの初期化 ---
+    settings_file_path = _project_root / SETTINGS_FILE_NAME
+    settings_manager = SettingsManager(settings_filename=str(settings_file_path))
+    setup_logging(settings_manager, logger)
+
+    # --- スタイルシートの適用 ---
+    stylesheet_file_path = _project_root / STYLESHEET_PATH
+    apply_stylesheet(app, stylesheet_file_path)
+
+    # --- MVCコンポーネントの作成 ---
     fractal_engine = FractalEngine(project_root_path=_project_root, settings_manager=settings_manager)
     fractal_controller = FractalController(fractal_engine, settings_manager)
-
-    # 起動時に保存された設定をコントローラー経由でエンジンに適用
     fractal_controller.apply_configuration_from_settings()
 
-    # ダークテーマのスタイルシート
-    app.setStyleSheet("""
-        QWidget {
-            background-color: #2e2e2e;
-            color: #e0e0e0;
-            font-size: 10pt;
-        }
-        QMainWindow {
-            background-color: #252525;
-        }
-        QMenuBar {
-            background-color: #3c3c3c;
-        }
-        QMenuBar::item { /* メニュー項目の通常状態 */
-            background-color: #3c3c3c;
-            color: #e0e0e0;
-        }
-        QMenuBar::item::selected { /* メニュー項目のホバー時 */
-            background-color: #505050;
-        }
-        QMenuBar::item::pressed { /* クリック時 */
-            background-color: #555555;
-        }
-        QMenu {
-            background-color: #3c3c3c;
-            border: 1px solid #505050;
-            color: #e0e0e0;
-        }
-        QMenu::item::selected { /* サブメニュー項目のホバー時 */
-            background-color: #505050;
-            color: #ffffff;
-        }
-        QPushButton {
-            background-color: #505050;
-            border: 1px solid #606060;
-            padding: 5px;
-            min-width: 70px;
-        }
-        QPushButton:hover { /* ボタンのホバー時 */
-            background-color: #606060;
-        }
-        QPushButton:pressed { /* ボタンのクリック時 */
-            background-color: #404040;
-        }
-        QScrollArea {
-            border: 1px solid #3c3c3c;
-        }
-        QLabel {
-            color: #e0e0e0;
-        }
-        QSplitter::handle { /* スプリッターのハンドル */
-            background-color: #3c3c3c;
-            border: 1px solid #505050;
-        }
-        QSplitter::handle:horizontal { width: 2px; }
-        QSplitter::handle:vertical { height: 2px; }
-        QSplitter::handle:hover { background-color: #505050; }
-
-        QGroupBox {
-            font-weight: bold; /* グループのタイトルを太字に */
-            border: 1px solid #505050;
-            border-radius: 5px;
-            margin-top: 10px; /* グループボックスの上に少しマージン */
-            padding-top: 10px; /* タイトルと内容の間にスペースを確保 */
-        }
-        QGroupBox::title {
-            subcontrol-origin: margin;
-            subcontrol-position: top center; /* タイトルを中央上部に */
-            padding: 0 5px 0 5px; /* タイトルの左右にパディング */
-            background-color: #3c3c3c; /* タイトルの背景を少し明るく、または QMenuBar と合わせる */
-            color: #e0e0e0;
-            border-radius: 3px; /* タイトルの角を少し丸める */
-        }
-        QDoubleSpinBox, QComboBox, QLineEdit { /* QLineEditも追加 */
-            padding: 4px; /* 少しパディングを増やす */
-            border: 1px solid #606060;
-            border-radius: 3px;
-            min-height: 22px; /* 高さを確保してクリックしやすく */
-        }
-        QDoubleSpinBox:focus, QComboBox:focus, QLineEdit:focus {
-            border: 1px solid #77aaff; /* フォーカス時に枠線を強調 */
-        }
-        QTabWidget::pane { /* タブのコンテンツエリア */
-            border: 1px solid #505050;
-            border-top: 1px solid #3c3c3c; /* タブとの境界線を調整 */
-        }
-        QTabBar::tab { /* タブのボタン */
-            background: #3c3c3c;
-            border: 1px solid #505050;
-            border-bottom-color: #3c3c3c; /* 選択されていないタブの下線をコンテンツエリアと一体化 */
-            border-top-left-radius: 4px;
-            border-top-right-radius: 4px;
-            min-width: 8ex;
-            padding: 5px;
-            color: #b0b0b0; /* 非選択タブの文字色 */
-        }
-        QTabBar::tab:selected { /* 選択されているタブ */
-            background: #505050;
-            border-color: #505050;
-            border-bottom-color: #505050; /* 選択されているタブの下線をコンテンツエリアと一体化 */
-            color: #e0e0e0; /* 選択タブの文字色 */
-        }
-    """)
-
-    # MainWindowにSettingsManagerのインスタンスを渡す
     main_window = MainWindow(fractal_controller, settings_manager)
     fractal_controller.set_main_window(main_window)
 
-    if hasattr(main_window, 'status_bar') and main_window.status_bar is not None: # status_barが存在するか確認
+    # --- シグナルとスロットの接続 ---
+    if hasattr(main_window, 'status_bar') and main_window.status_bar is not None:
         fractal_controller.status_updated.connect(main_window.update_status_bar)
     else:
-        logger.log("警告: MainWindow.status_barが見つからない、または初期化されていないため、status_updatedシグナルを接続できません。", level="WARNING")
+        logger.log("警告: MainWindow.status_barが見つからないため、status_updatedシグナルを接続できません。", level="WARNING")
 
-    main_window.show()
-
-    # アプリケーションの終了時にキャッシュをクリアするシグナルを接続
-    # パフォーマンス向上のため、キャッシュの自動クリアは無効化されています。
-    # app.aboutToQuit.connect(clear_numba_cache_on_exit)
-
+    # --- 終了時処理の接続 ---
     def save_engine_settings_on_exit():
-        # 設定ファイルから save_engine_settings の値を取得
-        # デフォルト値は True (従来通りの動作)
-        should_save_engine_settings = settings_manager.get_setting("save_engine_settings", True)
-
-        if should_save_engine_settings:
+        should_save = settings_manager.get_setting("save_engine_settings", True)
+        if should_save:
             logger.log("アプリケーション終了前にエンジン設定を保存します...", level="INFO")
             engine_config = fractal_controller.get_full_configuration()
-            settings_manager.set_setting("engine_settings", engine_config, auto_save=False) # auto_save=Falseにして最後にまとめて保存
-            settings_manager.save_settings() # ここでウィンドウ設定なども含めて全て保存
+            settings_manager.set_setting("engine_settings", engine_config, auto_save=False)
+            settings_manager.save_settings()
             logger.log("エンジン設定を保存しました。", level="INFO")
         else:
             logger.log("エンジン設定の保存はスキップされました (save_engine_settings is false)。", level="INFO")
 
     app.aboutToQuit.connect(save_engine_settings_on_exit)
+    # app.aboutToQuit.connect(clear_numba_cache_on_exit) # 必要に応じて有効化
+
+    # --- アプリケーションの実行 ---
+    main_window.show()
     sys.exit(app.exec())
+
+
+if __name__ == '__main__':
+    main()
