@@ -31,7 +31,7 @@
     },
     "app_settings": {
         "logging": {
-            "level": "INFO",
+            "level": "DEBUG",
             "enabled": true
         },
         "save_engine_settings": true,
