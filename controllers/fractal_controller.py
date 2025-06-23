@@ -1,5 +1,6 @@
 import time
 import traceback # この行が存在しない場合に追加
+from pathlib import Path # Path を追加
 from export.image_exporter import ImageExporter # ExporterSignals は ImageExporter 内部で使用されるシグナルです
 from models.fractal_engine import FractalEngine # FractalEngineモデルのインポート (型ヒント用)
 from .fractal_renderer import FractalRenderer
@@ -130,6 +131,38 @@ class FractalController(QObject):
         """プリセットを削除します。"""
         self.settings_manager.delete_preset(name)
         self.logger.log(f"プリセット '{name}' を削除しました。", "INFO")
+
+    def export_presets(self, file_path: str) -> tuple[bool, str]:
+        """
+        現在のプリセットをJSONファイルにエクスポートします。
+        Args:
+            file_path (str): エクスポート先のJSONファイルのパス。
+        Returns:
+            tuple[bool, str]: (成功フラグ, メッセージ)。
+        """
+        try:
+            self.settings_manager.export_presets_to_file(Path(file_path))
+            return True, f"プリセットを '{file_path}' にエクスポートしました。"
+        except Exception as e:
+            self.logger.log(f"プリセットのエクスポート中にエラーが発生しました: {e}", "ERROR")
+            return False, f"プリセットのエクスポートに失敗しました: {e}"
+
+    def import_presets(self, file_path: str, overwrite: bool) -> tuple[bool, str]:
+        """
+        JSONファイルからプリセットをインポートします。
+        Args:
+            file_path (str): インポートするJSONファイルのパス。
+            overwrite (bool): 既存の同名プリセットを上書きするかどうか。
+        Returns:
+            tuple[bool, str]: (成功フラグ, メッセージ)。
+        """
+        try:
+            imported_names = self.settings_manager.import_presets_from_file(Path(file_path), overwrite)
+            self.configuration_applied.emit() # UIを更新するためにシグナルを発行
+            return True, f"プリセットをインポートしました: {', '.join(imported_names) if imported_names else '新しいプリセットはありませんでした。'}"
+        except Exception as e:
+            self.logger.log(f"プリセットのインポート中にエラーが発生しました: {e}", "ERROR")
+            return False, f"プリセットのインポートに失敗しました: {e}"
 
     def set_main_window(self, main_window):
         """

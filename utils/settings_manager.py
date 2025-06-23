@@ -166,6 +166,51 @@ class SettingsManager:
         if auto_save:
             self.save_settings()
 
+    def export_presets_to_file(self, filepath: Path):
+        """
+        現在のすべてのプリセットを指定されたファイルにJSON形式でエクスポートします。
+        Args:
+            filepath (Path): エクスポート先のファイルパス。
+        Raises:
+            Exception: ファイル操作中にエラーが発生した場合。
+        """
+        presets_data = self.get_presets()
+        try:
+            filepath.parent.mkdir(parents=True, exist_ok=True)
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(presets_data, f, indent=4, ensure_ascii=False)
+            self._get_logger().log(f"プリセットを {filepath} にエクスポートしました。", "INFO")
+        except Exception as e:
+            self._get_logger().log(f"プリセットのエクスポート中にエラーが発生しました: {e}", "ERROR")
+            raise # コントローラーでキャッチするために再スロー
+
+    def import_presets_from_file(self, filepath: Path, overwrite: bool = False) -> list[str]:
+        """
+        指定されたJSONファイルからプリセットを読み込み、現在の設定にマージします。
+        Args:
+            filepath (Path): インポートするJSONファイルのパス。
+            overwrite (bool): 既存の同名プリセットを上書きするかどうか。
+        Returns:
+            list[str]: インポートされたプリセットの名前のリスト。
+        Raises:
+            Exception: ファイルの読み込み、解析、またはマージ中にエラーが発生した場合。
+        """
+        if not filepath.exists():
+            self._get_logger().log(f"インポートファイル '{filepath}' が見つかりません。", "WARNING")
+            return []
+
+        with open(filepath, 'r', encoding='utf-8') as f:
+            imported_data = json.load(f)
+        if not isinstance(imported_data, dict):
+            raise ValueError("インポートファイルの内容が有効なJSONオブジェクトではありません。")
+
+        current_presets = self.get_presets()
+        imported_names = [name for name, config in imported_data.items() if overwrite or name not in current_presets]
+        current_presets.update({name: config for name, config in imported_data.items() if overwrite or name not in current_presets})
+        self.set_setting("presets", current_presets) # 変更を保存
+        self._get_logger().log(f"{len(imported_names)} 個のプリセットをインポートしました。", "INFO")
+        return imported_names
+
     def get_presets(self) -> dict:
         """保存されているすべてのプリセットを取得します。"""
         return self.get_setting("presets", {})

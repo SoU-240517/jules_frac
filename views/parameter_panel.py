@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QScrollArea, QWidget, QVBoxLayout, QGroupBox, QFormLayout, QHBoxLayout,
     QLabel, QSpinBox, QDoubleSpinBox, QComboBox, QPushButton, QTabWidget,
-    QListWidget, QListWidgetItem, QAbstractSpinBox, QSlider,
+    QListWidget, QListWidgetItem, QAbstractSpinBox, QSlider, QFileDialog,
     QInputDialog, QMessageBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize, QTimer, QEvent # QEvent を追加
@@ -188,22 +188,33 @@ class ParameterPanel(QScrollArea):
 
         self.presets_combo_box = QComboBox()
 
-        preset_buttons_layout = QHBoxLayout()
+        # プリセットボタンのレイアウトを2段に分割
+        top_buttons_layout = QHBoxLayout()
         self.load_preset_button = QPushButton("読み込み")
         self.save_preset_button = QPushButton("保存")
         self.delete_preset_button = QPushButton("削除")
-        preset_buttons_layout.addWidget(self.load_preset_button)
-        preset_buttons_layout.addWidget(self.save_preset_button)
-        preset_buttons_layout.addWidget(self.delete_preset_button)
+        top_buttons_layout.addWidget(self.load_preset_button)
+        top_buttons_layout.addWidget(self.save_preset_button)
+        top_buttons_layout.addWidget(self.delete_preset_button)
+
+        bottom_buttons_layout = QHBoxLayout()
+        self.export_presets_button = QPushButton("エクスポート")
+        self.import_presets_button = QPushButton("インポート")
+        bottom_buttons_layout.addWidget(self.export_presets_button)
+        bottom_buttons_layout.addWidget(self.import_presets_button)
 
         preset_layout.addWidget(self.presets_combo_box)
-        preset_layout.addLayout(preset_buttons_layout)
+        preset_layout.addLayout(top_buttons_layout)    # 上段のボタンを追加
+        preset_layout.addLayout(bottom_buttons_layout) # 下段のボタンを追加
         self.preset_group_box.setLayout(preset_layout)
         self.main_layout.addWidget(self.preset_group_box)
 
+        # 新しいボタンのシグナル接続
+        self.export_presets_button.clicked.connect(self._on_export_presets)
         self.load_preset_button.clicked.connect(self._on_load_preset)
         self.save_preset_button.clicked.connect(self._on_save_preset)
         self.delete_preset_button.clicked.connect(self._on_delete_preset)
+        self.import_presets_button.clicked.connect(self._on_import_presets)
 
     def _create_coloring_tab(self, target_type: str) -> QWidget:
         """指定されたターゲットタイプ（'divergent' または 'non_divergent'）用のUIタブを作成します。"""
@@ -357,6 +368,33 @@ class ParameterPanel(QScrollArea):
         if reply == QMessageBox.StandardButton.Yes:
             self.fractal_controller.delete_preset(preset_name)
             self.populate_presets_combo_box()
+
+    @pyqtSlot()
+    def _on_export_presets(self):
+        """現在のプリセットをファイルにエクスポートします。"""
+        if not self.fractal_controller: return
+        file_path, _ = QFileDialog.getSaveFileName(self, "プリセットをエクスポート", "", "JSON Files (*.json);;All Files (*)")
+        if file_path:
+            success, message = self.fractal_controller.export_presets(file_path)
+            if success:
+                QMessageBox.information(self, "エクスポート成功", message)
+            else:
+                QMessageBox.warning(self, "エクスポート失敗", message)
+
+    @pyqtSlot()
+    def _on_import_presets(self):
+        """ファイルからプリセットをインポートします。"""
+        if not self.fractal_controller: return
+        file_path, _ = QFileDialog.getOpenFileName(self, "プリセットをインポート", "", "JSON Files (*.json);;All Files (*)")
+        if file_path:
+            reply = QMessageBox.question(self, "プリセットのインポート",
+                                         "既存の同名プリセットを上書きしますか？\n'はい'で上書き、'いいえ'でスキップします。",
+                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel)
+            if reply == QMessageBox.StandardButton.Cancel: return
+            overwrite = (reply == QMessageBox.StandardButton.Yes)
+            success, message = self.fractal_controller.import_presets(file_path, overwrite)
+            if success: QMessageBox.information(self, "インポート成功", message); self.populate_presets_combo_box()
+            else: QMessageBox.warning(self, "インポート失敗", message)
 
     @pyqtSlot(str)
     def _on_fractal_type_changed(self, plugin_name: str):
