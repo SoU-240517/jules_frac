@@ -6,6 +6,7 @@ from .fractal_renderer import FractalRenderer
 from PyQt6.QtCore import QObject, pyqtSignal, QThreadPool, pyqtSlot, QRunnable # QRunnable を追加
 from logger.custom_logger import CustomLogger
 from plugins.base_coloring_plugin import ColoringAlgorithmPlugin # ColoringAlgorithmPlugin をインポート
+from utils.settings_manager import SettingsManager # SettingsManager をインポート
 
 logger = CustomLogger()
 
@@ -25,9 +26,10 @@ class FractalController(QObject):
     export_progress_updated = pyqtSignal(int)
     export_process_finished = pyqtSignal(bool, str) # bool: 成功フラグ, str: メッセージ (ファイルパスまたはエラー)
 
-    def __init__(self, fractal_engine: FractalEngine): # fractal_engine の型ヒントを明示
+    def __init__(self, fractal_engine: FractalEngine, settings_manager: SettingsManager):
         super().__init__()
         self.fractal_engine = fractal_engine
+        self.settings_manager = settings_manager
         self.main_window = None
         self.last_compute_time_ms = 0.0
         self.last_coloring_time_ms = 0.0
@@ -41,6 +43,58 @@ class FractalController(QObject):
         self.current_renderer_task = None
         self.active_coloring_target_type: str = 'divergent' # デフォルトのターゲットタイプ
         # オプション: 必要に応じて同時エクスポート数を制限します。例: self.thread_pool.setMaxThreadCount(1)
+
+    def apply_configuration_from_settings(self):
+        """
+        SettingsManager から保存された設定を読み込み、FractalEngine に適用します。
+        このメソッドはUIの更新をトリガーしません。UIは別途初期化される必要があります。
+        """
+        config = self.settings_manager.get_setting("engine_settings")
+        if not config or not isinstance(config, dict):
+            logger.log("保存されたエンジン設定が見つからないか、無効です。デフォルトで起動します。", level="INFO")
+            return
+
+        logger.log("保存されたエンジン設定を読み込んで適用します...", level="INFO")
+        try:
+            # 1. フラクタルプラグイン
+            fp_name = config.get('fractal_plugin_name')
+            if fp_name:
+                self.fractal_engine.set_active_fractal_plugin(fp_name)
+                fp_params = config.get('fractal_plugin_parameters', {})
+                for name, value in fp_params.items():
+                    self.fractal_engine.set_fractal_plugin_parameter(name, value)
+
+            # 2. 共通パラメータ (プラグインのデフォルトを上書きするためにプラグイン設定後に適用)
+            common_params = config.get('common_parameters')
+            if common_params:
+                # set_common_parameters が辞書を受け入れることを想定
+                self.fractal_engine.set_common_parameters(**common_params)
+
+            # 3. カラーリング設定 (Divergent / Non-Divergent)
+            for target_type in ['divergent', 'non_divergent']:
+                coloring_config = config.get(f'coloring_{target_type}', {})
+                if not coloring_config:
+                    continue
+
+                # カラーリングプラグイン
+                cp_name = coloring_config.get('plugin_name')
+                if cp_name:
+                    self.fractal_engine.set_active_coloring_plugin(cp_name, target_type=target_type)
+                    cp_params = coloring_config.get('plugin_parameters', {})
+                    for name, value in cp_params.items():
+                        self.fractal_engine.set_coloring_plugin_parameter(name, value, target_type=target_type)
+
+                # カラーマップ
+                pack_name = coloring_config.get('pack_name')
+                map_name = coloring_config.get('map_name')
+                if pack_name and map_name:
+                    self.fractal_engine.set_active_color_map(pack_name, map_name, target_type=target_type)
+
+            self.fractal_engine.last_fractal_data_cache = None # 設定適用後はキャッシュをクリア
+            logger.log("エンジン設定の適用が完了しました。", level="INFO")
+
+        except Exception as e:
+            logger.log(f"エンジン設定の適用中にエラーが発生しました: {e}", level="ERROR", exc_info=True)
 
     def set_main_window(self, main_window):
         """
@@ -443,16 +497,22 @@ class FractalController(QObject):
             self.status_updated.emit("エラー: フラクタルエンジン未設定")
             return
 
-        # プレビューレンダリングの場合、既存のタスクをキャンセルしようと試みる
-        if is_preview and self.current_renderer_task is not None:
-             # QRunnableには直接的なキャンセルメソッドがないため、
-             # 新しいタスクがすぐに始まることで古いタスクの結果を事実上無視する。
-             # もしFractalRendererに停止フラグがあれば、ここでセットできる。
-             self.logger.log("プレビュー要求のため、進行中のレンダリングを置き換えます。", level="DEBUG")
-             # self.current_renderer_task.cancel() # FractalRendererにcancel()が実装されていれば
+        # プレビュー要求は、進行中の高品質レンダリングを中断できる
+        if self.is_rendering:
+            if is_preview:
+                # QRunnableには直接的なキャンセルメソッドがないため、
+                # 新しいタスクがすぐに始まることで古いタスクの結果を事実上無視する。
+                # もしFractalRendererに停止フラグがあれば、ここでセットできる。
+                self.logger.log("プレビュー要求のため、進行中のレンダリングを置き換えます。", level="DEBUG")
+                # self.current_renderer_task.cancel() # FractalRendererにcancel()が実装されていれば
+            else:
+                # 新しい高品質要求が来たが、既にレンダリング中の場合
+                self.logger.log("以前の描画処理がまだ実行中。新しいタスクは開始されません。", level="WARNING")
+                self.status_updated.emit("前の描画処理がまだ実行中。")
+                return
 
-        if self.is_rendering and not is_preview:
-            self.logger.log("以前の描画処理がまだ実行中。新しいタスクは開始されません。", level="WARNING") # Uses self.logger
+        if self.is_rendering and not is_preview: # このチェックは上のロジックに統合されたため、冗長
+            self.logger.log("以前の描画処理がまだ実行中。新しいタスクは開始されません。", level="WARNING")
             self.status_updated.emit("前の描画処理がまだ実行中。")
             return
 
@@ -756,6 +816,36 @@ class FractalController(QObject):
              self.active_fractal_plugin_ui_needs_update.emit(self.fractal_engine.get_active_fractal_plugin().name)
         self.trigger_render(full_recompute=True)
 
+    def get_full_configuration(self) -> dict:
+        """
+        現在のエンジンの完全な設定を辞書として取得します。
+        アプリケーション終了時に設定を保存するために使用されます。
+
+        Returns:
+            dict: 現在の完全な設定を含む辞書。
+        """
+        if not self.fractal_engine:
+            return {}
+
+        config = {
+            'common_parameters': self.get_current_common_parameters(),
+            'fractal_plugin_name': self.get_active_fractal_plugin_name_from_engine(),
+            'fractal_plugin_parameters': self.get_current_fractal_plugin_parameters_from_engine(),
+            'coloring_divergent': {
+                'plugin_name': self.get_active_coloring_plugin_name_from_engine('divergent'),
+                'plugin_parameters': self.get_current_coloring_plugin_parameters_from_engine('divergent'),
+                'pack_name': self.get_active_color_pack_name_from_engine('divergent'),
+                'map_name': self.get_active_color_map_name_from_engine('divergent'),
+            },
+            'coloring_non_divergent': {
+                'plugin_name': self.get_active_coloring_plugin_name_from_engine('non_divergent'),
+                'plugin_parameters': self.get_current_coloring_plugin_parameters_from_engine('non_divergent'),
+                'pack_name': self.get_active_color_pack_name_from_engine('non_divergent'),
+                'map_name': self.get_active_color_map_name_from_engine('non_divergent'),
+            }
+        }
+        return config
+
 if __name__ == '__main__':
     # ... (モッククラスとテストコード - このセクションのコードは変更なし) ...
     class MockFractalEngine:
@@ -918,7 +1008,14 @@ if __name__ == '__main__':
     # 現在のモジュールのグローバルスコープ内の名前 'FractalRenderer' をモックに置き換えます
     FractalRenderer = MockFractalRenderer
 
-    mock_engine = MockFractalEngine(); controller = FractalController(mock_engine); controller.set_main_window(MockMainWindow())
+    # モックのSettingsManagerを追加
+    class MockSettingsManager:
+        def get_setting(self, key, default=None): return default
+        def set_setting(self, key, value, auto_save=True): pass
+
+    mock_engine = MockFractalEngine()
+    controller = FractalController(mock_engine, MockSettingsManager())
+    controller.set_main_window(MockMainWindow())
     logger.log("\nコントローラーテスト（フルモックエンジン使用）...", level="INFO"); controller.handle_programmatic_parameter_change(cr=-0.7,ci=0.3,w=2.0,iters=150)
     controller.trigger_render(); controller.trigger_recolor() # これは今MockFractalRendererを使用します
 

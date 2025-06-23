@@ -44,9 +44,9 @@ class ParameterPanel(QScrollArea):
         # デバウンス用タイマーと再描画要求の状態管理
         self.redraw_timer = QTimer(self)
         self.redraw_timer.setSingleShot(True)
-        self.redraw_timer.setInterval(300)  # 300msのデバウンス遅延
+        self.redraw_timer.setInterval(150)  # 150msのデバウンス遅延 (リアルタイムプレビュー用に短縮)
         self.redraw_timer.timeout.connect(self._execute_redraw)
-        self._redraw_request = {'full_recompute': False, 'pending': False}
+        self._redraw_request = {'full_recompute': False, 'is_preview': False, 'pending': False}
 
         # UIの初期化とコントローラーからのデータ読み込み
         self._init_ui()
@@ -168,6 +168,11 @@ class ParameterPanel(QScrollArea):
         # スピンボックスとスライダーの値を同期させる
         self.iter_spinbox.valueChanged.connect(self.iter_slider.setValue)
         self.iter_slider.valueChanged.connect(self.iter_spinbox.setValue)
+
+        # リアルタイムプレビュー用のシグナル接続
+        self.iter_slider.valueChanged.connect(self._on_common_parameter_changed_for_preview)
+        # スピンボックスの値変更もプレビューをトリガーする
+        self.iter_spinbox.valueChanged.connect(self._on_common_parameter_changed_for_preview)
 
     def _create_coloring_tab(self, target_type: str) -> QWidget:
         """指定されたターゲットタイプ（'divergent' または 'non_divergent'）用のUIタブを作成します。"""
@@ -324,21 +329,31 @@ class ParameterPanel(QScrollArea):
         # フラクタルタイプ変更後、意図しないフォーカス移動を防ぐためにコンボボックスにフォーカスを戻す
         self.setFocus()
 
-    def request_redraw(self, full_recompute: bool):
+    def request_redraw(self, full_recompute: bool, is_preview: bool = False):
         """
         デバウンス付きで再描画を要求します。
         短時間に複数の要求があった場合、最後の要求から一定時間後に一度だけ実行されます。
         フル再計算の要求は、再カラーリングのみの要求を上書きします。
+        高品質の要求は、プレビュー要求を上書きします。
 
         Args:
             full_recompute (bool): Trueの場合、フラクタル計算を含む完全な再描画を要求します。
                                    Falseの場合、再カラーリングのみを要求します。
+            is_preview (bool, optional): Trueの場合、プレビュー品質でのレンダリングを要求します。
+                                         Defaults to False.
         """
+        # 既存の要求がペンディング中で、それが高品質要求であり、新しい要求がプレビュー要求の場合、何もしない
+        if self._redraw_request['pending'] and not self._redraw_request['is_preview'] and is_preview:
+            logger.log("高品質の再描画が既に要求されているため、プレビュー要求はスキップします。", level="DEBUG")
+            return
+
         # 要求を更新。full_recompute は一度 True になったら、タイマーが実行されるまで False に戻らないようにする。
         self._redraw_request['full_recompute'] = self._redraw_request.get('full_recompute', False) or full_recompute
+        # is_preview は、新しい要求が高品質なら False に設定される
+        self._redraw_request['is_preview'] = is_preview
         self._redraw_request['pending'] = True
 
-        logger.log(f"再描画を要求しました (フル再計算: {self._redraw_request['full_recompute']})。タイマーを開始します。", level="DEBUG")
+        logger.log(f"再描画を要求しました (フル: {self._redraw_request['full_recompute']}, プレビュー: {self._redraw_request['is_preview']})。タイマーを開始します。", level="DEBUG")
         self.redraw_timer.start() # タイマーを再スタート
 
     def _execute_redraw(self):
@@ -350,15 +365,20 @@ class ParameterPanel(QScrollArea):
 
         if self.fractal_controller:
             full_recompute = self._redraw_request.get('full_recompute', False)
-            logger.log(f"デバウンスされた再描画を実行します (フル再計算: {full_recompute})", level="INFO")
-            if full_recompute:
-                self.fractal_controller.trigger_render(full_recompute=True)
-            else:
-                self.fractal_controller.trigger_recolor()
+            is_preview = self._redraw_request.get('is_preview', False)
+            logger.log(f"デバウンスされた再描画を実行します (フル: {full_recompute}, プレビュー: {is_preview})", level="INFO")
+
+            # full_recomputeがFalse（再カラーリングのみ）の場合でも、プレビュー品質でレンダリングできるように
+            # trigger_renderを直接呼び出す
+            self.fractal_controller.trigger_render(
+                full_recompute=full_recompute,
+                is_preview=is_preview
+            )
 
         # 要求をリセット
         self._redraw_request['pending'] = False
         self._redraw_request['full_recompute'] = False
+        self._redraw_request['is_preview'] = False
 
     def _clear_fractal_plugin_specific_ui(self):
         """
@@ -411,25 +431,12 @@ class ParameterPanel(QScrollArea):
                 self.plugin_widgets[name] = widget
                 # 値変更シグナルを接続 (debounceのためvalueChangedではなく、より汎用的なeditingFinishedを使用するケースも検討)
                 if isinstance(widget, (QDoubleSpinBox, QSpinBox)):
-                    # 既存の valueChanged シグナル接続
-                    widget.valueChanged.connect(partial(self._on_fractal_plugin_parameter_changed, param_name=name))
-                    # 新規: editingFinished シグナルを接続 (Enterキー押下またはフォーカスアウト)
+                    # プレビュー用のリアルタイム更新
+                    widget.valueChanged.connect(partial(self._on_fractal_plugin_parameter_changed_for_preview, param_name=name))
+                    # 高品質更新用の編集完了シグナル
                     widget.editingFinished.connect(partial(self._on_plugin_parameter_editing_finished, param_name=name))
                     widget.installEventFilter(self) # イベントフィルターをインストール
                 # 他のウィジェットタイプの場合のシグナル接続はここに記述
-
-    def _on_fractal_plugin_parameter_changed(self, value, param_name: str):
-        """
-        フラクタルプラグイン固有パラメータがUIで変更されたときに呼び出されるスロット。
-        コントローラーにパラメータの更新を通知します。
-
-        Args:
-            value: 変更後の値。
-            param_name (str): 変更されたパラメータの名前。
-        """
-        if not self.fractal_controller: return
-        self.fractal_controller.set_fractal_plugin_parameter(param_name, value)
-        # ここでは再描画をトリガーしない。editingFinishedで対応。
 
     @pyqtSlot() # param_name を受け取るために slot デコレーターを調整する必要があるかもしれません。partialで対応済み。
     def _on_plugin_parameter_editing_finished(self, param_name: str):
@@ -460,8 +467,8 @@ class ParameterPanel(QScrollArea):
             if original_value is not None:
                 if current_value != original_value:
                     logger.log(f"ParameterPanel._on_plugin_parameter_editing_finished: Value changed for {param_name} from {original_value} to {current_value}. Requesting full render.", level="DEBUG")
-                    # パラメータは valueChanged で既に設定済み
-                    self.request_redraw(full_recompute=True)
+                    # 高品質で再描画を要求
+                    self.request_redraw(full_recompute=True, is_preview=False)
                 else:
                     logger.log(f"ParameterPanel._on_plugin_parameter_editing_finished: Value not changed for {param_name}. Skipping render request.", level="DEBUG")
             else:
@@ -647,37 +654,14 @@ class ParameterPanel(QScrollArea):
                 plugin_widgets[name] = widget
                 # シグナル接続
                 if isinstance(widget, (QDoubleSpinBox, QSpinBox)):
-                    widget.valueChanged.connect(partial(self._on_coloring_plugin_parameter_changed, param_name=name, target_type=target_type))
+                    # プレビュー用のリアルタイム更新
+                    widget.valueChanged.connect(partial(self._on_coloring_plugin_parameter_changed_for_preview, param_name=name, target_type=target_type))
+                    # 高品質更新用の編集完了シグナル
                     widget.editingFinished.connect(partial(self._on_coloring_plugin_parameter_editing_finished, param_name=name, target_type=target_type))
                     widget.installEventFilter(self)
                 # `if plugin_widgets: plugin_widgets[name] = widget` の重複行を削除 (既に上で登録済み)
             else:
                 logger.log(f"警告: アルゴリズム '{algo_name}' ({target_type}) のタイプ '{p_type}' のパラメータ '{name}' のウィジェットが作成されませんでした。", level="WARNING")
-
-    def _on_coloring_plugin_parameter_changed(self, value, param_name: str, target_type: str):
-        """
-        カラーリングプラグイン固有パラメータのUI要素の値が変更されたときに呼び出されるスロット。
-        主にUI内部の状態更新（例：プリセットコンボボックスを「カスタム」に設定）のために使用します。
-        再描画やコントローラーへのパラメータ設定は editingFinished で行います。
-
-        Args:
-            value (any): 変更後の値 (スロット接続の都合上存在するが、直接は使用しないことが多い)。
-            param_name (str): 変更されたパラメータの名前。
-            target_type (str): 'divergent' または 'non_divergent'.
-        """
-        if not self.fractal_controller: return
-        sender = self.sender()
-
-        plugin_widgets = self.coloring_widgets[target_type]['plugin_widgets']
-
-        if isinstance(sender, (QDoubleSpinBox, QSpinBox)):
-            if '_coloring_preset_combo' in plugin_widgets:
-                preset_combo = plugin_widgets['_coloring_preset_combo']
-                if preset_combo.currentText() != "カスタム":
-                    preset_combo.blockSignals(True)
-                    preset_combo.setCurrentText("カスタム")
-                    preset_combo.blockSignals(False)
-        logger.log(f"ParameterPanel._on_coloring_plugin_parameter_changed: Parameter {param_name} for {target_type} changed in UI. Actual update and recolor will be on editing finished.", level="DEBUG")
 
     @pyqtSlot() # param_name と target_type を受け取るために slot デコレーターを調整する必要があるかもしれません。partialで対応済み。
     def _on_coloring_plugin_parameter_editing_finished(self, param_name: str, target_type: str):
@@ -703,7 +687,7 @@ class ParameterPanel(QScrollArea):
                 if current_value != original_value:
                     logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: Value changed for {param_name} ({target_type}) from {original_value} to {current_value}. Setting param and requesting recolor.", level="DEBUG")
                     self.fractal_controller.set_coloring_plugin_parameter_and_recolor(param_name, current_value, target_type=target_type, allow_recolor=False)
-                    self.request_redraw(full_recompute=False)
+                    self.request_redraw(full_recompute=False, is_preview=False)
                 else:
                     logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: Value not changed for {param_name} ({target_type}). Skipping.", level="DEBUG")
             else:
@@ -956,7 +940,7 @@ class ParameterPanel(QScrollArea):
         if trigger_render_flag:
             if self.fractal_controller:
                 logger.log(f"Requesting full render for {widget_object_name}", level="DEBUG")
-                self.request_redraw(full_recompute=True)
+                self.request_redraw(full_recompute=True, is_preview=False)
             else:
                 logger.log("fractal_controller is None, cannot request render.", level="WARNING")
         else:
@@ -1122,7 +1106,7 @@ class ParameterPanel(QScrollArea):
                 for p_name, val in params_to_set_in_controller.items():
                     # allow_recolor=False でコントローラーに設定
                     self.fractal_controller.set_coloring_plugin_parameter_and_recolor(p_name, val, target_type=target_type, allow_recolor=False)
-                self.request_redraw(full_recompute=False) # 最後に再カラーリングを要求
+                self.request_redraw(full_recompute=False, is_preview=False) # 最後に高品質で再カラーリングを要求
 
             if not all_params_set_for_preset:
                  logger.log(f"Not all parameters from preset '{preset_name}' were applied to the UI for {target_type}.", level="WARNING")
@@ -1153,6 +1137,47 @@ class ParameterPanel(QScrollArea):
 
         # 2. 新しいアルゴリズム用にプラグイン固有のUIを更新
         self._update_coloring_plugin_specific_ui(plugin_name, target_type)
+
+    # --- リアルタイムプレビュー用スロット ---
+
+    def _on_common_parameter_changed_for_preview(self, value):
+        """共通パラメータがプレビュー用に変更されたときに呼び出されるスロット。"""
+        if not self.fractal_controller: return
+        # パラメータをコントローラーに設定
+        self.fractal_controller.update_common_fractal_parameters(max_iterations=self.iter_spinbox.value())
+        # プレビュー品質でフル再計算を要求
+        self.request_redraw(full_recompute=True, is_preview=True)
+
+    def _on_fractal_plugin_parameter_changed_for_preview(self, value, param_name: str):
+        """フラクタルプラグインパラメータがプレビュー用に変更されたときに呼び出されるスロット。"""
+        if not self.fractal_controller: return
+        # パラメータをコントローラーに設定
+        self.fractal_controller.set_fractal_plugin_parameter(param_name, value)
+        # プレビュー品質でフル再計算を要求
+        self.request_redraw(full_recompute=True, is_preview=True)
+
+    def _on_coloring_plugin_parameter_changed_for_preview(self, value, param_name: str, target_type: str):
+        """カラーリングプラグインパラメータがプレビュー用に変更されたときに呼び出されるスロット。"""
+        if not self.fractal_controller: return
+
+        # プリセットコンボを「カスタム」に設定
+        try:
+            plugin_widgets = self.coloring_widgets[target_type]['plugin_widgets']
+            if '_coloring_preset_combo' in plugin_widgets:
+                preset_combo = plugin_widgets['_coloring_preset_combo']
+                if preset_combo.currentText() != "カスタム":
+                    preset_combo.blockSignals(True)
+                    preset_combo.setCurrentText("カスタム")
+                    preset_combo.blockSignals(False)
+        except KeyError:
+            logger.log(f"Error: Widgets for target_type '{target_type}' not found in _on_coloring_plugin_parameter_changed_for_preview.", level="ERROR")
+            return
+
+        # パラメータをコントローラーに設定
+        self.fractal_controller.set_coloring_plugin_parameter_and_recolor(param_name, value, target_type=target_type, allow_recolor=False)
+
+        # プレビュー品質で再カラーリングを要求
+        self.request_redraw(full_recompute=False, is_preview=True)
 
 
 if __name__ == '__main__':

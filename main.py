@@ -81,7 +81,10 @@ if __name__ == '__main__':
 
     # モデル・コントローラーの作成
     fractal_engine = FractalEngine(project_root_path=_project_root, settings_manager=settings_manager)
-    fractal_controller = FractalController(fractal_engine)
+    fractal_controller = FractalController(fractal_engine, settings_manager)
+
+    # 起動時に保存された設定をコントローラー経由でエンジンに適用
+    fractal_controller.apply_configuration_from_settings()
 
     # ダークテーマのスタイルシート
     app.setStyleSheet("""
@@ -209,7 +212,7 @@ if __name__ == '__main__':
 
         if should_save_engine_settings:
             logger.log("アプリケーション終了前にエンジン設定を保存します...", level="INFO")
-            engine_config = fractal_engine.save_settings()
+            engine_config = fractal_controller.get_full_configuration()
             settings_manager.set_setting("engine_settings", engine_config, auto_save=False) # auto_save=Falseにして最後にまとめて保存
             settings_manager.save_settings() # ここでウィンドウ設定なども含めて全て保存
             logger.log("エンジン設定を保存しました。", level="INFO")
