@@ -1,62 +1,46 @@
 {
-    // --- フラクタル描画エンジン設定 ---
-    // アプリケーションが現在使用している描画設定です。
     "engine_settings": {
-        // --- 共通パラメータ ---
-        // すべてのフラクタルタイプで共通して使用されるパラメータです。
         "common_parameters": {
-            "center_real": -0.5,          // 描画中心の実部
-            "center_imag": 0.0,           // 描画中心の虚部
-            "width": 3.0,                 // 描画範囲の幅
-            "height": 2.2899590163934427,  // 描画範囲の高さ
-            "max_iterations": 100,        // 最大計算回数
-            "escape_radius": 2.0          // 発散判定半径
+            "center_real": -0.5,
+            "center_imag": 0.0,
+            "width": 3.0,
+            "height": 2.2899590163934427,
+            "max_iterations": 100,
+            "escape_radius": 2.0
         },
-        // --- フラクタルプラグイン設定 ---
-        "fractal_plugin_name": "Mandelbrot", // 使用するフラクタルプラグイン名
-        "fractal_plugin_parameters": {},     // フラクタルプラグイン固有のパラメータ
-        // --- 発散領域の着色設定 ---
+        "fractal_plugin_name": "Mandelbrot",
+        "fractal_plugin_parameters": {},
         "coloring_divergent": {
-            "plugin_name": "スムーズカラー", // 使用する着色プラグイン名
+            "plugin_name": "スムーズカラー",
             "plugin_parameters": {
-                "color_scale": 1.0 // 色の変化のスケール
+                "color_scale": 1.0
             },
-            "pack_name": "デフォルト",   // カラーマップのパック名
-            "map_name": "グレースケール"  // カラーマップ名
+            "pack_name": "デフォルト",
+            "map_name": "グレースケール"
         },
-        // --- 非発散領域（集合内部）の着色設定 ---
         "coloring_non_divergent": {
-            "plugin_name": "複素ポテンシャル", // 使用する着色プラグイン名
+            "plugin_name": "複素ポテンシャル",
             "plugin_parameters": {
-                "color_scale": 1.0,      // 色の変化のスケール
-                "potential_offset": 0.0, // ポテンシャルのオフセット
-                "potential_scale": 1.0   // ポテンシャルのスケール
+                "color_scale": 1.0,
+                "potential_offset": 0.0,
+                "potential_scale": 1.0
             },
-            "pack_name": "デフォルト",   // カラーマップのパック名
-            "map_name": "グレースケール"  // カラーマップ名
+            "pack_name": "デフォルト",
+            "map_name": "グレースケール"
         }
     },
-    // --- アプリケーション全体の設定 ---
     "app_settings": {
-        // --- ログ設定 ---
         "logging": {
-            "level": "INFO",   // ログレベル (e.g., DEBUG, INFO, WARNING, ERROR)
-            "enabled": true    // ログ出力の有効/無効
+            "level": "INFO",
+            "enabled": true
         },
-        // 終了時に現在のエンジン設定を保存するかどうか
         "save_engine_settings": true,
-        // UIのスタイルシートファイルへのパス
         "stylesheet_path": "resources/style.qss",
-        // --- Numba JITコンパイラ設定 ---
         "numba_settings": {
-            // Numbaのキャッシュを有効にするか
             "cache_enabled": true,
-            // 終了時にNumbaのキャッシュをクリアするか
             "clear_cache_on_exit": false
         }
     },
-    // --- プリセット ---
-    // 保存された描画設定のコレクションです。
     "presets": {
         "初期設定": {
             "common_parameters": {
