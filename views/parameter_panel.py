@@ -36,32 +36,29 @@ class ParameterPanel(QScrollArea):
         """
         super().__init__(parent)
         self.fractal_controller = fractal_controller
-        self.plugin_widgets = {}
-        self.coloring_plugin_widgets_divergent = {} # 発散部用
-        self.coloring_plugin_widgets_non_divergent = {} # 非発散部用
+        self.plugin_widgets = {} # フラクタルプラグイン用
+        self.coloring_widgets = {} # カラーリングプラグイン用 (Divergent/Non-Divergent)
         self._focused_value_store = {} # フォーカス時の値を保存する辞書
+
+        # デバウンス用タイマーと再描画要求の状態管理
+        self.redraw_timer = QTimer(self)
+        self.redraw_timer.setSingleShot(True)
+        self.redraw_timer.setInterval(300)  # 300msのデバウンス遅延
+        self.redraw_timer.timeout.connect(self._execute_redraw)
+        self._redraw_request = {'full_recompute': False, 'pending': False}
 
         # UIの初期化とコントローラーからのデータ読み込み
         self._init_ui()
 
         if self.fractal_controller:
+            # UIに初期データを投入
             self._populate_fractal_combo()
-            # Divergent
-            self._populate_coloring_algorithm_combo(target_type='divergent')
-            self._populate_color_pack_combo(target_type='divergent')
-            active_pack_divergent = self.fractal_controller.get_active_color_pack_name_from_engine(target_type='divergent')
-            if active_pack_divergent:
-                 self._populate_color_map_list(active_pack_divergent, target_type='divergent')
-            # Non-Divergent
-            self._populate_coloring_algorithm_combo(target_type='non_divergent')
-            self._populate_color_pack_combo(target_type='non_divergent')
-            active_pack_non_divergent = self.fractal_controller.get_active_color_pack_name_from_engine(target_type='non_divergent')
-            if active_pack_non_divergent:
-                 self._populate_color_map_list(active_pack_non_divergent, target_type='non_divergent')
-
-            # コントローラーから初期パラメータをロードしてUIに反映
+            for target_type in ['divergent', 'non_divergent']:
+                self._populate_coloring_algorithm_combo(target_type)
+                self._populate_color_pack_combo(target_type)
             self.load_initial_parameters()
 
+            # コントローラーからのシグナルを接続
             self.fractal_controller.parameters_updated_externally.connect(self.update_ui_from_controller_parameters)
             self.fractal_controller.active_fractal_plugin_ui_needs_update.connect(self._update_fractal_plugin_specific_ui)
             # active_coloring_plugin_ui_needs_update は、より多くの情報を提供する必要があるか、置き換えられる可能性があります
@@ -89,11 +86,7 @@ class ParameterPanel(QScrollArea):
             # コントローラーが利用できない場合のフォールバックUI設定
             self._set_ui_values(100)
             if hasattr(self, 'plugin_specific_group'): self.plugin_specific_group.setVisible(False)
-            # coloring_group は存在し続けるが、個々のサブグループを無効化する必要があるかもしれない
-            if hasattr(self, 'coloring_group'): self.coloring_group.setEnabled(False) # Keep disabling the main group for now
-            # if hasattr(self, 'divergent_coloring_group'): self.divergent_coloring_group.setEnabled(False)
-            # if hasattr(self, 'non_divergent_coloring_group'): self.non_divergent_coloring_group.setEnabled(False)
-
+            if hasattr(self, 'coloring_tabs'): self.coloring_tabs.setEnabled(False)
 
     def _init_ui(self):
         """
@@ -159,105 +152,11 @@ class ParameterPanel(QScrollArea):
         self.coloring_tabs = QTabWidget()
         self.main_layout.addWidget(self.coloring_tabs)
 
-        # --- 発散部タブ ---
-        divergent_tab = QWidget()
-        divergent_layout = QVBoxLayout(divergent_tab)
+        divergent_tab = self._create_coloring_tab('divergent')
         self.coloring_tabs.addTab(divergent_tab, "発散部")
 
-        # アルゴリズム選択
-        divergent_algo_layout = QFormLayout()
-        divergent_algo_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        divergent_algo_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        self.coloring_algorithm_combo_divergent = QComboBox()
-        divergent_algo_layout.addRow(QLabel("アルゴリズム:"), self.coloring_algorithm_combo_divergent)
-        divergent_layout.addLayout(divergent_algo_layout)
-        self.coloring_algorithm_combo_divergent.currentTextChanged.connect(
-            partial(self._on_coloring_algorithm_changed, target_type='divergent')
-        )
-
-        # アルゴリズム固有設定
-        self.coloring_plugin_specific_group_divergent = QGroupBox("アルゴリズム固有設定")
-        self.coloring_plugin_specific_layout_divergent = QFormLayout()
-        self.coloring_plugin_specific_layout_divergent.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        self.coloring_plugin_specific_layout_divergent.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        self.coloring_plugin_specific_group_divergent.setLayout(self.coloring_plugin_specific_layout_divergent)
-        divergent_layout.addWidget(self.coloring_plugin_specific_group_divergent)
-        self.coloring_plugin_specific_group_divergent.setVisible(False)
-
-        # カラーパック選択
-        divergent_pack_layout = QFormLayout()
-        divergent_pack_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        divergent_pack_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        self.color_pack_combo_divergent = QComboBox()
-        divergent_pack_layout.addRow(QLabel("カラーパック:"), self.color_pack_combo_divergent)
-        divergent_layout.addLayout(divergent_pack_layout)
-        self.color_pack_combo_divergent.currentTextChanged.connect(
-            partial(self._on_color_pack_changed, target_type='divergent')
-        )
-
-        # カラーマップ選択
-        divergent_map_layout = QFormLayout()
-        divergent_map_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        divergent_map_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        self.color_map_listwidget_divergent = QListWidget()
-        self.color_map_listwidget_divergent.setIconSize(QSize(96, 18))
-        self.color_map_listwidget_divergent.setSpacing(1)
-        self.color_map_listwidget_divergent.setFixedHeight(120)
-        divergent_map_layout.addRow(QLabel("カラーマップ:"), self.color_map_listwidget_divergent)
-        divergent_layout.addLayout(divergent_map_layout)
-        self.color_map_listwidget_divergent.currentItemChanged.connect(
-            lambda current, previous, target_type='divergent': self._on_color_map_changed(current, previous, target_type)
-        )
-
-        # --- 非発散部タブ ---
-        non_divergent_tab = QWidget()
-        non_divergent_layout = QVBoxLayout(non_divergent_tab)
+        non_divergent_tab = self._create_coloring_tab('non_divergent')
         self.coloring_tabs.addTab(non_divergent_tab, "非発散部")
-
-        # アルゴリズム選択
-        non_divergent_algo_layout = QFormLayout()
-        non_divergent_algo_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        non_divergent_algo_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        self.coloring_algorithm_combo_non_divergent = QComboBox()
-        non_divergent_algo_layout.addRow(QLabel("アルゴリズム:"), self.coloring_algorithm_combo_non_divergent)
-        non_divergent_layout.addLayout(non_divergent_algo_layout)
-        self.coloring_algorithm_combo_non_divergent.currentTextChanged.connect(
-            partial(self._on_coloring_algorithm_changed, target_type='non_divergent')
-        )
-
-        # アルゴリズム固有設定
-        self.coloring_plugin_specific_group_non_divergent = QGroupBox("アルゴリズム固有設定")
-        self.coloring_plugin_specific_layout_non_divergent = QFormLayout()
-        self.coloring_plugin_specific_layout_non_divergent.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        self.coloring_plugin_specific_layout_non_divergent.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        self.coloring_plugin_specific_group_non_divergent.setLayout(self.coloring_plugin_specific_layout_non_divergent)
-        non_divergent_layout.addWidget(self.coloring_plugin_specific_group_non_divergent)
-        self.coloring_plugin_specific_group_non_divergent.setVisible(False)
-
-        # カラーパック選択
-        non_divergent_pack_layout = QFormLayout()
-        non_divergent_pack_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        non_divergent_pack_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        self.color_pack_combo_non_divergent = QComboBox()
-        non_divergent_pack_layout.addRow(QLabel("カラーパック:"), self.color_pack_combo_non_divergent)
-        non_divergent_layout.addLayout(non_divergent_pack_layout)
-        self.color_pack_combo_non_divergent.currentTextChanged.connect(
-            partial(self._on_color_pack_changed, target_type='non_divergent')
-        )
-
-        # カラーマップ選択
-        non_divergent_map_layout = QFormLayout()
-        non_divergent_map_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
-        non_divergent_map_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        self.color_map_listwidget_non_divergent = QListWidget()
-        self.color_map_listwidget_non_divergent.setIconSize(QSize(96, 18))
-        self.color_map_listwidget_non_divergent.setSpacing(1)
-        self.color_map_listwidget_non_divergent.setFixedHeight(120)
-        non_divergent_map_layout.addRow(QLabel("カラーマップ:"), self.color_map_listwidget_non_divergent)
-        non_divergent_layout.addLayout(non_divergent_map_layout)
-        self.color_map_listwidget_non_divergent.currentItemChanged.connect(
-            lambda current, previous, target_type='non_divergent': self._on_color_map_changed(current, previous, target_type)
-        )
 
         self.main_layout.addStretch(1)
 
@@ -268,6 +167,62 @@ class ParameterPanel(QScrollArea):
         # スピンボックスとスライダーの値を同期させる
         self.iter_spinbox.valueChanged.connect(self.iter_slider.setValue)
         self.iter_slider.valueChanged.connect(self.iter_spinbox.setValue)
+
+    def _create_coloring_tab(self, target_type: str) -> QWidget:
+        """指定されたターゲットタイプ（'divergent' または 'non_divergent'）用のUIタブを作成します。"""
+        tab_widget = QWidget()
+        layout = QVBoxLayout(tab_widget)
+
+        # このタブのウィジェットを格納する辞書
+        widgets = {'plugin_widgets': {}}
+
+        # アルゴリズム選択
+        algo_layout = QFormLayout()
+        algo_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        algo_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        widgets['algo_combo'] = QComboBox()
+        algo_layout.addRow(QLabel("アルゴリズム:"), widgets['algo_combo'])
+        layout.addLayout(algo_layout)
+        widgets['algo_combo'].currentTextChanged.connect(
+            partial(self._on_coloring_algorithm_changed, target_type=target_type)
+        )
+
+        # アルゴリズム固有設定
+        widgets['specific_group'] = QGroupBox("アルゴリズム固有設定")
+        widgets['specific_layout'] = QFormLayout()
+        widgets['specific_layout'].setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        widgets['specific_layout'].setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        widgets['specific_group'].setLayout(widgets['specific_layout'])
+        layout.addWidget(widgets['specific_group'])
+        widgets['specific_group'].setVisible(False)
+
+        # カラーパック選択
+        pack_layout = QFormLayout()
+        pack_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        pack_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        widgets['pack_combo'] = QComboBox()
+        pack_layout.addRow(QLabel("カラーパック:"), widgets['pack_combo'])
+        layout.addLayout(pack_layout)
+        widgets['pack_combo'].currentTextChanged.connect(
+            partial(self._on_color_pack_changed, target_type=target_type)
+        )
+
+        # カラーマップ選択
+        map_layout = QFormLayout()
+        map_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        map_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        widgets['map_list'] = QListWidget()
+        widgets['map_list'].setIconSize(QSize(96, 18))
+        widgets['map_list'].setSpacing(1)
+        widgets['map_list'].setFixedHeight(120)
+        map_layout.addRow(QLabel("カラーマップ:"), widgets['map_list'])
+        layout.addLayout(map_layout)
+        widgets['map_list'].currentItemChanged.connect(
+            lambda current, previous, tt=target_type: self._on_color_map_changed(current, previous, tt)
+        )
+
+        self.coloring_widgets[target_type] = widgets
+        return tab_widget
 
     def _create_colormap_thumbnail(self, colors: list[tuple[int,int,int]], thumb_width: int = 96, thumb_height: int = 18) -> QPixmap:
         """
@@ -355,6 +310,42 @@ class ParameterPanel(QScrollArea):
         self.fractal_controller.set_active_fractal_plugin_and_redraw(plugin_name)
         # フラクタルタイプ変更後、意図しないフォーカス移動を防ぐためにコンボボックスにフォーカスを戻す
         self.setFocus()
+
+    def request_redraw(self, full_recompute: bool):
+        """
+        デバウンス付きで再描画を要求します。
+        短時間に複数の要求があった場合、最後の要求から一定時間後に一度だけ実行されます。
+        フル再計算の要求は、再カラーリングのみの要求を上書きします。
+
+        Args:
+            full_recompute (bool): Trueの場合、フラクタル計算を含む完全な再描画を要求します。
+                                   Falseの場合、再カラーリングのみを要求します。
+        """
+        # 要求を更新。full_recompute は一度 True になったら、タイマーが実行されるまで False に戻らないようにする。
+        self._redraw_request['full_recompute'] = self._redraw_request.get('full_recompute', False) or full_recompute
+        self._redraw_request['pending'] = True
+
+        logger.log(f"再描画を要求しました (フル再計算: {self._redraw_request['full_recompute']})。タイマーを開始します。", level="DEBUG")
+        self.redraw_timer.start() # タイマーを再スタート
+
+    def _execute_redraw(self):
+        """
+        タイマーのタイムアウト時に実際に再描画をトリガーします。
+        """
+        if not self._redraw_request.get('pending', False):
+            return
+
+        if self.fractal_controller:
+            full_recompute = self._redraw_request.get('full_recompute', False)
+            logger.log(f"デバウンスされた再描画を実行します (フル再計算: {full_recompute})", level="INFO")
+            if full_recompute:
+                self.fractal_controller.trigger_render(full_recompute=True)
+            else:
+                self.fractal_controller.trigger_recolor()
+
+        # 要求をリセット
+        self._redraw_request['pending'] = False
+        self._redraw_request['full_recompute'] = False
 
     def _clear_fractal_plugin_specific_ui(self):
         """
@@ -455,18 +446,15 @@ class ParameterPanel(QScrollArea):
             # 値が変更された場合のみ再描画
             if original_value is not None:
                 if current_value != original_value:
-                    logger.log(f"ParameterPanel._on_plugin_parameter_editing_finished: Value changed for {param_name} from {original_value} to {current_value}. Triggering render.", level="DEBUG")
-                    self.fractal_controller.trigger_render()
+                    logger.log(f"ParameterPanel._on_plugin_parameter_editing_finished: Value changed for {param_name} from {original_value} to {current_value}. Requesting full render.", level="DEBUG")
+                    # パラメータは valueChanged で既に設定済み
+                    self.request_redraw(full_recompute=True)
                 else:
-                    logger.log(f"ParameterPanel._on_plugin_parameter_editing_finished: Value not changed for {param_name}. Current: {current_value}. Original: {original_value}. Skipping render.", level="DEBUG")
+                    logger.log(f"ParameterPanel._on_plugin_parameter_editing_finished: Value not changed for {param_name}. Skipping render request.", level="DEBUG")
             else:
                 # original_value がない場合は、FocusIn が発生しなかったか、予期せぬ状態。
                 # 不要な再描画を防ぐため、警告を出して何もしない。
-                logger.log(f"ParameterPanel._on_plugin_parameter_editing_finished: No original value found for {param_name}. Assuming no change and skipping render.", level="WARNING")
-        else:
-            # ウィジェットが見つからない場合、従来通り再描画 (安全策)
-            logger.log(f"ParameterPanel._on_plugin_parameter_editing_finished: Widget for {param_name} not found. Triggering render as a fallback.", level="WARNING")
-            self.fractal_controller.trigger_render()
+                logger.log(f"ParameterPanel._on_plugin_parameter_editing_finished: No original value found for {param_name}. Assuming no change and skipping render request.", level="WARNING")
 
     def _populate_coloring_algorithm_combo(self, target_type: str):
         """
@@ -476,20 +464,11 @@ class ParameterPanel(QScrollArea):
         """
         if not self.fractal_controller: return
 
-        combo_box = None
-        if target_type == 'divergent':
-            combo_box = self.coloring_algorithm_combo_divergent
-        elif target_type == 'non_divergent':
-            combo_box = self.coloring_algorithm_combo_non_divergent
-        else:
-            logger.log(f"Error: Invalid target_type '{target_type}' in _populate_coloring_algorithm_combo", level="ERROR")
+        try:
+            combo_box = self.coloring_widgets[target_type]['algo_combo']
+        except KeyError:
+            logger.log(f"Error: Combo box not found for target_type '{target_type}' in _populate_coloring_algorithm_combo", level="ERROR")
             return
-
-        if combo_box is None: # Should not happen
-             logger.log(f"Error: Combo box not found for target_type '{target_type}'", level="ERROR")
-             return
-
-#        logger.log(f"target_type の入力 = {target_type}", level="DEBUG")
 
         algo_names = self.fractal_controller.get_available_coloring_plugin_names_from_engine(target_type=target_type)
         active_algo = self.fractal_controller.get_active_coloring_plugin_name_from_engine(target_type=target_type)
@@ -518,8 +497,11 @@ class ParameterPanel(QScrollArea):
             # algo が N/A の場合、特定のUIをクリアする可能性があります
             if algo_name == "N/A":
                 self._clear_coloring_plugin_specific_ui(target_type)
-                group_to_hide = self.coloring_plugin_specific_group_divergent if target_type == 'divergent' else self.coloring_plugin_specific_group_non_divergent
-                group_to_hide.setVisible(False)
+                try:
+                    group_to_hide = self.coloring_widgets[target_type]['specific_group']
+                    group_to_hide.setVisible(False)
+                except KeyError:
+                    logger.log(f"Error: Widgets for target_type '{target_type}' not found in _on_coloring_algorithm_changed.", level="ERROR")
             return
 
         # Check if this algo is already active for this target type
@@ -544,20 +526,12 @@ class ParameterPanel(QScrollArea):
         Args:
             target_type (str): 'divergent' または 'non_divergent'.
         """
-        plugin_widgets = None
-        specific_layout = None
-        if target_type == 'divergent':
-            plugin_widgets = self.coloring_plugin_widgets_divergent
-            specific_layout = self.coloring_plugin_specific_layout_divergent
-        elif target_type == 'non_divergent':
-            plugin_widgets = self.coloring_plugin_widgets_non_divergent
-            specific_layout = self.coloring_plugin_specific_layout_non_divergent
-        else:
-            logger.log(f"Error: Invalid target_type '{target_type}' in _clear_coloring_plugin_specific_ui", level="ERROR")
-            return
-
-        if plugin_widgets is None or specific_layout is None: # ロジックが正しければ発生すべきではありません
-            logger.log(f"Error: plugin_widgets or specific_layout is None for {target_type}", level="ERROR")
+        try:
+            widgets = self.coloring_widgets[target_type]
+            plugin_widgets = widgets['plugin_widgets']
+            specific_layout = widgets['specific_layout']
+        except KeyError:
+            logger.log(f"Error: Widgets for target_type '{target_type}' not found in _clear_coloring_plugin_specific_ui.", level="ERROR")
             return
 
         plugin_widgets.clear()
@@ -565,7 +539,7 @@ class ParameterPanel(QScrollArea):
             item = specific_layout.takeAt(0)
             if item.widget(): item.widget().deleteLater()
 
-    @pyqtSlot(str, str) # 呼び出し元によって渡されると仮定して、スロット シグネチャに target_type を追加しました。
+    @pyqtSlot(str, str)
     def _update_coloring_plugin_specific_ui(self, algo_name: str, target_type: str):
         """
         指定されたカラーリングアルゴリズムの固有パラメータUIを構築・更新します。
@@ -577,28 +551,13 @@ class ParameterPanel(QScrollArea):
         """
         self._clear_coloring_plugin_specific_ui(target_type) # まず特定のUIをクリアする
 
-        plugin_widgets = None
-        specific_group = None
-        specific_layout = None
-
-        if target_type == 'divergent':
-            plugin_widgets = self.coloring_plugin_widgets_divergent
-            specific_group = self.coloring_plugin_specific_group_divergent
-            specific_layout = self.coloring_plugin_specific_layout_divergent
-            if specific_layout is None:
-                logger.log(f"CRITICAL ERROR: target_type '{target_type}' の self.coloring_plugin_specific_layout_divergent が None です", level="CRITICAL")
-                if specific_group: specific_group.setVisible(False)
-                return
-        elif target_type == 'non_divergent':
-            plugin_widgets = self.coloring_plugin_widgets_non_divergent
-            specific_group = self.coloring_plugin_specific_group_non_divergent
-            specific_layout = self.coloring_plugin_specific_layout_non_divergent
-            if specific_layout is None:
-                logger.log(f"CRITICAL ERROR: self.coloring_plugin_specific_layout_non_divergent は、target_type '{target_type}' では None です。", level="CRITICAL")
-                if specific_group: specific_group.setVisible(False)
-                return
-        else:
-            logger.log(f"Error: _update_coloring_plugin_specific_ui の target_type '{target_type}' が無効です", level="ERROR")
+        try:
+            widgets = self.coloring_widgets[target_type]
+            plugin_widgets = widgets['plugin_widgets']
+            specific_group = widgets['specific_group']
+            specific_layout = widgets['specific_layout']
+        except KeyError:
+            logger.log(f"Error: Widgets for target_type '{target_type}' not found in _update_coloring_plugin_specific_ui.", level="ERROR")
             return
 
         if not self.fractal_controller or not algo_name or algo_name == "N/A":
@@ -672,10 +631,7 @@ class ParameterPanel(QScrollArea):
                 # else: # specific_layout is None の場合のログは削除
                     # logger.log(f"CRITICAL ERROR: specific_layout is None for {target_type} when trying to add widget for {name}.", level="CRITICAL")
 
-                if plugin_widgets is not None:
-                    # 注: これは簡略化されたものです。スライダーが再導入された場合は調整が必要になります。
-                    plugin_widgets[(name, target_type)] = (widget, None)
-
+                plugin_widgets[name] = widget
                 # シグナル接続
                 if isinstance(widget, (QDoubleSpinBox, QSpinBox)):
                     widget.valueChanged.connect(partial(self._on_coloring_plugin_parameter_changed, param_name=name, target_type=target_type))
@@ -699,7 +655,7 @@ class ParameterPanel(QScrollArea):
         if not self.fractal_controller: return
         sender = self.sender()
 
-        plugin_widgets = self.coloring_plugin_widgets_divergent if target_type == 'divergent' else self.coloring_plugin_widgets_non_divergent
+        plugin_widgets = self.coloring_widgets[target_type]['plugin_widgets']
 
         if isinstance(sender, (QDoubleSpinBox, QSpinBox)):
             if '_coloring_preset_combo' in plugin_widgets:
@@ -722,13 +678,9 @@ class ParameterPanel(QScrollArea):
         """
         if not self.fractal_controller: return
 
-        plugin_widgets = self.coloring_plugin_widgets_divergent if target_type == 'divergent' else self.coloring_plugin_widgets_non_divergent
+        widget = self.coloring_widgets[target_type]['plugin_widgets'].get(param_name)
 
-        widget_key = (param_name, target_type)
-        widget_tuple = plugin_widgets.get(widget_key)
-
-        if widget_tuple and isinstance(widget_tuple[0], (QSpinBox, QDoubleSpinBox)):
-            widget = widget_tuple[0]
+        if widget and isinstance(widget, (QSpinBox, QDoubleSpinBox)):
             # focused_value_store のキーは、eventFilter での設定方法と一致している必要があります
             focus_key = widget # 新しいロジックでは、ウィジェット自体がキーです
             original_value = self._focused_value_store.pop(focus_key, None)
@@ -736,17 +688,17 @@ class ParameterPanel(QScrollArea):
 
             if original_value is not None:
                 if current_value != original_value:
-                    logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: Value changed for {param_name} ({target_type}) from {original_value} to {current_value}. Setting param and recoloring.", level="DEBUG")
-                    self.fractal_controller.set_coloring_plugin_parameter_and_recolor(param_name, current_value, target_type=target_type)
+                    logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: Value changed for {param_name} ({target_type}) from {original_value} to {current_value}. Setting param and requesting recolor.", level="DEBUG")
+                    self.fractal_controller.set_coloring_plugin_parameter_and_recolor(param_name, current_value, target_type=target_type, allow_recolor=False)
+                    self.request_redraw(full_recompute=False)
                 else:
-                    logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: Value not changed for {param_name} ({target_type}). Current: {current_value}. Original: {original_value}. Skipping recolor.", level="DEBUG")
+                    logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: Value not changed for {param_name} ({target_type}). Skipping.", level="DEBUG")
             else:
                 # original_value がない場合は、FocusIn が発生しなかったか、予期せぬ状態。
                 # 不要な再描画を防ぐため、警告を出して何もしない。
                 logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: No original value for {param_name} ({target_type}). Assuming no change and skipping recolor.", level="WARNING")
-        elif widget_tuple:
-            widget = widget_tuple[0]
-            logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: Widget {param_name} ({target_type}) is not a SpinBox/DoubleSpinBox. Type: {type(widget)}. Skipping.", level="DEBUG")
+        elif widget:
+            logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: Widget {param_name} ({target_type}) is not a SpinBox/DoubleSpinBox. Type: {type(widget)}. Skipping.", level="WARNING")
         else:
             logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: Widget for {param_name} ({target_type}) not found. Skipping.", level="WARNING")
 
@@ -758,8 +710,7 @@ class ParameterPanel(QScrollArea):
         """
         if not self.fractal_controller: return
 
-        combo_box = self.color_pack_combo_divergent if target_type == 'divergent' else self.color_pack_combo_non_divergent
-
+        combo_box = self.coloring_widgets[target_type]['pack_combo']
         pack_names = self.fractal_controller.get_available_color_pack_names_from_engine() # パックはグローバルであり、target_type に固有ではありません
         active_pack = self.fractal_controller.get_active_color_pack_name_from_engine(target_type=target_type) # アクティブなパックはターゲットごとに設定可能
 
@@ -788,7 +739,7 @@ class ParameterPanel(QScrollArea):
         """
         if not self.fractal_controller or not pack_name or pack_name == "N/A": return
 
-        map_list_widget = self.color_map_listwidget_divergent if target_type == 'divergent' else self.color_map_listwidget_non_divergent
+        map_list_widget = self.coloring_widgets[target_type]['map_list']
         self._populate_color_map_list(pack_name, target_type) # Pass target_type
 
         if map_list_widget.count() > 0:
@@ -809,7 +760,7 @@ class ParameterPanel(QScrollArea):
             pack_name (str | None): 表示するカラーマップが含まれるカラーパックの名前。Noneの場合はリストを無効化。
             target_type (str): 'divergent' または 'non_divergent'.
         """
-        map_list_widget = self.color_map_listwidget_divergent if target_type == 'divergent' else self.color_map_listwidget_non_divergent
+        map_list_widget = self.coloring_widgets[target_type]['map_list']
 
         map_list_widget.blockSignals(True)
         map_list_widget.clear()
@@ -851,8 +802,7 @@ class ParameterPanel(QScrollArea):
         if not self.fractal_controller or not current_item: return
         map_name = current_item.text()
 
-        pack_combo = self.color_pack_combo_divergent if target_type == 'divergent' else self.color_pack_combo_non_divergent
-        pack_name = pack_combo.currentText()
+        pack_name = self.coloring_widgets[target_type]['pack_combo'].currentText()
 
         if not pack_name or pack_name == "N/A": return
 
@@ -875,20 +825,13 @@ class ParameterPanel(QScrollArea):
         """
         logger.log(f"ParameterPanel._update_color_selection_from_controller for target '{target_type}', pack '{pack_name}', map '{map_name}'", level="DEBUG")
 
-        pack_combo = None
-        map_list_widget = None
-
-        if target_type == 'divergent':
-            pack_combo = self.color_pack_combo_divergent
-            map_list_widget = self.color_map_listwidget_divergent
-        elif target_type == 'non_divergent':
-            pack_combo = self.color_pack_combo_non_divergent
-            map_list_widget = self.color_map_listwidget_non_divergent
-        else:
-            logger.log(f"Invalid target_type '{target_type}' in _update_color_selection_from_controller", level="ERROR")
+        try:
+            widgets = self.coloring_widgets[target_type]
+            pack_combo = widgets['pack_combo']
+            map_list_widget = widgets['map_list']
+        except KeyError:
+            logger.log(f"Error: Widgets for target_type '{target_type}' not found in _update_color_selection_from_controller.", level="ERROR")
             return
-
-        if not pack_combo or not map_list_widget: return # Should not happen
 
         pack_combo.blockSignals(True)
         map_list_widget.blockSignals(True)
@@ -945,11 +888,15 @@ class ParameterPanel(QScrollArea):
 
             if original_value is not None and current_value == original_value:
                 trigger_render_flag = False
-                logger.log(f"Value not changed for {widget_object_name}. Current: {current_value}. Original: {original_value}. Skipping render.", level="DEBUG")
+                logger.log(f"Value not changed for {widget_object_name}. Skipping render request.", level="DEBUG")
             elif original_value is None:
-                logger.log(f"No original value for {widget_object_name}. Rendering.", level="DEBUG")
+                # original_value がない場合は、FocusIn が発生しなかったか、予期せぬ状態。
+                # 不要な再描画を防ぐため、警告を出して何もしない。
+                trigger_render_flag = False
+                logger.log(f"No original value for {widget_object_name}. Assuming no change and skipping render request.", level="WARNING")
             else: # Value changed
-                logger.log(f"Value changed for {widget_object_name} from {original_value} to {current_value}. Rendering.", level="DEBUG")
+                trigger_render_flag = True
+                logger.log(f"Value changed for {widget_object_name} from {original_value} to {current_value}. Requesting render.", level="DEBUG")
 
         elif isinstance(sender_widget, QSlider):
             # スライダーが解放されたときは、値が変更されたとみなし、再描画とシグナル発行を行う
@@ -970,12 +917,12 @@ class ParameterPanel(QScrollArea):
 
         if trigger_render_flag:
             if self.fractal_controller:
-                logger.log(f"Calling fractal_controller.trigger_render() for {widget_object_name}", level="DEBUG")
-                self.fractal_controller.trigger_render()
+                logger.log(f"Requesting full render for {widget_object_name}", level="DEBUG")
+                self.request_redraw(full_recompute=True)
             else:
-                logger.log("fractal_controller is None, cannot trigger render.", level="WARNING")
+                logger.log("fractal_controller is None, cannot request render.", level="WARNING")
         else:
-            logger.log(f"Render skipped for {widget_object_name} as value did not change.", level="DEBUG")
+            logger.log(f"Render request skipped for {widget_object_name} as value did not change.", level="DEBUG")
 
     def load_initial_parameters(self):
         """
@@ -990,90 +937,41 @@ class ParameterPanel(QScrollArea):
             active_fp_name = self.fractal_controller.get_active_fractal_plugin_name_from_engine()
             if active_fp_name: self._update_fractal_plugin_specific_ui(active_fp_name)
 
-            # Coloring plugin UI - Initialize for 'divergent' first
-            # self.coloring_target_combo.blockSignals(True) # 削除されたためコメントアウト
-            # self.coloring_target_combo.setCurrentText("発散部") # 削除されたためコメントアウト
-            # self.coloring_target_combo.blockSignals(False) # 削除されたためコメントアウト
+            # カラーリングUI
+            for target_type in ['divergent', 'non_divergent']:
+                widgets = self.coloring_widgets[target_type]
+                combo_algo = widgets['algo_combo']
+                combo_pack = widgets['pack_combo']
+                list_map = widgets['map_list']
 
-            # self._populate_coloring_algorithm_combo() # Populates based on "発散部" # 修正が必要なためコメントアウト
+                # アルゴリズム
+                active_algo = self.fractal_controller.get_active_coloring_plugin_name_from_engine(target_type=target_type)
+                if active_algo and active_algo != "N/A":
+                    combo_algo.blockSignals(True)
+                    combo_algo.setCurrentText(active_algo)
+                    combo_algo.blockSignals(False)
+                    self._update_coloring_plugin_specific_ui(active_algo, target_type=target_type)
+                elif combo_algo.count() > 0:
+                    first_algo = combo_algo.itemText(0)
+                    if first_algo and first_algo != "N/A":
+                        combo_algo.setCurrentText(first_algo) # シグナル経由で更新
 
-            # active_target_type = 'divergent' # Since we just set it
-            # # Ensure active_cp_name is fetched for the current target_type
-            # active_cp_name = self.fractal_controller.get_active_coloring_plugin_name_from_engine(target_type=active_target_type)
-
-            # if active_cp_name and active_cp_name != "N/A":
-            #      # self.coloring_algorithm_combo.blockSignals(True) # 古い要素のためコメントアウト
-            #      # self.coloring_algorithm_combo.setCurrentText(active_cp_name) # 古い要素のためコメントアウト
-            #      # self.coloring_algorithm_combo.blockSignals(False) # 古い要素のためコメントアウト
-            #      # self._update_coloring_plugin_specific_ui(active_cp_name, target_type=active_target_type) # 修正が必要なためコメントアウト
-            #      pass # TODO: 新しい divergent/non-divergent UI 要素に対して設定を行う
-            # elif False : # self.coloring_algorithm_combo.count() > 0 : # 古い要素のため False に変更
-            #     # first_algo = self.coloring_algorithm_combo.itemText(0) # 古い要素のためコメントアウト
-            #     # if first_algo and first_algo != "N/A":
-            #     #     self.coloring_algorithm_combo.blockSignals(True) # 古い要素のためコメントアウト
-            #     #     self.coloring_algorithm_combo.setCurrentText(first_algo) # 古い要素のためコメントアウト
-            #     #     self.coloring_algorithm_combo.blockSignals(False) # 古い要素のためコメントアウト
-            #     #     self._update_coloring_plugin_specific_ui(first_algo, target_type=active_target_type) # 修正が必要なためコメントアウト
-            #     #     self.fractal_controller.set_active_coloring_plugin_and_recolor(plugin_name=first_algo, target_type=active_target_type) # 修正が必要
-            # Divergent
-            active_algo_div = self.fractal_controller.get_active_coloring_plugin_name_from_engine(target_type='divergent')
-            if active_algo_div and active_algo_div != "N/A":
-                 self.coloring_algorithm_combo_divergent.blockSignals(True)
-                 self.coloring_algorithm_combo_divergent.setCurrentText(active_algo_div)
-                 self.coloring_algorithm_combo_divergent.blockSignals(False)
-                 self._update_coloring_plugin_specific_ui(active_algo_div, target_type='divergent')
-            elif self.coloring_algorithm_combo_divergent.count() > 0:
-                first_algo_div = self.coloring_algorithm_combo_divergent.itemText(0)
-                if first_algo_div and first_algo_div != "N/A":
-                    self.coloring_algorithm_combo_divergent.setCurrentText(first_algo_div) # これにより _on_coloring_algorithm_changed がトリガーされます
-                    # テキストが実際に変更された場合、コントローラーの更新は _on_coloring_algorithm_changed で行われます
-
-            active_pack_div = self.fractal_controller.get_active_color_pack_name_from_engine(target_type='divergent')
-            active_map_div = self.fractal_controller.get_active_color_map_name_from_engine(target_type='divergent')
-            if active_pack_div and active_map_div:
-                self.color_pack_combo_divergent.blockSignals(True)
-                self.color_pack_combo_divergent.setCurrentText(active_pack_div)
-                self.color_pack_combo_divergent.blockSignals(False)
-                self._populate_color_map_list(active_pack_div, target_type='divergent')
-                # Find and set current item for map
-                for i in range(self.color_map_listwidget_divergent.count()):
-                    if self.color_map_listwidget_divergent.item(i).text() == active_map_div:
-                        self.color_map_listwidget_divergent.setCurrentRow(i)
-                        break
-            elif self.color_pack_combo_divergent.count() > 0: # アクティブなものがない場合は、最初のパックとマップを選択
-                 first_pack_div = self.color_pack_combo_divergent.itemText(0)
-                 if first_pack_div and first_pack_div != "N/A":
-                    self.color_pack_combo_divergent.setCurrentText(first_pack_div) # パック変更をトリガー -> マップリストを生成し最初のマップを選択
-
-
-            # Non-Divergent
-            active_algo_non_div = self.fractal_controller.get_active_coloring_plugin_name_from_engine(target_type='non_divergent')
-            if active_algo_non_div and active_algo_non_div != "N/A":
-                 self.coloring_algorithm_combo_non_divergent.blockSignals(True)
-                 self.coloring_algorithm_combo_non_divergent.setCurrentText(active_algo_non_div)
-                 self.coloring_algorithm_combo_non_divergent.blockSignals(False)
-                 self._update_coloring_plugin_specific_ui(active_algo_non_div, target_type='non_divergent')
-            elif self.coloring_algorithm_combo_non_divergent.count() > 0:
-                first_algo_non_div = self.coloring_algorithm_combo_non_divergent.itemText(0)
-                if first_algo_non_div and first_algo_non_div != "N/A":
-                     self.coloring_algorithm_combo_non_divergent.setCurrentText(first_algo_non_div)
-
-            active_pack_non_div = self.fractal_controller.get_active_color_pack_name_from_engine(target_type='non_divergent')
-            active_map_non_div = self.fractal_controller.get_active_color_map_name_from_engine(target_type='non_divergent')
-            if active_pack_non_div and active_map_non_div:
-                self.color_pack_combo_non_divergent.blockSignals(True)
-                self.color_pack_combo_non_divergent.setCurrentText(active_pack_non_div)
-                self.color_pack_combo_non_divergent.blockSignals(False)
-                self._populate_color_map_list(active_pack_non_div, target_type='non_divergent')
-                for i in range(self.color_map_listwidget_non_divergent.count()):
-                    if self.color_map_listwidget_non_divergent.item(i).text() == active_map_non_div:
-                        self.color_map_listwidget_non_divergent.setCurrentRow(i)
-                        break
-            elif self.color_pack_combo_non_divergent.count() > 0:
-                 first_pack_non_div = self.color_pack_combo_non_divergent.itemText(0)
-                 if first_pack_non_div and first_pack_non_div != "N/A":
-                    self.color_pack_combo_non_divergent.setCurrentText(first_pack_non_div)
-
+                # カラーパックとマップ
+                active_pack = self.fractal_controller.get_active_color_pack_name_from_engine(target_type=target_type)
+                active_map = self.fractal_controller.get_active_color_map_name_from_engine(target_type=target_type)
+                if active_pack and active_map:
+                    combo_pack.blockSignals(True)
+                    combo_pack.setCurrentText(active_pack)
+                    combo_pack.blockSignals(False)
+                    self._populate_color_map_list(active_pack, target_type=target_type)
+                    for i in range(list_map.count()):
+                        if list_map.item(i).text() == active_map:
+                            list_map.setCurrentRow(i)
+                            break
+                elif combo_pack.count() > 0:
+                    first_pack = combo_pack.itemText(0)
+                    if first_pack and first_pack != "N/A":
+                        combo_pack.setCurrentText(first_pack) # シグナル経由で更新
 
     @pyqtSlot(dict) # 引数として dict を受け取ることを明示
     def update_ui_from_controller_parameters(self, params: dict):
@@ -1146,13 +1044,12 @@ class ParameterPanel(QScrollArea):
 
         logger.log(f"プリセット '{preset_name}' をプラグイン '{plugin_name}' に適用中 (ターゲット: '{target_type}')", level="DEBUG")
 
-        plugin_widgets_dict = self.coloring_plugin_widgets_divergent if target_type == 'divergent' else self.coloring_plugin_widgets_non_divergent
-        algo_combo = self.coloring_algorithm_combo_divergent if target_type == 'divergent' else self.coloring_algorithm_combo_non_divergent
+        widgets = self.coloring_widgets[target_type]
+        plugin_widgets_dict = widgets['plugin_widgets']
+        algo_combo = widgets['algo_combo']
 
         selected_vals = presets_data.get(preset_name)
         if selected_vals:
-            # UIで現在選択されているアルゴリズムが、このプリセットのプラグイン名と一致することを確認します。
-            # これは念のための確認です。
             current_ui_algo_name = algo_combo.currentText()
             if current_ui_algo_name != plugin_name:
                 logger.log(f"プラグイン '{plugin_name}' のプリセット選択ですが、UI は {target_type} 用に '{current_ui_algo_name}' を表示しています。プリセットの適用を中止します。", level="WARNING")
@@ -1162,8 +1059,8 @@ class ParameterPanel(QScrollArea):
             params_to_set_in_controller = {}
 
             for p_name, val in selected_vals.items():
-                if p_name in plugin_widgets_dict:
-                    widget = plugin_widgets_dict[p_name]
+                widget = plugin_widgets_dict.get(p_name)
+                if widget:
                     widget.blockSignals(True) # 即時のフィードバックループを防ぐために、値を設定中はシグナルをブロックします
                     if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
                         widget.setValue(val)
@@ -1172,8 +1069,6 @@ class ParameterPanel(QScrollArea):
                         if widget in self._focused_value_store:
                             del self._focused_value_store[widget]
                     # TODO: 必要であれば他のウィジェットタイプ（例：列挙型用のQComboBox）のサポートを追加
-                    else:
-                        logger.log(f"Widget '{p_name}' for preset is not a SpinBox/DoubleSpinBox. Type: {type(widget)}. Value not set from preset.", level="WARNING")
 
                     widget.blockSignals(False) # シグナルをアンブロック
                     params_to_set_in_controller[p_name] = val # コントローラー用のパラメータを収集
@@ -1181,26 +1076,16 @@ class ParameterPanel(QScrollArea):
                     all_params_set_for_preset = False
                     logger.log(f"Widget for preset parameter '{p_name}' not found in {target_type} UI.", level="WARNING")
 
-            # Update all parameters in the controller in a batch if possible, then trigger one recolor.
-            # This assumes FractalController has a method like set_coloring_plugin_parameters_batch_and_recolor
-            # or we set them individually then trigger recolor.
+            # コントローラーのパラメータを更新し、再カラーリングを1回トリガーします。
             if params_to_set_in_controller:
-                # Option 1: Batch update (preferred if available)
-                if hasattr(self.fractal_controller, 'set_coloring_plugin_parameters_batch_and_recolor'):
-                    self.fractal_controller.set_coloring_plugin_parameters_batch_and_recolor(params_to_set_in_controller, target_type=target_type, allow_recolor=True)
-                else:
-                    # Option 2: Individual updates then one recolor
-                    for p_name, val in params_to_set_in_controller.items():
-                        self.fractal_controller.set_coloring_plugin_parameter(p_name, val, target_type=target_type, allow_recolor=False) # Set without recolor first
-                    self.fractal_controller.trigger_recolor(target_type=target_type) # Then trigger recolor once
+                # 個別に設定し、最後に再カラーリングを1回トリガーします。
+                for p_name, val in params_to_set_in_controller.items():
+                    # allow_recolor=False でコントローラーに設定
+                    self.fractal_controller.set_coloring_plugin_parameter_and_recolor(p_name, val, target_type=target_type, allow_recolor=False)
+                self.request_redraw(full_recompute=False) # 最後に再カラーリングを要求
 
             if not all_params_set_for_preset:
                  logger.log(f"Not all parameters from preset '{preset_name}' were applied to the UI for {target_type}.", level="WARNING")
-
-            # After applying a preset, ensure the preset combo itself (if it was part of `plugin_widgets_dict`)
-            # correctly reflects the chosen preset name, and not "カスタム" if the preset was successfully applied.
-            # This should already be the case as the user selected it, but good to be mindful.
-            # The UI update for parameters should be handled by the controller signals if parameters changed there.
 
     @pyqtSlot(str, str) # preset_name 引数を削除
     def update_active_coloring_target_and_plugin_from_controller(self, target_type: str, plugin_name: str): # preset_name 引数を削除
@@ -1209,20 +1094,11 @@ class ParameterPanel(QScrollArea):
         """
         logger.log(f"ParameterPanel.update_active_coloring_target_and_plugin_from_controller: target='{target_type}', plugin='{plugin_name}'", level="DEBUG") # preset_name をログから削除
 
-        algo_combo = None
-        # plugin_widgets_dict = None # プリセットロジックには不要になりました
-
-        if target_type == 'divergent':
-            algo_combo = self.coloring_algorithm_combo_divergent
-            # plugin_widgets_dict = self.coloring_plugin_widgets_divergent # No longer needed
-        elif target_type == 'non_divergent':
-            algo_combo = self.coloring_algorithm_combo_non_divergent
-            # plugin_widgets_dict = self.coloring_plugin_widgets_non_divergent # No longer needed
-        else:
-            logger.log(f"Invalid target_type '{target_type}' received.", level="ERROR")
+        try:
+            algo_combo = self.coloring_widgets[target_type]['algo_combo']
+        except KeyError:
+            logger.log(f"Error: Widgets for target_type '{target_type}' not found in update_active_coloring_target_and_plugin_from_controller.", level="ERROR")
             return
-
-        if not algo_combo: return # Should not happen
 
         # 1. アルゴリズムコンボボックスの選択を更新
         algo_combo.blockSignals(True)
@@ -1237,12 +1113,6 @@ class ParameterPanel(QScrollArea):
 
         # 2. 新しいアルゴリズム用にプラグイン固有のUIを更新
         self._update_coloring_plugin_specific_ui(plugin_name, target_type)
-
-        # 3. プリセット関連ロジックを削除
-        # if preset_name:
-        #     ...
-        # else:
-        #     ...
 
 
 if __name__ == '__main__':
