@@ -1,6 +1,9 @@
 import json
 from pathlib import Path
 import os
+import re # 追加: 正規表現モジュールをインポート
+
+from typing import Any, Dict, Optional
 
 class SettingsManager:
     """
@@ -13,47 +16,61 @@ class SettingsManager:
 
     def _get_logger(self):
         """ロガーインスタンスを遅延初期化で取得します。"""
+        # SettingsManager._logger_instance は CustomLogger が自身を初期化する際に設定されることを想定しています。
+        # ここで CustomLogger を直接インスタンス化すると循環参照が発生します。
         if SettingsManager._logger_instance is None:
-            from logger.custom_logger import CustomLogger # サイクルを断ち切るためにここにインポートする
-            SettingsManager._logger_instance = CustomLogger()
+            # ロガーがまだ設定されていない場合、フォールバックロガーを使用します。
+            # これは、CustomLogger がまだ初期化されていないか、利用できない場合に発生します。
+            class FallbackLogger:
+                def log(self, message: str, level: str = "INFO"):
+                    print(f"[{level}] {message}") # シンプルなprintで出力
+                def set_level(self, level: str): pass
+                def set_enabled(self, enabled: bool): pass
+                def set_project_root(self, path: Path): pass
+            SettingsManager._logger_instance = FallbackLogger()
         return SettingsManager._logger_instance
 
-    def __init__(self, settings_filename: str = "settings.jsonc", _is_for_logger_init: bool = False):
+    def __init__(self, settings_filename: str = "settings.jsonc", _is_for_logger_init: bool = False) -> None:
         """
         SettingsManagerを初期化します。
 
-        Args:
-            settings_filename (str): 設定ファイルの名前またはパス。
-                                     相対パスで指定された場合、ユーザーのホームディレクトリ下の
-                                     `.fractalapp` フォルダ内にファイルパスを解決しようとします。
-                                     解決に失敗した場合はカレントワーキングディレクトリ(CWD)を使用します。
-            _is_for_logger_init (bool): CustomLoggerの初期化中に呼び出されたかどうかを示す内部フラグ。
-                                        Trueの場合、ファイルI/Oや複雑なパス解決を避け、
-                                        ロガーの循環依存を防ぐための最小限の初期化を行います。
+        :param settings_filename: 設定ファイルの名前またはパス。相対パスの場合、ユーザーのホームディレクトリ下の
+                                  `.fractalapp` フォルダ内にファイルパスを解決しようとします。
+                                  解決に失敗した場合はカレントワーキングディレクトリ(CWD)を使用します。
+        :param _is_for_logger_init: CustomLoggerの初期化中に呼び出されたかどうかを示す内部フラグ。
+                                    Trueの場合、ファイルI/Oや複雑なパス解決を避け、
+                                    ロガーの循環依存を防ぐための最小限の初期化を行います。
         """
-        print(f"SettingsManagerの初期化: settings_filename={settings_filename}, _is_for_logger_init={_is_for_logger_init}")
+        logger = self._get_logger()
+        logger.log(f"SettingsManagerの初期化開始: settings_filename='{settings_filename}', _is_for_logger_init={_is_for_logger_init}", level="DEBUG")
+
         if _is_for_logger_init:
             # CustomLogger初期化中の呼び出し: CWDのシンプルなパスを使用し、ファイルI/Oを避けます。
             # CustomLoggerはデフォルト値で初期化され、その後、アプリケーションのメインの
             # SettingsManagerインスタンスによって設定が更新されることを意図しています。
             self.filepath = Path.cwd() / settings_filename # 最小パス解像度
-            self.settings = {} # 設定をロードせず、空の辞書を使用
+            self.settings: Dict[str, Any] = {} # 設定をロードせず、空の辞書を使用
+            logger.log("ロガー初期化モードでSettingsManagerを初期化しました。", level="DEBUG")
         else:
             # 通常の初期化パス
-            self.filepath = Path(settings_filename)
-            print(f"設定ファイルの絶対パスの判定: {self.filepath.is_absolute()}")
-            if not self.filepath.is_absolute():
+            initial_filepath = Path(settings_filename)
+            logger.log(f"設定ファイルの初期パス: '{initial_filepath}'", level="DEBUG")
+
+            if not initial_filepath.is_absolute():
                 try:
                     home_dir = Path.home()
                     app_data_dir = home_dir / ".fractalapp"
                     app_data_dir.mkdir(parents=True, exist_ok=True)
-                    print(f"ホームディレクトリ: {home_dir}, アプリデータディレクトリ: {app_data_dir}")
                     self.filepath = app_data_dir / settings_filename
+                    logger.log(f"設定ファイルをユーザーデータディレクトリに解決しました: '{self.filepath}'", level="DEBUG")
                 except Exception as e:
                     self._get_logger().log(f"ホームに設定ディレクトリを作成できませんでした。CWD を使用します。エラー: {e}", level="WARNING")
                     self.filepath = Path.cwd() / settings_filename
+            else:
+                self.filepath = initial_filepath
+                logger.log(f"設定ファイルは絶対パスで指定されました: '{self.filepath}'", level="DEBUG")
 
-            self.settings: dict = {}
+            self.settings: Dict[str, Any] = {}
             self.load_settings() # 通常のインスタンスのみ設定をロード
 
     def load_settings(self):
@@ -61,16 +78,27 @@ class SettingsManager:
         設定ファイルから設定を読み込みます。
         ファイルが存在しない、または読み込みに失敗した場合は、空の設定を使用します。
         """
+        logger = self._get_logger()
         if self.filepath.exists() and self.filepath.is_file():
             try:
                 with open(self.filepath, 'r', encoding='utf-8') as f:
-                    self.settings = json.load(f)
-                self._get_logger().log("設定ファイル読込完了", level="INFO")
-            except (json.JSONDecodeError, IOError, Exception) as e: # より一般的な例外もキャッチします
-                self._get_logger().log(f"設定ファイルの読込失敗: {e}。デフォルト設定を使用します。", level="ERROR")
+                    content = f.read()
+
+                # JSONCコメントを削除 (行コメントのみ対応)
+                content_without_comments = re.sub(r"//.*", "", content)
+                self.settings = json.loads(content_without_comments)
+                logger.log(f"設定ファイル '{self.filepath}' の読み込み完了。", level="INFO")
+            except json.JSONDecodeError as e:
+                logger.log(f"設定ファイル '{self.filepath}' のJSON形式が不正です: {e}。デフォルト設定を使用します。", level="ERROR")
+                self.settings = {}
+            except IOError as e:
+                logger.log(f"設定ファイル '{self.filepath}' の読み込み中にI/Oエラーが発生しました: {e}。デフォルト設定を使用します。", level="ERROR")
+                self.settings = {}
+            except Exception as e: # その他の予期せぬエラー
+                logger.log(f"設定ファイル '{self.filepath}' の読み込み中に予期せぬエラーが発生しました: {e}。デフォルト設定を使用します。", level="ERROR")
                 self.settings = {}
         else:
-            self._get_logger().log("設定ファイルが見つかりません。デフォルト設定を使用します。", level="INFO")
+            logger.log(f"設定ファイル '{self.filepath}' が見つかりません。デフォルト設定を使用します。", level="INFO")
             self.settings = {}
 
     def save_settings(self):
@@ -78,16 +106,17 @@ class SettingsManager:
         現在の設定をファイルに保存します。
         保存先のディレクトリが存在しない場合は作成します。
         """
+        logger = self._get_logger()
         try:
             # 親ディレクトリが存在することを確認します
             self.filepath.parent.mkdir(parents=True, exist_ok=True)
             with open(self.filepath, 'w', encoding='utf-8') as f:
                 json.dump(self.settings, f, indent=4, ensure_ascii=False)
-            self._get_logger().log(f"設定を {self.filepath} に保存しました", level="INFO")
+            logger.log(f"設定を '{self.filepath}' に保存しました。", level="INFO")
         except (IOError, Exception) as e: # より一般的な例外もキャッチします
-            self._get_logger().log(f"設定ファイル '{self.filepath}' の保存に失敗しました: {e}", level="ERROR")
+            logger.log(f"設定ファイル '{self.filepath}' の保存に失敗しました: {e}", level="ERROR")
 
-    def get_setting(self, key_path: str, default_value: any = None) -> any:
+    def get_setting(self, key_path: str, default_value: Any = None) -> Any:
         """
         指定されたキーパスに対応する設定値を取得します。
 
@@ -97,7 +126,7 @@ class SettingsManager:
 
         Args:
             key_path (str): 取得したい設定のキーパス。
-            default_value (any, optional): キーが存在しない場合に返すデフォルト値。Defaults to None.
+            default_value (Any, optional): キーが存在しない場合に返すデフォルト値。デフォルトは None。
         """
         keys = key_path.split('.')
         value_ptr = self.settings
@@ -113,17 +142,16 @@ class SettingsManager:
              return default_value
 
 
-    def set_setting(self, key_path: str, value: any, auto_save: bool = True):
+    def set_setting(self, key_path: str, value: Any, auto_save: bool = True):
         """
         指定されたキーパスに設定値を設定します。
 
         キーパスはドット区切りでネストされたキーを指定します (例: "window.width")。
         途中のキーが存在しない場合は、新しい辞書が作成されます。
 
-        Args:
-            key_path (str): 設定したい値のキーパス。
-            value (any): 設定する値。
-            auto_save (bool, optional): Trueの場合、設定後に自動的に `save_settings` を呼び出します。Defaults to True.
+        :param key_path: 設定したい値のキーパス。
+        :param value: 設定する値。
+        :param auto_save: Trueの場合、設定後に自動的に `save_settings` を呼び出します。デフォルトは True。
         """
         keys = key_path.split('.')
         current_level = self.settings
@@ -137,30 +165,27 @@ class SettingsManager:
         if auto_save:
             self.save_settings()
 
-    # 必要に応じてセクション用の便利なメソッド (この計画ではダイアログでは厳密には使用されません)
-    def get_section(self, section_name: str) -> dict:
+    def get_section(self, section_name: str) -> Dict[str, Any]:
         """
         指定されたセクション名（トップレベルキー）の設定を辞書として取得します。
 
         セクションが存在しない場合は空の辞書を返します。
         返される辞書は元の設定のコピーです。
 
-        Args:
-            section_name (str): 取得したいセクションの名前。
+        :param section_name: 取得したいセクションの名前。
 
         Returns:
             dict: セクションの設定データ、または空の辞書。
         """
         return self.settings.get(section_name, {}).copy() # コピーを返します
 
-    def set_section(self, section_name: str, section_data: dict, auto_save: bool = True):
+    def set_section(self, section_name: str, section_data: Dict[str, Any], auto_save: bool = True):
         """
         指定されたセクション名（トップレベルキー）に新しい設定データを設定します。
 
-        Args:
-            section_name (str): 設定したいセクションの名前。
-            section_data (dict): 設定するデータ。
-            auto_save (bool, optional): Trueの場合、設定後に自動的に `save_settings` を呼び出します。Defaults to True.
+        :param section_name: 設定したいセクションの名前。
+        :param section_data: 設定するデータ。
+        :param auto_save: Trueの場合、設定後に自動的に `save_settings` を呼び出します。デフォルトは True。
         """
         self.settings[section_name] = section_data
         if auto_save:
@@ -169,53 +194,62 @@ class SettingsManager:
     def export_presets_to_file(self, filepath: Path):
         """
         現在のすべてのプリセットを指定されたファイルにJSON形式でエクスポートします。
-        Args:
-            filepath (Path): エクスポート先のファイルパス。
-        Raises:
-            Exception: ファイル操作中にエラーが発生した場合。
+        :param filepath: エクスポート先のファイルパス。
+        :raises Exception: ファイル操作中にエラーが発生した場合。
         """
+        logger = self._get_logger()
         presets_data = self.get_presets()
         try:
             filepath.parent.mkdir(parents=True, exist_ok=True)
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(presets_data, f, indent=4, ensure_ascii=False)
-            self._get_logger().log(f"プリセットを {filepath} にエクスポートしました。", "INFO")
+            logger.log(f"プリセットを '{filepath}' にエクスポートしました。", "INFO")
         except Exception as e:
-            self._get_logger().log(f"プリセットのエクスポート中にエラーが発生しました: {e}", "ERROR")
+            logger.log(f"プリセットのエクスポート中にエラーが発生しました: {e}", level="ERROR")
             raise # コントローラーでキャッチするために再スロー
 
     def import_presets_from_file(self, filepath: Path, overwrite: bool = False) -> list[str]:
         """
         指定されたJSONファイルからプリセットを読み込み、現在の設定にマージします。
-        Args:
-            filepath (Path): インポートするJSONファイルのパス。
-            overwrite (bool): 既存の同名プリセットを上書きするかどうか。
-        Returns:
-            list[str]: インポートされたプリセットの名前のリスト。
-        Raises:
-            Exception: ファイルの読み込み、解析、またはマージ中にエラーが発生した場合。
+        :param filepath: インポートするJSONファイルのパス。
+        :param overwrite: 既存の同名プリセットを上書きするかどうか。
+        :return: インポートされたプリセットの名前のリスト。
+        :raises Exception: ファイルの読み込み、解析、またはマージ中にエラーが発生した場合。
         """
+        logger = self._get_logger()
         if not filepath.exists():
-            self._get_logger().log(f"インポートファイル '{filepath}' が見つかりません。", "WARNING")
+            logger.log(f"インポートファイル '{filepath}' が見つかりません。", level="WARNING")
             return []
 
-        with open(filepath, 'r', encoding='utf-8') as f:
-            imported_data = json.load(f)
-        if not isinstance(imported_data, dict):
-            raise ValueError("インポートファイルの内容が有効なJSONオブジェクトではありません。")
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                imported_data = json.load(f) # type: ignore
+            if not isinstance(imported_data, dict):
+                raise ValueError("インポートファイルの内容が有効なJSONオブジェクトではありません。")
 
-        current_presets = self.get_presets()
-        imported_names = [name for name, config in imported_data.items() if overwrite or name not in current_presets]
-        current_presets.update({name: config for name, config in imported_data.items() if overwrite or name not in current_presets})
-        self.set_setting("presets", current_presets) # 変更を保存
-        self._get_logger().log(f"{len(imported_names)} 個のプリセットをインポートしました。", "INFO")
-        return imported_names
+            current_presets = self.get_presets()
+            imported_names = []
+            for name, config in imported_data.items():
+                if overwrite or name not in current_presets:
+                    current_presets[name] = config
+                    imported_names.append(name)
 
-    def get_presets(self) -> dict:
+            self.set_setting("presets", current_presets) # 変更を保存
+            logger.log(f"{len(imported_names)} 個のプリセットをインポートしました。", level="INFO")
+            return imported_names
+        except (json.JSONDecodeError, IOError, ValueError) as e:
+            logger.log(f"プリセットのインポート中にエラーが発生しました: {e}", level="ERROR")
+            raise # コントローラーでキャッチするために再スロー
+        except Exception as e:
+            logger.log(f"プリセットのインポート中に予期せぬエラーが発生しました: {e}", level="ERROR")
+            raise # コントローラーでキャッチするために再スロー
+
+
+    def get_presets(self) -> Dict[str, Any]:
         """保存されているすべてのプリセットを取得します。"""
         return self.get_setting("presets", {})
 
-    def save_preset(self, name: str, config: dict):
+    def save_preset(self, name: str, config: Dict[str, Any]):
         """指定された名前でプリセットを保存します。"""
         presets = self.get_presets()
         presets[name] = config
@@ -223,18 +257,22 @@ class SettingsManager:
 
     def delete_preset(self, name: str):
         """指定された名前のプリセットを削除します。"""
+        logger = self._get_logger()
         presets = self.get_presets()
         if name in presets:
             del presets[name]
-            self.set_setting("presets", presets)
-            self._get_logger().log(f"プリセット '{name}' を設定から削除しました。", "DEBUG")
+            self.set_setting("presets", presets) # auto_save=True なので自動保存される
+            logger.log(f"プリセット '{name}' を設定から削除しました。", level="DEBUG")
+        else:
+            logger.log(f"プリセット '{name}' が見つかりませんでした。削除はスキップされました。", level="WARNING")
 
 if __name__ == '__main__':
     # __main__ のテストでは、SettingsManager が自身のロガーをインスタンス化できるように、
     # CustomLogger が利用可能であると仮定します。
-    # これは、CustomLogger が SettingsManager を使用する本番シナリオとは逆です。
     # このテストブロックは、SettingsManager のコア機能のテストに焦点を当てています。
-    _main_logger = SettingsManager()._get_logger() # テスト用のロガーを取得
+    from logger.custom_logger import CustomLogger
+    _main_logger = CustomLogger()
+    _main_logger.set_level("DEBUG") # テスト中は詳細なログを出力
 
     _main_logger.log("SettingsManager のテスト中...", level="INFO")
     # 実際の設定を上書きしないように、テスト用に一時的なファイル名を使用します
@@ -276,26 +314,64 @@ if __name__ == '__main__':
     manager_reloaded_2 = SettingsManager(settings_filename=test_settings_file)
     assert manager_reloaded_2.get_section("section1") == {"a":1, "b":2}
 
+    # テスト 7: 新しい構造のキーパスのテスト
+    _main_logger.log("新しい構造のキーパスのテスト...", level="INFO")
+    manager.set_setting("application.logging.level", "WARNING")
+    assert manager.get_setting("application.logging.level") == "WARNING"
+    manager.set_setting("ui.window.width", 1920)
+    assert manager.get_setting("ui.window.width") == 1920
+    manager.set_setting("workspace.common_parameters.max_iterations", 200)
+    assert manager.get_setting("workspace.common_parameters.max_iterations") == 200
+    manager.set_setting("application.save_workspace_on_exit", True)
+    assert manager.get_setting("application.save_workspace_on_exit") == True
+
+    # テスト 8: プリセットの保存と取得
+    _main_logger.log("プリセットのテスト...", level="INFO")
+    test_preset_config = {
+        "common_parameters": {"center_real": 0.1, "max_iterations": 1000},
+        "fractal_plugin_name": "Julia"
+    }
+    manager.save_preset("MyTestPreset", test_preset_config)
+    retrieved_preset = manager.get_setting("presets.MyTestPreset")
+    _main_logger.log(f"保存されたプリセット 'MyTestPreset': {retrieved_preset}", level="DEBUG")
+    assert retrieved_preset == test_preset_config
+
+    # テスト 9: プリセットの削除
+    manager.delete_preset("MyTestPreset")
+    assert manager.get_setting("presets.MyTestPreset") is None
+    _main_logger.log("プリセット 'MyTestPreset' を削除しました。", level="DEBUG")
+
+    # テスト 10: プリセットのエクスポートとインポート
+    _main_logger.log("プリセットのエクスポート/インポートテスト...", level="INFO")
+    manager.save_preset("ExportTest1", {"val": 1})
+    manager.save_preset("ExportTest2", {"val": 2})
+    export_file = Path("exported_presets.json")
+    manager.export_presets_to_file(export_file)
+    _main_logger.log(f"プリセットを '{export_file}' にエクスポートしました。", level="INFO")
+
+    # 新しいマネージャーでインポートをシミュレート
+    manager_import = SettingsManager(settings_filename=test_settings_file)
+    imported_names = manager_import.import_presets_from_file(export_file)
+    _main_logger.log(f"インポートされたプリセット: {imported_names}", level="INFO")
+    assert "ExportTest1" in manager_import.get_presets()
+    assert "ExportTest2" in manager_import.get_presets()
+    assert len(imported_names) == 2
+
+    # 上書きテスト
+    manager_import.save_preset("ExportTest1", {"val": 100}) # 既存の値を変更
+    imported_names_overwrite = manager_import.import_presets_from_file(export_file, overwrite=True)
+    assert manager_import.get_setting("presets.ExportTest1.val") == 1 # 上書きされたことを確認
+    _main_logger.log(f"上書きインポートされたプリセット: {imported_names_overwrite}", level="INFO")
 
     # テスト設定ファイルをクリーンアップ
-    # テスト設定ファイルをクリーンアップします
     try:
         if Path(test_settings_file).exists(): Path(test_settings_file).unlink()
-        # .fractalapp ディレクトリを使用している場合は、次回のクリーンなテスト実行のためにそれもクリーンアップします
         app_data_dir_for_test = Path.home() / ".fractalapp"
-        # SettingsManagerの初期化ロジックは、settings_filenameが単純な名前の場合、
-        # このテストファイル (test_app_settings.json) を app_data_dir に作成する可能性があるため、
-        # その場所で確認して削除します。
         test_file_in_app_data = app_data_dir_for_test / test_settings_file
         if test_file_in_app_data.exists(): test_file_in_app_data.unlink()
+        if export_file.exists(): export_file.unlink()
 
-        # ディレクトリが空かどうかを確認し、空であれば削除します
-        # 他のファイルが存在する可能性がある実際のシナリオでは注意してください。
-        # テストの場合、作成し、テストファイルのみが含まれるべきであれば問題ありません。
-        # if app_data_dir_for_test.exists() and not any(app_data_dir_for_test.iterdir()):
-        #     app_data_dir_for_test.rmdir()
-
-        _main_logger.log(f"テスト設定ファイル '{test_settings_file}' (および潜在的な app_data コピー) をクリーンアップしました。", level="INFO")
+        _main_logger.log(f"テスト設定ファイル '{test_settings_file}' および '{export_file}' (および潜在的な app_data コピー) をクリーンアップしました。", level="INFO")
     except Exception as e:
         _main_logger.log(f"テスト設定ファイルのクリーンアップ中にエラーが発生しました: {e}", level="ERROR")
 

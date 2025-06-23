@@ -3,7 +3,6 @@ import inspect
 from pathlib import Path
 import sys # exc_infoフォールバック用に追加
 import traceback # exc_info用に追加
-# SettingsManagerのインポートは _initialize_singleton_attrs メソッド内で行い、循環インポートを避けます。
 
 class CustomLogger:
     """
@@ -40,50 +39,60 @@ class CustomLogger:
         """シングルトンインスタンスを作成または返します。初回作成時に初期化を行います。"""
         if not cls._instance:
             cls._initializing = True # 初期化開始のフラグを設定
+
             instance = super(CustomLogger, cls).__new__(cls)
 
             # _start_time は最初のインスタンス作成時に一度だけ設定
             if cls._start_time is None:
                 cls._start_time = time.time()
 
-            # _initialize_singleton_attrs はインスタンスメソッドとして定義されているが、
-            # クラス属性 (_current_level_int, _is_enabled, _log_file_path) を設定する。
-            # これは、設定をシングルトン全体で共有するため。
-            instance._initialize_singleton_attrs()
+            # SettingsManagerに自身を登録する
+            # これにより、SettingsManagerがロガーを必要としたときに、
+            # 既に初期化中のCustomLoggerインスタンスを利用できるようになる。
+            # 循環インポートを避けるため、ここでインポートする
+            from utils.settings_manager import SettingsManager
+            SettingsManager._logger_instance = instance # 自身をSettingsManagerに登録
+
+            # クラス属性として基本的なデフォルト値を設定。
+            # これらは設定ファイルから読み込めない場合の最終フォールバック。
+            # SettingsManagerの初期化中にロギングが発生しても、基本的なロギング状態が保証される。
+            cls._current_level_int = cls.LOG_LEVELS.get("INFO", 20)
+            cls._is_enabled = True
+            cls._log_file_path = Path("/tmp/app.log") # デフォルトのログファイルパス
+
+            instance._configure_from_settings() # 設定ファイルからの読み込みと適用
 
             cls._instance = instance
             cls._initializing = False # 初期化終了のフラグを解除
         return cls._instance
 
-    def _initialize_singleton_attrs(self):
+    def __init__(self):
+        # シングルトンなので、__new__ で全ての初期化を完結させるため、__init__ では何もしない。
+        pass
+
+    def _configure_from_settings(self):
         """
-        シングルトンの状態に関連する属性を初期化します。
-        SettingsManagerから設定を読み込み、適用します。
+        SettingsManagerから設定を読み込み、シングルトンのクラス属性に適用します。
         このメソッドは __new__ から一度だけ、最初のインスタンス作成時に呼び出されます。
         """
-        # SettingsManager をここでインポートして、モジュールレベルでの循環インポートのリスクを軽減します。
+        # SettingsManager は既に __new__ でインポートされ、CustomLogger が登録されているため、
+        # ここで再度インポートしても循環は発生しない。
         from utils.settings_manager import SettingsManager
-
-        # クラス属性として基本的なデフォルト値を設定。これらは設定ファイルから読み込めない場合の最終フォールバック。
-        # これにより、SettingsManagerの初期化中にロギングが発生しても、基本的なロギング状態が保証されます。
-        CustomLogger._current_level_int = CustomLogger.LOG_LEVELS.get("INFO", 20)
-        CustomLogger._is_enabled = True
-        CustomLogger._log_file_path = Path("/tmp/app.log") # デフォルトのログファイルパス
-
         try:
             # SettingsManager のインスタンス化時にロギングが発生する可能性があるため、
             # _initializing フラグが CustomLogger.log() でチェックされることが重要です。
             settings_manager = SettingsManager(settings_filename="settings.jsonc", _is_for_logger_init=True) # SettingsManager は自身のロガーを使用する可能性があります
 
             # SettingsManagerから "logging" 設定を取得するためのデフォルト値を定義
-            # このデフォルト値は、settings_manager.get_setting の第2引数として使用される
+            # このデフォルト値は、settings_manager.get_setting の第2引数として使用される。
+            # 新しい設定構造 "application.logging" に対応。
             default_config_for_sm = {
                 "level": "INFO",
                 "enabled": True,
                 "file": str(CustomLogger._log_file_path) # 初期デフォルトのファイルパス
             }
             # settings_manager.get_setting を使用して "logging" セクションを取得
-            logging_config = settings_manager.get_setting("logging", default_config_for_sm)
+            logging_config = settings_manager.get_setting("application.logging", default_config_for_sm)
 
             # logging_config (辞書) から各値を取得。存在しない場合はフォールバック値を使用。
             level_to_set_str = logging_config.get("level", "INFO").upper()
@@ -105,19 +114,21 @@ class CustomLogger:
             if log_file_from_settings:
                 CustomLogger._log_file_path = Path(log_file_from_settings)
 
-            # ログファイルパスがNoneでなく、親ディレクトリが存在する場合に作成
+            # ログファイルパスがNoneでなく、親ディレクトリが存在しない場合に作成
             if CustomLogger._log_file_path and CustomLogger._log_file_path.parent:
                  CustomLogger._log_file_path.parent.mkdir(parents=True, exist_ok=True)
 
+            # ログが有効であれば、設定適用完了をログに出力
+            if CustomLogger._is_enabled:
+                self.log(f"CustomLogger: 設定ファイルからロガー設定を適用しました。レベル: {level_to_set_str}, 有効: {enabled_setting}, ファイル: {CustomLogger._log_file_path}", level="INFO")
+
         except Exception as e:
-            # 初期化中にエラーが発生した場合のフォールバック (標準エラーに出力検討)
-            # この段階ではカスタムロガーが完全には利用できない可能性があるため、printを使用します。
+            # 初期化中にエラーが発生した場合のフォールバック (標準エラーに出力)
+            # SettingsManager._logger_instance は既に設定されているため、log() メソッドを呼び出すことも可能。
+            # ここでは、エラー発生時のロギングがさらにエラーを招かないよう、printを維持する。
             print(f"[CRITICAL] CustomLogger: 設定からのロガー初期化に失敗しました: {e}. デフォルト設定 (INFO, Enabled, /tmp/app.log) を使用します。", flush=True)
-            CustomLogger._current_level_int = CustomLogger.LOG_LEVELS.get("INFO", 20)
-            CustomLogger._is_enabled = True
-            # _log_file_path は try 前にデフォルトが設定されているが、念のため再設定とディレクトリ作成
-            if CustomLogger._log_file_path is None: # 通常は発生しない
-                CustomLogger._log_file_path = Path("/tmp/app.log")
+            # エラーが発生しても、デフォルト値は __new__ で既に設定されているため、ここでは再設定不要。
+            # ただし、ログファイルディレクトリの作成は再度試みる。
             if CustomLogger._log_file_path and CustomLogger._log_file_path.parent:
                  CustomLogger._log_file_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -272,7 +283,7 @@ if __name__ == '__main__':
     # テスト用の設定ファイルを作成
     settings_content = {
         "logging": {
-            "level": "DEBUG",
+            "level": "DEBUG", # 古い構造
             "enabled": True
         },
         "other_setting": "value"
@@ -283,9 +294,18 @@ if __name__ == '__main__':
     settings_dir.mkdir(parents=True, exist_ok=True)
     settings_file_path = settings_dir / "settings.jsonc"
 
+    # 新しい設定構造に合わせてテスト設定を更新
+    settings_content_new_structure = {
+        "application": {
+            "logging": {
+                "level": "DEBUG",
+                "enabled": True
+            }
+        }
+    }
     with open(settings_file_path, 'w', encoding='utf-8') as f:
-        import json
-        json.dump(settings_content, f, indent=4)
+        import json # jsonモジュールが既にインポートされているが、念のため
+        json.dump(settings_content_new_structure, f, indent=4)
     print(f"テスト用設定ファイルを '{settings_file_path}' に作成しました。", flush=True)
 
     # 3. CustomLoggerをリセットして再インスタンス化し、新しい設定を読み込ませる
@@ -320,9 +340,11 @@ if __name__ == '__main__':
     # 5. 無効な設定値のテスト
     print("\nステージ5: 無効なログ設定値のテスト", flush=True)
     settings_content_invalid = {
-        "logging": {
-            "level": "INVALID_LEVEL_STRING", # 無効なレベル文字列
-            "enabled": "not_a_boolean"      # 無効なenabled値
+        "application": { # 新しい構造に対応
+            "logging": {
+                "level": "INVALID_LEVEL_STRING", # 無効なレベル文字列
+                "enabled": "not_a_boolean"      # 無効なenabled値
+            }
         }
     }
     with open(settings_file_path, 'w', encoding='utf-8') as f:
