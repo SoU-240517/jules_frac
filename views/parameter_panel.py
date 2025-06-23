@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
-    QScrollArea, QWidget, QVBoxLayout, QGroupBox, QFormLayout,
+    QScrollArea, QWidget, QVBoxLayout, QGroupBox, QFormLayout, QHBoxLayout,
     QLabel, QSpinBox, QDoubleSpinBox, QComboBox, QPushButton, QTabWidget,
-    QListWidget, QListWidgetItem, QAbstractSpinBox
+    QListWidget, QListWidgetItem, QAbstractSpinBox, QSlider
 )
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize, QTimer, QEvent # QEvent を追加
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QLinearGradient, QIcon
@@ -111,37 +111,53 @@ class ParameterPanel(QScrollArea):
         # fractal_layout.addWidget(self.fractal_combo); fractal_group.setLayout(fractal_layout)
         fractal_group = QGroupBox("フラクタル選択")
         fractal_form_layout = QFormLayout() # QVBoxLayout から QFormLayout に変更
+        fractal_form_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        fractal_form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.fractal_combo = QComboBox()
         fractal_form_layout.addRow(QLabel("タイプ:"), self.fractal_combo) # ラベルとウィジェットのペアとして追加
         fractal_group.setLayout(fractal_form_layout)
         self.main_layout.addWidget(fractal_group)
         self.fractal_combo.currentTextChanged.connect(self._on_fractal_type_changed)
+
         # 共通パラメータ
         common_params_group = QGroupBox("共通描画設定")
         self.common_params_layout = QFormLayout()
-        self.iter_spinbox = QSpinBox(); self.iter_spinbox.setRange(10,100000)
+        self.common_params_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        self.common_params_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        self.iter_spinbox = QSpinBox()
+        self.iter_spinbox.setRange(10, 100000)
         self.iter_spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.iter_spinbox.installEventFilter(self)
-        self.common_params_layout.addRow(QLabel("最大反復回数:"), self.iter_spinbox)
+
+        self.iter_slider = QSlider(Qt.Orientation.Horizontal)
+        self.iter_slider.setRange(10, 100000)
+
+        # スピンボックスとスライダーを横に並べるためのレイアウト
+        iter_widget_layout = QHBoxLayout()
+        iter_widget_layout.setContentsMargins(0, 0, 0, 0)
+        iter_widget_layout.addWidget(self.iter_spinbox, 1) # スピンボックスが幅の約1/4を占める
+        iter_widget_layout.addWidget(self.iter_slider, 3)  # スライダーが幅の約3/4を占める
+        iter_widget = QWidget()
+        iter_widget.setLayout(iter_widget_layout)
+
+        self.common_params_layout.addRow(QLabel("最大反復回数:"), iter_widget)
         common_params_group.setLayout(self.common_params_layout)
         self.main_layout.addWidget(common_params_group)
 
         # フラクタルプラグイン固有設定
         self.plugin_specific_group = QGroupBox("フラクタル固有設定")
         self.plugin_specific_layout = QFormLayout()
+        self.plugin_specific_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        self.plugin_specific_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.plugin_specific_group.setLayout(self.plugin_specific_layout)
         self.main_layout.addWidget(self.plugin_specific_group)
         self.plugin_specific_group.setVisible(False)
 
-        # カラーリング設定グループ
-        coloring_group = QGroupBox("カラーリング設定")
-        coloring_layout = QVBoxLayout()
-        coloring_group.setLayout(coloring_layout)
-        self.main_layout.addWidget(coloring_group)
-
         # カラーリング設定をタブで分ける
+        # QGroupBoxを削除し、QTabWidgetを直接メインレイアウトに追加してUIの階層を浅くし、すっきりと見せます。
         self.coloring_tabs = QTabWidget()
-        coloring_layout.addWidget(self.coloring_tabs)
+        self.main_layout.addWidget(self.coloring_tabs)
 
         # --- 発散部タブ ---
         divergent_tab = QWidget()
@@ -150,6 +166,8 @@ class ParameterPanel(QScrollArea):
 
         # アルゴリズム選択
         divergent_algo_layout = QFormLayout()
+        divergent_algo_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        divergent_algo_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.coloring_algorithm_combo_divergent = QComboBox()
         divergent_algo_layout.addRow(QLabel("アルゴリズム:"), self.coloring_algorithm_combo_divergent)
         divergent_layout.addLayout(divergent_algo_layout)
@@ -160,12 +178,16 @@ class ParameterPanel(QScrollArea):
         # アルゴリズム固有設定
         self.coloring_plugin_specific_group_divergent = QGroupBox("アルゴリズム固有設定")
         self.coloring_plugin_specific_layout_divergent = QFormLayout()
+        self.coloring_plugin_specific_layout_divergent.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        self.coloring_plugin_specific_layout_divergent.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.coloring_plugin_specific_group_divergent.setLayout(self.coloring_plugin_specific_layout_divergent)
         divergent_layout.addWidget(self.coloring_plugin_specific_group_divergent)
         self.coloring_plugin_specific_group_divergent.setVisible(False)
 
         # カラーパック選択
         divergent_pack_layout = QFormLayout()
+        divergent_pack_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        divergent_pack_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.color_pack_combo_divergent = QComboBox()
         divergent_pack_layout.addRow(QLabel("カラーパック:"), self.color_pack_combo_divergent)
         divergent_layout.addLayout(divergent_pack_layout)
@@ -175,6 +197,8 @@ class ParameterPanel(QScrollArea):
 
         # カラーマップ選択
         divergent_map_layout = QFormLayout()
+        divergent_map_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        divergent_map_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.color_map_listwidget_divergent = QListWidget()
         self.color_map_listwidget_divergent.setIconSize(QSize(96, 18))
         self.color_map_listwidget_divergent.setSpacing(1)
@@ -192,6 +216,8 @@ class ParameterPanel(QScrollArea):
 
         # アルゴリズム選択
         non_divergent_algo_layout = QFormLayout()
+        non_divergent_algo_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        non_divergent_algo_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.coloring_algorithm_combo_non_divergent = QComboBox()
         non_divergent_algo_layout.addRow(QLabel("アルゴリズム:"), self.coloring_algorithm_combo_non_divergent)
         non_divergent_layout.addLayout(non_divergent_algo_layout)
@@ -202,12 +228,16 @@ class ParameterPanel(QScrollArea):
         # アルゴリズム固有設定
         self.coloring_plugin_specific_group_non_divergent = QGroupBox("アルゴリズム固有設定")
         self.coloring_plugin_specific_layout_non_divergent = QFormLayout()
+        self.coloring_plugin_specific_layout_non_divergent.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        self.coloring_plugin_specific_layout_non_divergent.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.coloring_plugin_specific_group_non_divergent.setLayout(self.coloring_plugin_specific_layout_non_divergent)
         non_divergent_layout.addWidget(self.coloring_plugin_specific_group_non_divergent)
         self.coloring_plugin_specific_group_non_divergent.setVisible(False)
 
         # カラーパック選択
         non_divergent_pack_layout = QFormLayout()
+        non_divergent_pack_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        non_divergent_pack_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.color_pack_combo_non_divergent = QComboBox()
         non_divergent_pack_layout.addRow(QLabel("カラーパック:"), self.color_pack_combo_non_divergent)
         non_divergent_layout.addLayout(non_divergent_pack_layout)
@@ -217,6 +247,8 @@ class ParameterPanel(QScrollArea):
 
         # カラーマップ選択
         non_divergent_map_layout = QFormLayout()
+        non_divergent_map_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        non_divergent_map_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         self.color_map_listwidget_non_divergent = QListWidget()
         self.color_map_listwidget_non_divergent.setIconSize(QSize(96, 18))
         self.color_map_listwidget_non_divergent.setSpacing(1)
@@ -231,6 +263,11 @@ class ParameterPanel(QScrollArea):
 
         # 再描画をトリガーするシグナル接続
         self.iter_spinbox.editingFinished.connect(self._on_value_changed_by_ui)
+        self.iter_slider.sliderReleased.connect(self._on_value_changed_by_ui) # スライダー解放時に再描画
+
+        # スピンボックスとスライダーの値を同期させる
+        self.iter_spinbox.valueChanged.connect(self.iter_slider.setValue)
+        self.iter_slider.valueChanged.connect(self.iter_spinbox.setValue)
 
     def _create_colormap_thumbnail(self, colors: list[tuple[int,int,int]], thumb_width: int = 96, thumb_height: int = 18) -> QPixmap:
         """
