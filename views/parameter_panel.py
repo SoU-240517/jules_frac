@@ -453,15 +453,16 @@ class ParameterPanel(QScrollArea):
                 pass
 
             # 値が変更された場合のみ再描画
-            if original_value is not None and current_value != original_value:
-                logger.log(f"ParameterPanel._on_plugin_parameter_editing_finished: Value changed for {param_name} from {original_value} to {current_value}. Triggering render.", level="DEBUG")
-                self.fractal_controller.trigger_render()
-            elif original_value is None:
-                logger.log(f"ParameterPanel._on_plugin_parameter_editing_finished: No original value found for {param_name}. Triggering render as a fallback.", level="DEBUG")
-                # フォールバックとして、元の値がない場合は再描画（初回フォーカス時など）
-                self.fractal_controller.trigger_render()
+            if original_value is not None:
+                if current_value != original_value:
+                    logger.log(f"ParameterPanel._on_plugin_parameter_editing_finished: Value changed for {param_name} from {original_value} to {current_value}. Triggering render.", level="DEBUG")
+                    self.fractal_controller.trigger_render()
+                else:
+                    logger.log(f"ParameterPanel._on_plugin_parameter_editing_finished: Value not changed for {param_name}. Current: {current_value}. Original: {original_value}. Skipping render.", level="DEBUG")
             else:
-                logger.log(f"ParameterPanel._on_plugin_parameter_editing_finished: Value not changed for {param_name}. Current: {current_value}. Original: {original_value}. Skipping render.", level="DEBUG")
+                # original_value がない場合は、FocusIn が発生しなかったか、予期せぬ状態。
+                # 不要な再描画を防ぐため、警告を出して何もしない。
+                logger.log(f"ParameterPanel._on_plugin_parameter_editing_finished: No original value found for {param_name}. Assuming no change and skipping render.", level="WARNING")
         else:
             # ウィジェットが見つからない場合、従来通り再描画 (安全策)
             logger.log(f"ParameterPanel._on_plugin_parameter_editing_finished: Widget for {param_name} not found. Triggering render as a fallback.", level="WARNING")
@@ -733,14 +734,16 @@ class ParameterPanel(QScrollArea):
             original_value = self._focused_value_store.pop(focus_key, None)
             current_value = widget.value()
 
-            if original_value is not None and current_value != original_value:
-                logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: Value changed for {param_name} ({target_type}) from {original_value} to {current_value}. Setting param and recoloring.", level="DEBUG")
-                self.fractal_controller.set_coloring_plugin_parameter_and_recolor(param_name, current_value, target_type=target_type)
-            elif original_value is None:
-                logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: No original value for {param_name} ({target_type}). Setting param and recoloring as fallback.", level="DEBUG")
-                self.fractal_controller.set_coloring_plugin_parameter_and_recolor(param_name, current_value, target_type=target_type)
+            if original_value is not None:
+                if current_value != original_value:
+                    logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: Value changed for {param_name} ({target_type}) from {original_value} to {current_value}. Setting param and recoloring.", level="DEBUG")
+                    self.fractal_controller.set_coloring_plugin_parameter_and_recolor(param_name, current_value, target_type=target_type)
+                else:
+                    logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: Value not changed for {param_name} ({target_type}). Current: {current_value}. Original: {original_value}. Skipping recolor.", level="DEBUG")
             else:
-                logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: Value not changed for {param_name} ({target_type}). Current: {current_value}. Original: {original_value}. Skipping recolor.", level="DEBUG")
+                # original_value がない場合は、FocusIn が発生しなかったか、予期せぬ状態。
+                # 不要な再描画を防ぐため、警告を出して何もしない。
+                logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: No original value for {param_name} ({target_type}). Assuming no change and skipping recolor.", level="WARNING")
         elif widget_tuple:
             widget = widget_tuple[0]
             logger.log(f"ParameterPanel._on_coloring_plugin_parameter_editing_finished: Widget {param_name} ({target_type}) is not a SpinBox/DoubleSpinBox. Type: {type(widget)}. Skipping.", level="DEBUG")
@@ -942,15 +945,21 @@ class ParameterPanel(QScrollArea):
 
             if original_value is not None and current_value == original_value:
                 trigger_render_flag = False
-                logger.log(f"ParameterPanel._on_value_changed_by_ui (SpinBox): Value not changed for {widget_object_name}. Current: {current_value}. Original: {original_value}. Skipping render.", level="DEBUG")
+                logger.log(f"Value not changed for {widget_object_name}. Current: {current_value}. Original: {original_value}. Skipping render.", level="DEBUG")
             elif original_value is None:
-                logger.log(f"ParameterPanel._on_value_changed_by_ui (SpinBox): No original value for {widget_object_name}. Rendering.", level="DEBUG")
+                logger.log(f"No original value for {widget_object_name}. Rendering.", level="DEBUG")
             else: # Value changed
-                logger.log(f"ParameterPanel._on_value_changed_by_ui (SpinBox): Value changed for {widget_object_name} from {original_value} to {current_value}. Rendering.", level="DEBUG")
+                logger.log(f"Value changed for {widget_object_name} from {original_value} to {current_value}. Rendering.", level="DEBUG")
+
+        elif isinstance(sender_widget, QSlider):
+            # スライダーが解放されたときは、値が変更されたとみなし、再描画とシグナル発行を行う
+            param_changed_for_signal = True
+            trigger_render_flag = True
+            logger.log(f"Slider released ({widget_object_name}). Assuming value changed and triggering render.", level="DEBUG")
 
         else:
             # 知らないタイプのウィジェットからの場合 (例えばボタンなど、通常ここには来ないはずだが念のため)
-            logger.log(f"ParameterPanel._on_value_changed_by_ui: Sender is an unexpected widget type: {widget_object_name}. Assuming render is needed.", level="WARNING")
+            logger.log(f"Sender is an unexpected widget type: {widget_object_name}. Assuming render is needed.", level="WARNING")
             param_changed_for_signal = True # 不明な場合は通知しておく
 
         if param_changed_for_signal:
@@ -961,12 +970,12 @@ class ParameterPanel(QScrollArea):
 
         if trigger_render_flag:
             if self.fractal_controller:
-                logger.log(f"ParameterPanel._on_value_changed_by_ui: Calling fractal_controller.trigger_render() for {widget_object_name}", level="DEBUG")
+                logger.log(f"Calling fractal_controller.trigger_render() for {widget_object_name}", level="DEBUG")
                 self.fractal_controller.trigger_render()
             else:
-                logger.log("ParameterPanel._on_value_changed_by_ui: fractal_controller is None, cannot trigger render.", level="WARNING")
+                logger.log("fractal_controller is None, cannot trigger render.", level="WARNING")
         else:
-            logger.log(f"ParameterPanel._on_value_changed_by_ui: Render skipped for {widget_object_name} as value did not change.", level="DEBUG")
+            logger.log(f"Render skipped for {widget_object_name} as value did not change.", level="DEBUG")
 
     def load_initial_parameters(self):
         """
