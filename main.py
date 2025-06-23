@@ -3,10 +3,6 @@ import sys
 import numba
 import shutil
 
-# Numbaのキャッシュ機能をグローバルに有効化する
-# この設定は、個々の @jit(cache=True) よりも優先されることを期待
-numba.config.CACHE = True
-
 # プロジェクトのルートディレクトリ（'src'の親）をsys.pathに追加
 # これにより、'jules_frac' ディレクトリからの相対インポートや、そのサブディレクトリからのインポートが可能になる
 _project_root = Path(__file__).resolve().parent # このスクリプトがあるディレクトリをプロジェクトルートとする
@@ -24,15 +20,19 @@ from logger.custom_logger import CustomLogger
 
 # --- 定数定義 ---
 SETTINGS_FILE_NAME = "settings.jsonc"
-STYLESHEET_PATH = "resources/style.qss" # スタイルシートのパス
+DEFAULT_STYLESHEET_PATH = "resources/style.qss" # デフォルトのスタイルシートパス
 
 logger = CustomLogger()
 logger.set_project_root(_project_root) # プロジェクトルートを設定
 
-def clear_numba_cache_on_exit():
+def clear_numba_cache_on_exit(settings_manager: SettingsManager):
     """Numbaのキャッシュディレクトリを安全に削除する。"""
-    # この機能は現在無効化されています。キャッシュをクリアしたい場合は、手動で__pycache__フォルダを削除するか、この関数のコメントアウトを解除してください。
-    return
+    numba_config = settings_manager.get_setting("app_settings.numba_settings", {})
+    clear_cache = numba_config.get("clear_cache_on_exit", False)
+
+    if not clear_cache:
+        return
+
     logger.log("Numbaキャッシュのクリアを試みます...", level="INFO")
     try:
         numba_cache_dir_path_str = numba.config.CACHE_DIR
@@ -74,7 +74,8 @@ def apply_stylesheet(app, path):
 
 def setup_logging(settings_manager, logger_instance):
     """設定ファイルからロギング設定を読み込み、ロガーに適用する。"""
-    log_config = settings_manager.get_setting("logging", {"level": "INFO", "enabled": True})
+    # app_settingsからロギング設定を取得
+    log_config = settings_manager.get_setting("app_settings.logging", {"level": "INFO", "enabled": True})
     log_level = log_config.get("level", "INFO")
     log_enabled = log_config.get("enabled", True)
 
@@ -91,8 +92,14 @@ def main():
     settings_manager = SettingsManager(settings_filename=str(settings_file_path))
     setup_logging(settings_manager, logger)
 
+    # --- Numbaキャッシュ設定の適用 ---
+    numba_config = settings_manager.get_setting("app_settings.numba_settings", {"cache_enabled": True})
+    numba.config.CACHE = numba_config.get("cache_enabled", True)
+    logger.log(f"Numbaキャッシュ設定適用 [有効: {numba.config.CACHE}]", level="DEBUG")
+
     # --- スタイルシートの適用 ---
-    stylesheet_file_path = _project_root / STYLESHEET_PATH
+    app_config = settings_manager.get_setting("app_settings", {})
+    stylesheet_file_path = _project_root / app_config.get("stylesheet_path", DEFAULT_STYLESHEET_PATH)
     apply_stylesheet(app, stylesheet_file_path)
 
     # --- MVCコンポーネントの作成 ---
@@ -111,7 +118,8 @@ def main():
 
     # --- 終了時処理の接続 ---
     def save_engine_settings_on_exit():
-        should_save = settings_manager.get_setting("save_engine_settings", True)
+        app_config = settings_manager.get_setting("app_settings", {})
+        should_save = app_config.get("save_engine_settings", True)
         if should_save:
             logger.log("アプリケーション終了前にエンジン設定を保存します...", level="INFO")
             engine_config = fractal_controller.get_full_configuration()
@@ -122,7 +130,7 @@ def main():
             logger.log("エンジン設定の保存はスキップされました (save_engine_settings is false)。", level="INFO")
 
     app.aboutToQuit.connect(save_engine_settings_on_exit)
-    # app.aboutToQuit.connect(clear_numba_cache_on_exit) # 必要に応じて有効化
+    app.aboutToQuit.connect(lambda: clear_numba_cache_on_exit(settings_manager))
 
     # --- アプリケーションの実行 ---
     main_window.show()
