@@ -94,8 +94,8 @@ class JuliaPlugin(FractalPlugin):
                 'type': 'float',
                 'default': -0.745,
                 'range': (-2.0, 2.0),
-                'step': 1e-6,  # ステップサイズをより細かく
-                'decimals': 7, # 表示する小数点以下の桁数を指定
+                'step': 1e-9,  # ステップサイズをより細かく
+                'decimals': 10, # 表示する小数点以下の桁数を指定
                 'tooltip': 'Julia定数Cの実部',
                 'hide_spin_buttons': True
             },
@@ -105,8 +105,8 @@ class JuliaPlugin(FractalPlugin):
                 'type': 'float',
                 'default': 0.113,
                 'range': (-2.0, 2.0),
-                'step': 1e-6,  # ステップサイズをより細かく
-                'decimals': 7, # 表示する小数点以下の桁数を指定
+                'step': 1e-9,  # ステップサイズをより細かく
+                'decimals': 10, # 表示する小数点以下の桁数を指定
                 'tooltip': 'Julia定数Cの虚部',
                 'hide_spin_buttons': True
             }
