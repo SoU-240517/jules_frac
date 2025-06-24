@@ -1,10 +1,10 @@
 {
     "common_parameters": {
-        "center_real": 0.2819604965883569,
-        "center_imag": 0.2832522294932491,
-        "width": 0.0014174538266596508,
-        "height": 0.0010819703902268851,
-        "max_iterations": 30000,
+        "center_real": -0.5,
+        "center_imag": 0.0,
+        "width": 3.0,
+        "height": 2.2899590163934427,
+        "max_iterations": 100,
         "escape_radius": 2.0
     },
     "fractal_plugin_name": "Mandelbrot",

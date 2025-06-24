@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QMenuBar, QStatusBar, QSplitter, QLabel, QWidget, QApplication, QVBoxLayout, QProgressDialog, QMessageBox
 )
 from PyQt6.QtGui import QAction
-from PyQt6.QtCore import Qt, pyqtSlot, QTimer
+from PyQt6.QtCore import Qt, pyqtSlot, QTimer, QEvent
 from .render_area import RenderArea
 from .parameter_panel import ParameterPanel
 from .high_res_dialog import HighResOutputDialog
@@ -50,17 +50,23 @@ class MainWindow(QMainWindow):
         self._initial_render_done = False
         self._initial_render_attempts = 0
 
+        self.menuBar().installEventFilter(self)
+
     def _create_actions(self):
         """
         メニューバーやツールバーで使用する QAction インスタンスを作成します。
         """
         self.export_action = QAction("高解像度出力...", self)
         self.export_action.setShortcut("Ctrl+E")
+        self.export_action.setStatusTip("現在の画像を高解像度でエクスポートします")
+        self.export_action.setToolTip("現在の画像を高解像度でエクスポートします")
         # self.export_action.triggered.connect(self._open_high_res_dialog) # 接続は _connect_controller_signals またはメニュー内で直接行うように移動
 
         # 終了アクションの例 (拡張可能)
         self.exit_action = QAction("終了", self)
         self.exit_action.setShortcut("Ctrl+Q")
+        self.exit_action.setStatusTip("アプリケーションを終了します")
+        self.exit_action.setToolTip("アプリケーションを終了します")
         self.exit_action.triggered.connect(self.close)
 
 
@@ -75,11 +81,18 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
         file_menu.addAction(self.exit_action)
 
+        # hoveredシグナルで説明を明示的に表示
+        self.export_action.hovered.connect(lambda: self.statusBar().showMessage(self.export_action.statusTip()))
+        self.exit_action.hovered.connect(lambda: self.statusBar().showMessage(self.exit_action.statusTip()))
+
         # ヘルプメニュー (プレースホルダー)
         help_menu = menu_bar.addMenu("&ヘルプ")
         about_action = QAction("バージョン情報", self)
+        about_action.setStatusTip("バージョン情報を表示します")
+        about_action.setToolTip("バージョン情報を表示します")
         # about_action.triggered.connect(self._show_about_dialog) # バージョン情報ダイアログのプレースホルダー
         help_menu.addAction(about_action)
+        about_action.hovered.connect(lambda: self.statusBar().showMessage(about_action.statusTip()))
 
 
     def _connect_controller_signals(self):
@@ -382,6 +395,19 @@ class MainWindow(QMainWindow):
             logger.log(f"RenderArea のサイズがまだ有効ではありません ({render_width}x{render_height})。再試行します...", level="WARNING")
             QTimer.singleShot(200, self._perform_initial_render)
 
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.StatusTip and hasattr(event, 'tip') and event.tip() == "":
+            # 空文字での上書きを抑制
+            return True
+        return super().eventFilter(obj, event)
+
+    def show_default_status_message(self):
+        if self.fractal_controller:
+            self.fractal_controller.update_status_display()
+
+    def mousePressEvent(self, event):
+        self.show_default_status_message()
+        super().mousePressEvent(event)
 
 if __name__ == '__main__':
     import sys
