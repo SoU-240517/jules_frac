@@ -1,4 +1,16 @@
 {
+    "app_settings": {
+        "logging": {
+            "level": "DEBUG",
+            "enabled": true
+        },
+        "save_engine_settings": true,
+        "stylesheet_path": "resources/style.qss",
+        "numba_settings": {
+            "cache_enabled": true,
+            "clear_cache_on_exit": false
+        }
+    },
     "engine_settings": {
         "common_parameters": {
             "center_real": -0.5,
@@ -29,48 +41,5 @@
             "map_name": "グレースケール"
         }
     },
-    "app_settings": {
-        "logging": {
-            "level": "DEBUG",
-            "enabled": true
-        },
-        "save_engine_settings": true,
-        "stylesheet_path": "resources/style.qss",
-        "numba_settings": {
-            "cache_enabled": true,
-            "clear_cache_on_exit": false
-        }
-    },
-    "presets": {
-        "初期設定": {
-            "common_parameters": {
-                "center_real": -0.5,
-                "center_imag": 0.0,
-                "width": 3.0,
-                "height": 2.2899590163934427,
-                "max_iterations": 100,
-                "escape_radius": 2.0
-            },
-            "fractal_plugin_name": "Mandelbrot",
-            "fractal_plugin_parameters": {},
-            "coloring_divergent": {
-                "plugin_name": "スムーズカラー",
-                "plugin_parameters": {
-                    "color_scale": 1.0
-                },
-                "pack_name": "デフォルト",
-                "map_name": "グレースケール"
-            },
-            "coloring_non_divergent": {
-                "plugin_name": "複素ポテンシャル",
-                "plugin_parameters": {
-                    "color_scale": 1.0,
-                    "potential_offset": 0.0,
-                    "potential_scale": 1.0
-                },
-                "pack_name": "デフォルト",
-                "map_name": "グレースケール"
-            }
-        }
-    }
+    "presets": {}
 }

@@ -116,6 +116,17 @@ class SettingsManager:
         except (IOError, Exception) as e: # より一般的な例外もキャッチします
             logger.log(f"設定ファイル '{self.filepath}' の保存に失敗しました: {e}", level="ERROR")
 
+    def get_all_settings(self) -> Dict[str, Any]:
+        """
+        現在のすべての設定を辞書として取得します。
+
+        返される辞書は元の設定のコピーです。
+
+        Returns:
+            Dict[str, Any]: すべての設定データ。
+        """
+        return self.settings.copy()
+
     def get_setting(self, key_path: str, default_value: Any = None) -> Any:
         """
         指定されたキーパスに対応する設定値を取得します。

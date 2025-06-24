@@ -2,6 +2,7 @@ from pathlib import Path
 import sys
 import numba
 import shutil
+import json
 
 # プロジェクトのルートディレクトリ（'src'の親）をsys.pathに追加
 # これにより、'jules_frac' ディレクトリからの相対インポートや、そのサブディレクトリからのインポートが可能になる
@@ -20,6 +21,8 @@ from logger.custom_logger import CustomLogger
 
 # --- 定数定義 ---
 SETTINGS_FILE_NAME = "settings.jsonc"
+INIT_ENGINE_SETTINGS_FILE_NAME = "resources/init_engine_settings.json"
+PRESET_FILE_NAME = "resources/preset/preset_record.json"
 DEFAULT_STYLESHEET_PATH = "resources/style.qss" # デフォルトのスタイルシートパス
 
 logger = CustomLogger()
@@ -92,6 +95,31 @@ def main():
     settings_manager = SettingsManager(settings_filename=str(settings_file_path))
     setup_logging(settings_manager, logger)
 
+    # --- プリセットを専用ファイルからロード ---
+    preset_file_path = _project_root / PRESET_FILE_NAME
+    if preset_file_path.exists():
+        try:
+            with open(preset_file_path, "r", encoding="utf-8") as f:
+                presets = json.load(f)
+            # settings.jsoncのpresetsを上書きする
+            settings_manager.set_setting("presets", presets, auto_save=False)
+            logger.log(f"プリセットをロードしました: {preset_file_path}", level="INFO")
+        except Exception as e:
+            logger.log(f"プリセットファイルの読み込みに失敗しました: {e}", level="ERROR")
+
+    # --- 初期エンジン設定を専用ファイルからロード ---
+    init_engine_settings_path = _project_root / INIT_ENGINE_SETTINGS_FILE_NAME
+    if init_engine_settings_path.exists():
+        try:
+            # JSONC形式の可能性を考慮し、一時的なSettingsManagerで読み込む
+            temp_settings_manager = SettingsManager(settings_filename=str(init_engine_settings_path))
+            init_engine_settings = temp_settings_manager.get_all_settings()
+            # settings.jsoncから読み込んだエンジン設定を上書きする
+            settings_manager.set_setting("engine_settings", init_engine_settings, auto_save=False)
+            logger.log(f"初期エンジン設定をロードしました: {init_engine_settings_path}", level="INFO")
+        except Exception as e:
+            logger.log(f"初期エンジン設定ファイルの読み込みに失敗しました: {e}", level="ERROR")
+
     # --- Numbaキャッシュ設定の適用 ---
     numba_config = settings_manager.get_setting("app_settings.numba_settings", {"cache_enabled": True})
     numba.config.CACHE = numba_config.get("cache_enabled", True)
@@ -117,19 +145,33 @@ def main():
         logger.log("警告: MainWindow.status_barが見つからないため、status_updatedシグナルを接続できません。", level="WARNING")
 
     # --- 終了時処理の接続 ---
-    def save_engine_settings_on_exit():
+    def save_settings_on_exit():
+        # エンジン設定の保存 (settings.jsoncへ)
         app_config = settings_manager.get_setting("app_settings", {})
-        should_save = app_config.get("save_engine_settings", True)
-        if should_save:
+        should_save_engine = app_config.get("save_engine_settings", True)
+        if should_save_engine:
             logger.log("アプリケーション終了前にエンジン設定を保存します...", level="INFO")
             engine_config = fractal_controller.get_full_configuration()
             settings_manager.set_setting("engine_settings", engine_config, auto_save=False)
-            settings_manager.save_settings()
-            logger.log("エンジン設定を保存しました。", level="INFO")
+            logger.log("エンジン設定を保存キューに追加しました。", level="INFO")
         else:
             logger.log("エンジン設定の保存はスキップされました (save_engine_settings is false)。", level="INFO")
 
-    app.aboutToQuit.connect(save_engine_settings_on_exit)
+        # プリセットの保存 (preset_record.jsonへ)
+        presets = settings_manager.get_setting("presets", {})
+        if presets:
+            preset_file_path = _project_root / PRESET_FILE_NAME
+            try:
+                with open(preset_file_path, "w", encoding="utf-8") as f:
+                    json.dump(presets, f, indent=4, ensure_ascii=False)
+                logger.log(f"プリセットを保存しました: {preset_file_path}", level="INFO")
+                # settings.jsoncからはpresetsを削除する
+                settings_manager.set_setting("presets", {}, auto_save=False)
+            except Exception as e:
+                logger.log(f"プリセットの保存に失敗しました: {e}", level="ERROR")
+        settings_manager.save_settings()
+
+    app.aboutToQuit.connect(save_settings_on_exit)
     app.aboutToQuit.connect(lambda: clear_numba_cache_on_exit(settings_manager))
 
     # --- アプリケーションの実行 ---
