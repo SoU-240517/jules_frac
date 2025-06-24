@@ -1,23 +1,23 @@
-from pathlib import Path
 import sys
-import numba
-import shutil
 import json
+import shutil
+from pathlib import Path
+import numba
+
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import Qt
+
+from views.main_window import MainWindow
+from models.fractal_engine import FractalEngine
+from controllers.fractal_controller import FractalController
+from utils.settings_manager import SettingsManager
+from logger.custom_logger import CustomLogger
 
 # プロジェクトのルートディレクトリ（'src'の親）をsys.pathに追加
 # これにより、'jules_frac' ディレクトリからの相対インポートや、そのサブディレクトリからのインポートが可能になる
 _project_root = Path(__file__).resolve().parent # このスクリプトがあるディレクトリをプロジェクトルートとする
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
-
-from PyQt6.QtWidgets import QApplication
-from views.main_window import MainWindow
-from models.fractal_engine import FractalEngine
-from controllers.fractal_controller import FractalController
-from utils.settings_manager import SettingsManager
-from PyQt6.QtCore import Qt
-
-from logger.custom_logger import CustomLogger
 
 # --- 定数定義 ---
 SETTINGS_FILE_NAME = "settings.jsonc"

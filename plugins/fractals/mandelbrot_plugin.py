@@ -1,6 +1,5 @@
 import numpy as np
 from numba import jit, prange
-
 from plugins.base_fractal_plugin import FractalPlugin
 from logger.custom_logger import CustomLogger # logger がプロジェクトルート/loggerにあると仮定
 

@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import (
     QScrollArea, QWidget, QVBoxLayout, QGroupBox, QFormLayout, QHBoxLayout,
     QLabel, QSpinBox, QDoubleSpinBox, QComboBox, QPushButton, QTabWidget,
     QListWidget, QListWidgetItem, QAbstractSpinBox, QSlider, QFileDialog,
-    QInputDialog, QMessageBox
+    QInputDialog, QMessageBox, QCheckBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QSize, QTimer, QEvent # QEvent を追加
 from PyQt6.QtGui import QPixmap, QImage, QPainter, QColor, QLinearGradient, QIcon

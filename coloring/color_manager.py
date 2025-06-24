@@ -7,7 +7,7 @@ logger = CustomLogger() # ロガーインスタンスを作成します
 
 class ColorManager:
     """カラーパックとカラーマップを管理するクラスです。"""
-    def __init__(self, color_packs_dir: str = "plugins/colorpacks"):
+    def __init__(self, color_packs_dir: str = "plugins/colorpacks") -> None:
         logger.log("ColorManager初期化中...", level="DEBUG")
         # color_packs_dir はプロジェクトルートからの相対パスを想定しています
         self.color_packs_dir = Path(color_packs_dir)
@@ -51,7 +51,7 @@ class ColorManager:
             )
         return output_colors
 
-    def load_color_packs(self):
+    def load_color_packs(self) -> None:
         self.color_packs.clear()
 
         # プロジェクトルートからの相対パスとして解決する (より堅牢な方法が望ましい)

@@ -35,7 +35,7 @@ class PluginManager:
         self.coloring_plugins: dict[str, ColoringAlgorithmPlugin] = {} # 単一の辞書で管理
         self.load_all_plugins()
 
-    def load_all_plugins(self):
+    def load_all_plugins(self) -> None:
         """すべての種類のプラグインを読み込みます。"""
         logger.log("全プラグイン読込中...", level="INFO")
         self.fractal_plugins.clear()
@@ -60,7 +60,7 @@ class PluginManager:
             "Non-Divergent Coloring Algorithm"
         )
 
-    def _load_plugins_from_folder(self, folder_path: Path, target_dict: dict, base_class: type, plugin_type_name: str):
+    def _load_plugins_from_folder(self, folder_path: Path, target_dict: dict, base_class: type, plugin_type_name: str) -> None:
         """
         指定された folder_path から特定の base_class のプラグインを target_dict に読み込みます。
         このメソッドは呼び出し側で target_dict.clear() を行うことを想定しています。
@@ -158,7 +158,7 @@ class PluginManager:
             logger.log(f"名前 '{name}' およびターゲット '{target_type}' に該当するプラグインが見つかりません。", level="WARNING")
         return plugin
 
-    def reload_all_plugins(self):
+    def reload_all_plugins(self) -> None:
         """すべてのプラグインをディスクから再読み込みします。
 
         既存のプラグインリストはクリアされ、再度プラグインフォルダをスキャンして読み込みます。

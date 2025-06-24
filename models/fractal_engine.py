@@ -480,9 +480,87 @@ class FractalEngine:
         if antialiasing_level_str == "4x4 SSAA": return 4
         return 1
 
+    def _prepare_output_parameters(self, output_width: int, output_height: int, common_params_override: dict, fractal_plugin_name_override: str | None, fractal_plugin_params_override: dict | None, coloring_algo_name_override: str | None, coloring_algo_params_override: dict | None, color_pack_name_override: str | None, color_map_name_override: str | None, antialiasing_level: str) -> tuple[dict, FractalPlugin, dict, ColoringAlgorithmPlugin, dict, list, int, int, int]:
+        """
+        出力画像生成のための全パラメータを準備し、必要なインスタンスやデータを返す。
+        """
+        final_common_params = self.get_common_parameters()
+        final_common_params.update(common_params_override)
+        active_fractal_plugin = self.plugin_manager.get_fractal_plugin(fractal_plugin_name_override) if fractal_plugin_name_override else self.current_fractal_plugin
+        if not active_fractal_plugin:
+            logger.log("出力失敗、フラクタルプラグインが解決できませんでした。", level="ERROR")
+            raise ValueError("フラクタルプラグインが解決できません")
+        final_fractal_plugin_params = {p_def['name']: p_def['default'] for p_def in active_fractal_plugin.get_parameters_definition()}
+        if self.current_fractal_plugin and active_fractal_plugin.name == self.current_fractal_plugin.name:
+            final_fractal_plugin_params.update(self.current_fractal_plugin_parameters)
+        if fractal_plugin_params_override:
+            final_fractal_plugin_params.update(fractal_plugin_params_override)
+        active_target_type_for_output = self.active_coloring_target_type
+        final_coloring_plugin_name_to_use = coloring_algo_name_override
+        if final_coloring_plugin_name_to_use is None:
+            active_plugin_for_target = self.get_active_coloring_plugin(active_target_type_for_output)
+            if active_plugin_for_target:
+                final_coloring_plugin_name_to_use = active_plugin_for_target.name
+        active_coloring_plugin = None
+        if final_coloring_plugin_name_to_use:
+            active_coloring_plugin = self.plugin_manager.get_coloring_plugin(final_coloring_plugin_name_to_use, target_type=active_target_type_for_output)
+        if not active_coloring_plugin:
+            logger.log(f"出力失敗、カラーリングプラグイン '{final_coloring_plugin_name_to_use}' (target: {active_target_type_for_output}) が解決できませんでした。", level="ERROR")
+            raise ValueError("カラーリングプラグインが解決できません")
+        final_coloring_algo_params = {p_def['name']: p_def['default'] for p_def in active_coloring_plugin.get_parameters_definition()}
+        current_engine_cp_params = self.get_coloring_plugin_parameters(active_target_type_for_output)
+        active_plugin_for_current_target = self.get_active_coloring_plugin(active_target_type_for_output)
+        if active_plugin_for_current_target and active_coloring_plugin.name == active_plugin_for_current_target.name:
+            final_coloring_algo_params.update(current_engine_cp_params)
+        if coloring_algo_params_override:
+            final_coloring_algo_params.update(coloring_algo_params_override)
+        current_pack_name_for_target, current_map_name_for_target = self.get_current_color_map_selection(active_target_type_for_output)
+        pack_name = color_pack_name_override if color_pack_name_override else current_pack_name_for_target
+        map_name = color_map_name_override if color_map_name_override else current_map_name_for_target
+        final_color_map_data = self.color_manager.get_color_map_data(pack_name, map_name) if pack_name and map_name else []
+        if not final_color_map_data:
+            final_color_map_data = [(i,i,i) for i in range(0,256,16)]
+        aa_factor = self._get_antialiasing_factor(antialiasing_level)
+        ss_width = output_width * aa_factor
+        ss_height = output_height * aa_factor
+        original_engine_complex_height = final_common_params['height']
+        final_common_params['height'] = (final_common_params['width'] * ss_height) / ss_width if ss_width > 0 else final_common_params['width']
+        return (final_common_params, active_fractal_plugin, final_fractal_plugin_params, active_coloring_plugin, final_coloring_algo_params, final_color_map_data, aa_factor, ss_width, ss_height)
+
+    def _compute_fractal_for_output(self, plugin: FractalPlugin, params: dict, common_params: dict, width: int, height: int) -> dict | None:
+        try:
+            return plugin.compute_fractal(common_params, params, width, height)
+        except Exception as e:
+            logger.log(f"スーパーサンプリングされたフラクタル計算に失敗: {e}", level="ERROR")
+            return None
+
+    def _apply_coloring_for_output(self, plugin: ColoringAlgorithmPlugin, params: dict, common_params: dict, fractal_data: dict, color_map_data: list) -> np.ndarray | None:
+        try:
+            common_params_for_coloring = common_params.copy()
+            common_params_for_coloring['image_width_px'] = common_params['width']
+            common_params_for_coloring['image_height_px'] = common_params['height']
+            return plugin.apply_coloring(fractal_data, common_params_for_coloring, params, color_map_data)
+        except Exception as e:
+            logger.log(f"スーパーサンプリングされたカラーリングに失敗: {e}", level="ERROR")
+            return None
+
+    def _downsample_image(self, image: np.ndarray, output_width: int, output_height: int, aa_factor: int) -> np.ndarray:
+        if aa_factor > 1:
+            try:
+                if image.shape[2] != 4:
+                    logger.log(f"カラーリングから4チャンネルを期待しましたが、{image.shape[2]} を取得しました", level="ERROR")
+                    return image
+                reshaped = image.reshape(output_height, aa_factor, output_width, aa_factor, 4)
+                return reshaped.mean(axis=(1, 3)).astype(np.uint8)
+            except ValueError as e:
+                logger.log(f"ダウンサンプリングリシェイプ中のエラー: {e}。入力: {image.shape}, ターゲット: {output_height}x{output_width}, AA: {aa_factor}", level="ERROR")
+                return image
+        else:
+            return image
+
     def generate_image_for_output(self, output_width: int, output_height: int,
                                   common_params_override: dict,
-                                  fractal_plugin_name_override: str | None = None, # 名前に変更
+                                  fractal_plugin_name_override: str | None = None,
                                   fractal_plugin_params_override: dict | None = None,
                                   coloring_algo_name_override: str | None = None,
                                   coloring_algo_params_override: dict | None = None,
@@ -490,139 +568,27 @@ class FractalEngine:
                                   color_map_name_override: str | None = None,
                                   antialiasing_level: str = "なし"
                                   ) -> np.ndarray | None:
-        """
-        指定されたパラメータで高解像度のフラクタル画像を生成します。
-
-        このメソッドは、現在のエンジンの状態を一時的に上書きする形で、
-        特定の出力解像度、フラクタルパラメータ、カラーリング設定で画像を生成します。
-        スーパーサンプリングアンチエイリアス (SSAA) もサポートします。
-
-        Args:
-            output_width (int): 出力画像の幅 (ピクセル単位)。
-            output_height (int): 出力画像の高さ (ピクセル単位)。
-            common_params_override (dict): `get_common_parameters` で返される形式の共通パラメータ。
-                                         エンジンの現在の設定を上書きします。
-            fractal_plugin_name_override (str | None): 使用するフラクタルプラグインの名前。Noneの場合、現在のプラグイン。
-            fractal_plugin_params_override (dict | None): フラクタルプラグイン固有のパラメータ。Noneの場合、現在のパラメータまたはデフォルト。
-            coloring_algo_name_override (str | None): 使用するカラーリングアルゴリズムの名前。Noneの場合、現在のアルゴリズム。
-            coloring_algo_params_override (dict | None): カラーリングアルゴリズム固有のパラメータ。Noneの場合、現在のパラメータまたはデフォルト。
-            color_pack_name_override (str | None): 使用するカラーパックの名前。Noneの場合、現在のカラーパック。
-            color_map_name_override (str | None): 使用するカラーマップの名前。Noneの場合、現在のカラーマップ。
-            antialiasing_level (str): アンチエイリアスレベル。"なし", "2x2 SSAA", "3x3 SSAA", "4x4 SSAA"。
-
-        Returns:
-            np.ndarray | None: 生成されたRGBA画像 (高さ x 幅 x 4, uint8)。
-                               エラーが発生した場合はNone。
-        """
         logger.log(f"高解像度出力開始 - ターゲット: {output_width}x{output_height}, AA: {antialiasing_level}", level="INFO")
-
-        # 1. パラメータ準備
-        final_common_params = self.get_common_parameters()
-        final_common_params.update(common_params_override) # ダイアログ設定で上書き
-
-        # フラクタルプラグインとそのパラメータを決定
-        active_fractal_plugin = self.plugin_manager.get_fractal_plugin(fractal_plugin_name_override) if fractal_plugin_name_override else self.current_fractal_plugin
-        if not active_fractal_plugin: logger.log("出力失敗、フラクタルプラグインが解決できませんでした。", level="ERROR"); return None
-
-        final_fractal_plugin_params = {} # 空またはプラグインのデフォルトで開始
-        base_plugin_param_defs = active_fractal_plugin.get_parameters_definition()
-        for p_def in base_plugin_param_defs: final_fractal_plugin_params[p_def['name']] = p_def['default']
-        if self.current_fractal_plugin and active_fractal_plugin.name == self.current_fractal_plugin.name: # 現在と同じ場合
-            final_fractal_plugin_params.update(self.current_fractal_plugin_parameters) # 現在の設定をベースとして使用
-        if fractal_plugin_params_override: final_fractal_plugin_params.update(fractal_plugin_params_override)
-
-        # カラーリングプラグインとそのパラメータを決定 (アクティブターゲットタイプを考慮)
-        # generate_image_for_output は単一のカラーリング設定セットを取る。
-        # どのターゲットタイプを使用するかを決定する必要がある。コントローラの current active target type を使う。
-        # このメソッドはコントローラからは呼ばれず、エクスポータから直接呼ばれるため、
-        # self.active_coloring_target_type を信頼する。
-        active_target_type_for_output = self.active_coloring_target_type
-
-        final_coloring_plugin_name_to_use = coloring_algo_name_override
-        if final_coloring_plugin_name_to_use is None:
-            active_plugin_for_target = self.get_active_coloring_plugin(active_target_type_for_output)
-            if active_plugin_for_target:
-                final_coloring_plugin_name_to_use = active_plugin_for_target.name
-
-        active_coloring_plugin = None
-        if final_coloring_plugin_name_to_use:
-            active_coloring_plugin = self.plugin_manager.get_coloring_plugin(final_coloring_plugin_name_to_use, target_type=active_target_type_for_output)
-
-        if not active_coloring_plugin:
-            logger.log(f"出力失敗、カラーリングプラグイン '{final_coloring_plugin_name_to_use}' (target: {active_target_type_for_output}) が解決できませんでした。", level="ERROR")
+        try:
+            (final_common_params, active_fractal_plugin, final_fractal_plugin_params, active_coloring_plugin, final_coloring_algo_params, final_color_map_data, aa_factor, ss_width, ss_height) = self._prepare_output_parameters(
+                output_width, output_height, common_params_override, fractal_plugin_name_override, fractal_plugin_params_override, coloring_algo_name_override, coloring_algo_params_override, color_pack_name_override, color_map_name_override, antialiasing_level)
+            logger.log(f"  - スーパーサンプリング解像度: {ss_width}x{ss_height} (AA係数: {aa_factor})", level="DEBUG")
+            logger.log(f"  - フラクタルプラグイン: {active_fractal_plugin.name}, パラメータ: {final_fractal_plugin_params}", level="DEBUG")
+            logger.log(f"  - カラーリングプラグイン: {active_coloring_plugin.name}, パラメータ: {final_coloring_algo_params}", level="DEBUG")
+            logger.log(f"  - カラーマップ: {color_pack_name_override}/{color_map_name_override}", level="DEBUG")
+            logger.log(f"  - 計算用共通パラメータ: 中心=({final_common_params['center_real']:.4f},{final_common_params['center_imag']:.4f}), 幅={final_common_params['width']:.3e}, 高さ(複素)={final_common_params['height']:.3e]}, 反復={final_common_params['max_iterations']}", level="DEBUG")
+            fractal_data_ss = self._compute_fractal_for_output(active_fractal_plugin, final_fractal_plugin_params, final_common_params, ss_width, ss_height)
+            if fractal_data_ss is None:
+                return None
+            colored_image_ss_rgba = self._apply_coloring_for_output(active_coloring_plugin, final_coloring_algo_params, final_common_params, fractal_data_ss, final_color_map_data)
+            if colored_image_ss_rgba is None:
+                return None
+            downsampled_image_rgba = self._downsample_image(colored_image_ss_rgba, output_width, output_height, aa_factor)
+            logger.log(f"高解像度画像が正常に生成されました ({output_width}x{output_height})。", level="INFO")
+            return downsampled_image_rgba
+        except Exception as e:
+            logger.log(f"generate_image_for_output中にエラー: {e}", level="ERROR")
             return None
-
-        final_coloring_algo_params = {}
-        base_coloring_param_defs = active_coloring_plugin.get_parameters_definition()
-        for p_def in base_coloring_param_defs:
-            final_coloring_algo_params[p_def['name']] = p_def['default']
-
-        current_engine_cp_params = self.get_coloring_plugin_parameters(active_target_type_for_output)
-        # 上書き用のプラグインがターゲットタイプに対してアクティブなものと同じかどうかを確認
-        active_plugin_for_current_target = self.get_active_coloring_plugin(active_target_type_for_output)
-        if active_plugin_for_current_target and active_coloring_plugin.name == active_plugin_for_current_target.name :
-             final_coloring_algo_params.update(current_engine_cp_params) # 同じプラグインであれば現在のパラメータで開始
-        if coloring_algo_params_override: # 次に特定の上書きを適用
-            final_coloring_algo_params.update(coloring_algo_params_override)
-
-
-        # カラーマップを決定 (正しいターゲットタイプ用)
-        current_pack_name_for_target, current_map_name_for_target = self.get_current_color_map_selection(active_target_type_for_output)
-        pack_name = color_pack_name_override if color_pack_name_override else current_pack_name_for_target
-        map_name = color_map_name_override if color_map_name_override else current_map_name_for_target
-        final_color_map_data = self.color_manager.get_color_map_data(pack_name, map_name) if pack_name and map_name else []
-        if not final_color_map_data: final_color_map_data = [(i,i,i) for i in range(0,256,16)]
-
-        # 2. スーパーサンプリング解像度
-        aa_factor = self._get_antialiasing_factor(antialiasing_level)
-        ss_width = output_width * aa_factor
-        ss_height = output_height * aa_factor
-
-        # 3. スーパーサンプリングされたアスペクト比に合わせて common_params.height を調整
-        # これは重要です: common_params の 'height' は複素平面の高さです。
-        # 計算されるピクセルグリッドのアスペクト比と一致する必要があります。
-        original_engine_complex_height = final_common_params['height'] # エンジン状態が直接変更された場合に後で復元するため
-        final_common_params['height'] = (final_common_params['width'] * ss_height) / ss_width if ss_width > 0 else final_common_params['width']
-
-        logger.log(f"  - スーパーサンプリング解像度: {ss_width}x{ss_height} (AA係数: {aa_factor})", level="DEBUG")
-        logger.log(f"  - フラクタルプラグイン: {active_fractal_plugin.name}, パラメータ: {final_fractal_plugin_params}", level="DEBUG")
-        logger.log(f"  - カラーリングプラグイン: {active_coloring_plugin.name}, パラメータ: {final_coloring_algo_params}", level="DEBUG")
-        logger.log(f"  - カラーマップ: {pack_name}/{map_name}", level="DEBUG")
-        logger.log(f"  - 計算用共通パラメータ: 中心=({final_common_params['center_real']:.4f},{final_common_params['center_imag']:.4f}), 幅={final_common_params['width']:.3e}, 高さ(複素)={final_common_params['height']:.3e]}, 反復={final_common_params['max_iterations']}", level="DEBUG")
-
-        # 4. フラクタル計算 (スーパーサンプリング解像度で)
-        fractal_data_ss = active_fractal_plugin.compute_fractal(
-            final_common_params, final_fractal_plugin_params, ss_width, ss_height
-        )
-        if fractal_data_ss is None: logger.log("スーパーサンプリングされたフラクタル計算に失敗しました。", level="ERROR"); return None
-
-        # カラーリングプラグインが必要とする可能性があるため、画像寸法を common_params に追加
-        final_common_params_for_coloring = final_common_params.copy()
-        final_common_params_for_coloring['image_width_px'] = ss_width
-        final_common_params_for_coloring['image_height_px'] = ss_height
-        # 5. カラーリング (スーパーサンプリング解像度で)
-        colored_image_ss_rgba = active_coloring_plugin.apply_coloring(
-            fractal_data_ss, final_common_params_for_coloring, final_coloring_algo_params, final_color_map_data
-        )
-        if colored_image_ss_rgba is None: logger.log("スーパーサンプリングされたカラーリングに失敗しました。", level="ERROR"); return None
-
-        # 6. ダウンサンプリング (AAが有効な場合)
-        if aa_factor > 1:
-            logger.log(f"  - {ss_width}x{ss_height} から {output_width}x{output_height} へダウンサンプリング中...", level="DEBUG")
-            try:
-                # リシェイプのためにRGBA (4チャンネル) を確認
-                if colored_image_ss_rgba.shape[2] != 4: # カラーリングプラグインからは常に4チャンネルのはず
-                    logger.log(f"カラーリングから4チャンネルを期待しましたが、{colored_image_ss_rgba.shape[2]} を取得しました", level="ERROR"); return None
-
-                reshaped = colored_image_ss_rgba.reshape(output_height, aa_factor, output_width, aa_factor, 4)
-                downsampled_image_rgba = reshaped.mean(axis=(1, 3)).astype(np.uint8)
-            except ValueError as e:
-                logger.log(f"ダウンサンプリングリシェイプ中のエラー: {e}。入力: {colored_image_ss_rgba.shape}, ターゲット: {output_height}x{output_width}, AA: {aa_factor}", level="ERROR"); return None
-        else:
-            downsampled_image_rgba = colored_image_ss_rgba
-
-        logger.log(f"高解像度画像が正常に生成されました ({output_width}x{output_height})。", level="INFO")
-        return downsampled_image_rgba
 
     # --- 設定の保存/読み込み ---
     def save_settings(self) -> dict:

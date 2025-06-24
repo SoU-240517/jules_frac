@@ -5,8 +5,9 @@ from PIL import Image
 from pathlib import Path
 # Pillowをインポート
 # fractal_engine_refの型ヒント用
-# from src.app.models.fractal_engine import FractalEngine
+from typing import Any
 from logger.custom_logger import CustomLogger
+from models.fractal_engine import FractalEngine
 
 logger = CustomLogger()
 

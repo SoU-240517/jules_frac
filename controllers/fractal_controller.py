@@ -8,6 +8,7 @@ from PyQt6.QtCore import QObject, pyqtSignal, QThreadPool, pyqtSlot, QRunnable #
 from logger.custom_logger import CustomLogger
 from plugins.base_coloring_plugin import ColoringAlgorithmPlugin # ColoringAlgorithmPlugin をインポート
 from utils.settings_manager import SettingsManager # SettingsManager をインポート
+from typing import Any
 
 logger = CustomLogger()
 

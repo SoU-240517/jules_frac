@@ -14,7 +14,7 @@ class SettingsManager:
     """
     _logger_instance = None # ロガーインスタンスのクラス変数
 
-    def _get_logger(self):
+    def _get_logger(self) -> object:
         """ロガーインスタンスを遅延初期化で取得します。"""
         # SettingsManager._logger_instance は CustomLogger が自身を初期化する際に設定されることを想定しています。
         # ここで CustomLogger を直接インスタンス化すると循環参照が発生します。
@@ -73,7 +73,7 @@ class SettingsManager:
             self.settings: Dict[str, Any] = {}
             self.load_settings() # 通常のインスタンスのみ設定をロード
 
-    def load_settings(self):
+    def load_settings(self) -> None:
         """
         設定ファイルから設定を読み込みます。
         ファイルが存在しない、または読み込みに失敗した場合は、空の設定を使用します。
@@ -101,7 +101,7 @@ class SettingsManager:
             logger.log(f"設定ファイル '{self.filepath}' が見つかりません。デフォルト設定を使用します。", level="INFO")
             self.settings = {}
 
-    def save_settings(self):
+    def save_settings(self) -> None:
         """
         現在の設定をファイルに保存します。
         保存先のディレクトリが存在しない場合は作成します。
@@ -153,7 +153,7 @@ class SettingsManager:
              return default_value
 
 
-    def set_setting(self, key_path: str, value: Any, auto_save: bool = True):
+    def set_setting(self, key_path: str, value: Any, auto_save: bool = True) -> None:
         """
         指定されたキーパスに設定値を設定します。
 
@@ -190,7 +190,7 @@ class SettingsManager:
         """
         return self.settings.get(section_name, {}).copy() # コピーを返します
 
-    def set_section(self, section_name: str, section_data: Dict[str, Any], auto_save: bool = True):
+    def set_section(self, section_name: str, section_data: Dict[str, Any], auto_save: bool = True) -> None:
         """
         指定されたセクション名（トップレベルキー）に新しい設定データを設定します。
 
@@ -202,7 +202,7 @@ class SettingsManager:
         if auto_save:
             self.save_settings()
 
-    def export_presets_to_file(self, filepath: Path):
+    def export_presets_to_file(self, filepath: Path) -> None:
         """
         現在のすべてのプリセットを指定されたファイルにJSON形式でエクスポートします。
         :param filepath: エクスポート先のファイルパス。
@@ -260,13 +260,13 @@ class SettingsManager:
         """保存されているすべてのプリセットを取得します。"""
         return self.get_setting("presets", {})
 
-    def save_preset(self, name: str, config: Dict[str, Any]):
+    def save_preset(self, name: str, config: Dict[str, Any]) -> None:
         """指定された名前でプリセットを保存します。"""
         presets = self.get_presets()
         presets[name] = config
         self.set_setting("presets", presets)
 
-    def delete_preset(self, name: str):
+    def delete_preset(self, name: str) -> None:
         """指定された名前のプリセットを削除します。"""
         logger = self._get_logger()
         presets = self.get_presets()

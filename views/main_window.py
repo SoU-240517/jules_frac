@@ -1,13 +1,11 @@
 from PyQt6.QtWidgets import (
-    QMainWindow, QMenuBar, QStatusBar, QSplitter, QLabel, QWidget, QApplication, QVBoxLayout
+    QMainWindow, QMenuBar, QStatusBar, QSplitter, QLabel, QWidget, QApplication, QVBoxLayout, QProgressDialog, QMessageBox
 )
 from PyQt6.QtGui import QAction
-from PyQt6.QtGui import QAction
-from PyQt6.QtWidgets import QProgressDialog, QMessageBox, QMainWindow, QMenuBar, QStatusBar, QSplitter, QVBoxLayout, QApplication # インポートを追加
+from PyQt6.QtCore import Qt, pyqtSlot, QTimer
 from .render_area import RenderArea
 from .parameter_panel import ParameterPanel
 from .high_res_dialog import HighResOutputDialog
-from PyQt6.QtCore import Qt, pyqtSlot, QTimer
 from .status_bar_animator import StatusBarAnimator
 from logger.custom_logger import CustomLogger
 

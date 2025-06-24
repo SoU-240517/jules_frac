@@ -13,15 +13,18 @@
     },
     "engine_settings": {
         "common_parameters": {
-            "center_real": -0.5,
+            "center_real": 0.0,
             "center_imag": 0.0,
             "width": 3.0,
             "height": 2.2899590163934427,
             "max_iterations": 100,
             "escape_radius": 2.0
         },
-        "fractal_plugin_name": "Mandelbrot",
-        "fractal_plugin_parameters": {},
+        "fractal_plugin_name": "Julia",
+        "fractal_plugin_parameters": {
+            "c_real": -0.745,
+            "c_imag": 0.113
+        },
         "coloring_divergent": {
             "plugin_name": "スムーズカラー",
             "plugin_parameters": {

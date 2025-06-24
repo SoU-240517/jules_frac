@@ -1,16 +1,20 @@
 import os
+import sys
 from pathlib import Path
 from functools import partial
 from PyQt6.QtWidgets import (
     QDialog, QLineEdit, QPushButton, QComboBox, QCheckBox,
     QSlider, QSpinBox, QLabel, QFormLayout, QVBoxLayout,
     QHBoxLayout, QGroupBox, QFileDialog, QDialogButtonBox,
-    QSizePolicy
+    QSizePolicy, QApplication
 )
 from PyQt6.QtCore import Qt, pyqtSlot, QSize
 from PyQt6.QtWidgets import QMessageBox # accept時のエラー表示用
 
 from utils.settings_manager import SettingsManager # SettingsManager をインポート
+from logger.custom_logger import CustomLogger
+
+logger = CustomLogger()
 
 class HighResOutputDialog(QDialog):
     """高解像度画像出力の設定を行うダイアログクラスです。
@@ -242,30 +246,6 @@ class HighResOutputDialog(QDialog):
             elif not ext: # 拡張子がなかった場合
                  self.filepath_edit.setText(current_path + new_ext)
 
-    @pyqtSlot(str)
-    def _on_format_changed(self, format_str: str):
-        """ファイル形式コンボボックスの選択が変更されたときに呼び出されます。
-
-        PNG形式の場合のみ透過オプションを有効にし、JPEG形式の場合のみ品質スライダーを有効にします。
-        また、ファイルパスの拡張子を自動的に更新します。
-        """
-        is_png = (format_str == "PNG")
-        is_jpeg = (format_str == "JPEG")
-        self.png_transparent_check.setEnabled(is_png)
-        if not is_png: self.png_transparent_check.setChecked(False)
-        for widget in self.jpeg_quality_widgets:
-            widget.setEnabled(is_jpeg)
-        # ユーザーが入力していない場合、パス内のファイル拡張子を更新
-        current_path = self.filepath_edit.text()
-        if current_path:
-            name, ext = os.path.splitext(current_path)
-            new_ext = f".{format_str.lower()}"
-            if ext.lower() in ['.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp'] and ext.lower() != new_ext:
-                 self.filepath_edit.setText(name + new_ext)
-            elif not ext: # 拡張子がなかった場合
-                 self.filepath_edit.setText(current_path + new_ext)
-
-
     @pyqtSlot(int)
     def _on_jpeg_quality_changed(self, value: int):
         """JPEG品質スライダーの値が変更されたときに呼び出され、品質表示ラベルを更新します。"""
@@ -402,11 +382,6 @@ class HighResOutputDialog(QDialog):
     # updates_enabled のカスタム __setattr__ を削除し、明示的な呼び出しまたはシグナルブロッキングを使用。
 
 if __name__ == '__main__':
-    import sys
-    from PyQt6.QtWidgets import QApplication
-    from logger.custom_logger import CustomLogger
-
-    logger = CustomLogger() # テストブロック用のロガー
     app = QApplication(sys.argv)
     # テスト用のダミー設定マネージャーを作成
     # 実際のアプリでは、これは MainWindow/Application から渡されます
@@ -446,18 +421,6 @@ if __name__ == '__main__':
     if default_sm_file.exists(): default_sm_file.unlink(missing_ok=True)
     if (Path.home() / ".fractalapp").exists() and not any((Path.home() / ".fractalapp").iterdir()):
         (Path.home() / ".fractalapp").rmdir()
-
-    # sys.exit(app.exec()) # これがメインアプリループの場合のみ
-    # テストの場合、通常、既に実行中の場合は新しい app.exec() を開始しません。
-    # これがスタンドアロンスクリプトとして実行される場合、app.exec() は問題ありません。
-    # より大きなアプリでは、このダイアログはモーダルなので、ここでは app.exec() は不要です。
-    # このテストでは、単に終了させます。
-    # このスクリプトによって直接イベントループが開始されなかった場合は sys.exit(0)。
-    # app = QApplication(sys.argv) が唯一の QApplication インスタンスである場合、sys.exit(app.exec()) は問題ありません。
-    # この特定のケースでは、これがインポートされることを意図している場合は sys.exit を省略できます。
-    # main として実行する場合:
-    #   exit_code = app.exec()
-    #   sys.exit(exit_code)
 
     # テスト完了。アプリループを管理するより大きなテストスイートの一部として実行される場合、
     # またはモーダルで長時間表示せずにダイアログロジックをテストするだけの場合は、app.exec() は不要です。

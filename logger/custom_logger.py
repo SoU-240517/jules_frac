@@ -35,7 +35,7 @@ class CustomLogger:
     _log_file_path: Path | None = None
     _project_root_path: Path | None = None # プロジェクトルートパスを保持するクラス変数
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args, **kwargs) -> 'CustomLogger':
         """シングルトンインスタンスを作成または返します。初回作成時に初期化を行います。"""
         if not cls._instance:
             cls._initializing = True # 初期化開始のフラグを設定
@@ -66,11 +66,11 @@ class CustomLogger:
             cls._initializing = False # 初期化終了のフラグを解除
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         # シングルトンなので、__new__ で全ての初期化を完結させるため、__init__ では何もしない。
         pass
 
-    def _configure_from_settings(self):
+    def _configure_from_settings(self) -> None:
         """
         SettingsManagerから設定を読み込み、シングルトンのクラス属性に適用します。
         このメソッドは __new__ から一度だけ、最初のインスタンス作成時に呼び出されます。
@@ -133,7 +133,7 @@ class CustomLogger:
                  CustomLogger._log_file_path.parent.mkdir(parents=True, exist_ok=True)
 
 
-    def set_level(self, level_name_or_int):
+    def set_level(self, level_name_or_int: str | int) -> None:
         """ロガーの現在のログレベルを設定します。"""
         if isinstance(level_name_or_int, str):
             CustomLogger._current_level_int = CustomLogger.LOG_LEVELS.get(level_name_or_int.upper(), CustomLogger.LOG_LEVELS["INFO"])
@@ -142,16 +142,16 @@ class CustomLogger:
         else:
             CustomLogger._current_level_int = CustomLogger.LOG_LEVELS["INFO"]
 
-    def set_enabled(self, enabled: bool):
+    def set_enabled(self, enabled: bool) -> None:
         """ロガーの有効/無効状態を設定します。"""
         CustomLogger._is_enabled = enabled
 
     @classmethod
-    def set_project_root(cls, project_root: Path):
+    def set_project_root(cls, project_root: Path) -> None:
         """プロジェクトのルートパスを設定します。ログ出力時のパス表示に使用されます。"""
         cls._project_root_path = project_root.resolve() if project_root else None
 
-    def log(self, message, level="INFO", exc_info=None): # 新しいシグネチャ
+    def log(self, message: str, level: str = "INFO", exc_info: object = None) -> None: # 新しいシグネチャ
         """指定されたレベルでログメッセージを記録します。"""
         # 初期化中のロギング呼び出しをチェック (循環依存を避けるため)
         if hasattr(CustomLogger, '_initializing') and CustomLogger._initializing:

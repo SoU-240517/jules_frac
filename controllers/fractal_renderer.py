@@ -4,6 +4,7 @@ from models.fractal_engine import FractalEngine  # 型ヒント用
 import time
 import numpy as np # NumPy をインポート
 from logger.custom_logger import CustomLogger
+from typing import Any
 
 
 class FractalRendererSignals(QObject):

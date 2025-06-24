@@ -1,5 +1,13 @@
-import sys
 import os
+import sys
+import numpy as np
+from PyQt6.QtWidgets import QLabel, QSizePolicy, QApplication, QMainWindow
+from PyQt6.QtGui import QImage, QPixmap, QCursor
+from PyQt6.QtCore import Qt, QPointF, QTimer, QObject, pyqtSignal
+from PIL import Image, ImageQt
+from logger.custom_logger import CustomLogger
+
+logger = CustomLogger()
 
 # スクリプトが直接実行された場合にsys.pathを調整し、
 # プロジェクトルート (jules_frac) からの絶対インポートを可能にします。
@@ -8,15 +16,6 @@ if __name__ == "__main__" and (__package__ is None or __package__ == ""):
     PARENT_DIR = os.path.dirname(SCRIPT_DIR)  # .../jules_frac
     if PARENT_DIR not in sys.path:
         sys.path.insert(0, PARENT_DIR)
-
-from PyQt6.QtWidgets import QLabel, QSizePolicy
-from PyQt6.QtGui import QImage, QPixmap, QCursor
-from PyQt6.QtCore import Qt, QPointF, QTimer
-import numpy as np
-from PIL import Image, ImageQt
-from logger.custom_logger import CustomLogger
-
-logger = CustomLogger()
 
 class RenderArea(QLabel):
     """
