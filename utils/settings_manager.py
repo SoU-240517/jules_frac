@@ -53,7 +53,7 @@ class SettingsManager:
                                     ロガーの循環依存を防ぐための最小限の初期化を行います。
         """
         logger = self._get_logger()
-        logger.log(f"SettingsManagerの初期化開始: settings_filename='{settings_filename}', _is_for_logger_init={_is_for_logger_init}", level="DEBUG")
+        logger.log(f"SettingsManagerの初期化開始: settings_filename='{SettingsManager._to_relpath(settings_filename)}', _is_for_logger_init={_is_for_logger_init}", level="DEBUG")
 
         if _is_for_logger_init:
             # CustomLogger初期化中の呼び出し: CWDのシンプルなパスを使用し、ファイルI/Oを避けます。

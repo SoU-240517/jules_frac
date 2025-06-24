@@ -9,6 +9,7 @@ from logger.custom_logger import CustomLogger
 from plugins.base_coloring_plugin import ColoringAlgorithmPlugin # ColoringAlgorithmPlugin をインポート
 from utils.settings_manager import SettingsManager # SettingsManager をインポート
 from typing import Any
+import re
 
 logger = CustomLogger()
 
@@ -559,8 +560,22 @@ class FractalController(QObject):
                                              False の場合、既存のフラクタルデータを使用して再カラーリングのみを行います。Defaults to True.
             is_preview (bool, optional): True の場合、プレビュー品質 (低解像度) でレンダリングします。Defaults to False.
         """
-        # このログ記録行を追加
-        self.logger.log(f"発信元: {traceback.format_stack()[-2].strip()}", level="DEBUG")
+        # 発信元のパス部分を相対パスに変換して出力
+        stack_str = traceback.format_stack()[-2].strip()
+        import re
+        m = re.search(r'File "([^"]+)", line (\d+), in ([^\s]+)', stack_str)
+        if m:
+            abs_path, lineno, func = m.groups()
+            try:
+                from logger.custom_logger import CustomLogger
+                prj = getattr(CustomLogger, '_project_root_path', None)
+                rel_path = str(Path(abs_path).relative_to(prj)) if prj and Path(abs_path).is_absolute() else abs_path
+            except Exception:
+                rel_path = abs_path
+            display_str = f"{rel_path}:{lineno}:{func}"
+        else:
+            display_str = stack_str
+        logger.log(f"発信元: {display_str}", level="DEBUG")
 
         if not self.fractal_engine:
             self.status_updated.emit("エラー: フラクタルエンジン未設定")
@@ -572,16 +587,16 @@ class FractalController(QObject):
                 # QRunnableには直接的なキャンセルメソッドがないため、
                 # 新しいタスクがすぐに始まることで古いタスクの結果を事実上無視する。
                 # もしFractalRendererに停止フラグがあれば、ここでセットできる。
-                self.logger.log("プレビュー要求のため、進行中のレンダリングを置き換えます。", level="DEBUG")
+                logger.log("プレビュー要求のため、進行中のレンダリングを置き換えます。", level="DEBUG")
                 # self.current_renderer_task.cancel() # FractalRendererにcancel()が実装されていれば
             else:
                 # 新しい高品質要求が来たが、既にレンダリング中の場合
-                self.logger.log("以前の描画処理がまだ実行中。新しいタスクは開始されません。", level="WARNING")
+                logger.log("以前の描画処理がまだ実行中。新しいタスクは開始されません。", level="WARNING")
                 self.status_updated.emit("前の描画処理がまだ実行中。")
                 return
 
         if self.is_rendering and not is_preview: # このチェックは上のロジックに統合されたため、冗長
-            self.logger.log("以前の描画処理がまだ実行中。新しいタスクは開始されません。", level="WARNING")
+            logger.log("以前の描画処理がまだ実行中。新しいタスクは開始されません。", level="WARNING")
             self.status_updated.emit("前の描画処理がまだ実行中。")
             return
 
@@ -591,7 +606,7 @@ class FractalController(QObject):
         if is_preview:
             render_width = int(self.main_window.render_area.width() * self.preview_downscale_factor)
             render_height = int(self.main_window.render_area.height() * self.preview_downscale_factor)
-            self.logger.log(f"プレビューレンダリングを開始します。解像度: {render_width}x{render_height}", level="DEBUG")
+            logger.log(f"プレビューレンダリングを開始します。解像度: {render_width}x{render_height}", level="DEBUG")
         else:
             render_width = image_width_px if image_width_px is not None else self.main_window.render_area.width()
             render_height = image_height_px if image_height_px is not None else self.main_window.render_area.height()
