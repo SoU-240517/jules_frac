@@ -234,7 +234,7 @@ class CustomLogger:
             log_message_file = (f"{formatted_elapsed_time_ms}ms: "
                                 f"{formatted_level_str} "
                                 f"{message} "
-                                f"[{filepath_abs}:{lineno}:{log_context}]") # ファイルログは絶対パス
+                                f"[{display_path_str}:{lineno}:{log_context}]") # ファイルログも相対パス
             try:
                 with open(CustomLogger._log_file_path, "a", encoding="utf-8") as f:
                     f.write(log_message_file + "\n")

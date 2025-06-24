@@ -71,7 +71,16 @@ class ImageExporter(QRunnable):
             aa_factor = self.export_settings.get('antialiasing_factor', 1)
             antialiasing_level_str = f"{aa_factor}x{aa_factor} SSAA" if aa_factor > 1 else "なし"
 
-            logger.log(f"エクスポート処理開始: {filepath} ({output_width}x{output_height}), AA: {antialiasing_level_str}", level="INFO")
+            def _to_relpath(path):
+                try:
+                    prj = getattr(type(logger), '_project_root_path', None)
+                    if prj and Path(path).is_absolute():
+                        return str(Path(path).relative_to(prj))
+                except Exception:
+                    pass
+                return str(path)
+
+            logger.log(f"エクスポート処理開始: {_to_relpath(filepath)} ({output_width}x{output_height}), AA: {antialiasing_level_str}", level="INFO")
             self.signals.progress_updated.emit(5)
 
             if self._is_cancelled:
@@ -102,7 +111,7 @@ class ImageExporter(QRunnable):
                 return
 
             # --- Pillowを使用したファイル保存 ---
-            logger.log(f"画像データ生成完了 ({image_data_np.shape})。ファイル保存開始: {filepath}", level="INFO")
+            logger.log(f"画像データ生成完了 ({image_data_np.shape})。ファイル保存開始: {_to_relpath(filepath)}", level="INFO")
 
             pil_image = Image.fromarray(image_data_np, 'RGBA')
             format_str = self.export_settings.get('format', 'PNG').upper()
@@ -159,7 +168,7 @@ class ImageExporter(QRunnable):
                 self.signals.export_finished.emit(False, "エクスポートがキャンセルされました (保存直前)。")
                 return
 
-            logger.log(f"'{filepath}' に '{format_str}' として保存中です (オプション: {save_options})。", level="INFO")
+            logger.log(f"'{_to_relpath(filepath)}' に '{format_str}' として保存中です (オプション: {save_options})。", level="INFO")
             image_to_save.save(filepath, format=format_str, **save_options)
 
             self.signals.progress_updated.emit(100)
@@ -171,7 +180,7 @@ class ImageExporter(QRunnable):
             logger.log(f"エラー - {error_msg}", level="ERROR")
             self.signals.export_finished.emit(False, error_msg)
         except IOError as e:
-            error_msg = f"ファイルの書き込みに失敗しました ({filepath}): {e}"
+            error_msg = f"ファイルの書き込みに失敗しました ({_to_relpath(filepath)}): {e}"
             logger.log(f"エラー - {error_msg}", level="ERROR")
             self.signals.export_finished.emit(False, error_msg)
         except Exception as e:

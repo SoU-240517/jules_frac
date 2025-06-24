@@ -28,6 +28,16 @@ DEFAULT_STYLESHEET_PATH = "resources/style.qss" # デフォルトのスタイル
 logger = CustomLogger()
 logger.set_project_root(_project_root) # プロジェクトルートを設定
 
+# --- 共通: パスをプロジェクトルートからの相対パスに変換 ---
+def _to_relpath(p):
+    try:
+        prj = _project_root
+        if prj and Path(p).is_absolute():
+            return str(Path(p).relative_to(prj))
+    except Exception:
+        pass
+    return str(p)
+
 def clear_numba_cache_on_exit(settings_manager: SettingsManager):
     """Numbaのキャッシュディレクトリを安全に削除する。"""
     numba_config = settings_manager.get_setting("app_settings.numba_settings", {})
@@ -69,11 +79,11 @@ def apply_stylesheet(app, path):
         try:
             with open(stylesheet_path, "r", encoding="utf-8") as f:
                 app.setStyleSheet(f.read())
-            logger.log(f"スタイルシートを適用しました: {stylesheet_path}", level="INFO")
+            logger.log(f"スタイルシートを適用しました: {_to_relpath(stylesheet_path)}", level="INFO")
         except Exception as e:
             logger.log(f"スタイルシートの読み込みまたは適用中にエラーが発生しました: {e}", level="ERROR")
     else:
-        logger.log(f"スタイルシートファイルが見つかりません: {stylesheet_path}", level="WARNING")
+        logger.log(f"スタイルシートファイルが見つかりません: {_to_relpath(stylesheet_path)}", level="WARNING")
 
 def setup_logging(settings_manager, logger_instance):
     """設定ファイルからロギング設定を読み込み、ロガーに適用する。"""
@@ -103,7 +113,7 @@ def main():
                 presets = json.load(f)
             # settings.jsoncのpresetsを上書きする
             settings_manager.set_setting("presets", presets, auto_save=False)
-            logger.log(f"プリセットをロードしました: {preset_file_path}", level="INFO")
+            logger.log(f"プリセットをロードしました: {_to_relpath(preset_file_path)}", level="INFO")
         except Exception as e:
             logger.log(f"プリセットファイルの読み込みに失敗しました: {e}", level="ERROR")
 
@@ -119,7 +129,7 @@ def main():
             # settings.jsoncから読み込んだエンジン設定を上書きする
             settings_manager.set_setting("engine_settings", loaded_engine_settings, auto_save=False)
             initial_engine_settings = loaded_engine_settings # 保持する値を更新
-            logger.log(f"初期エンジン設定をロードしました: {init_engine_settings_path}", level="INFO")
+            logger.log(f"初期エンジン設定をロードしました: {_to_relpath(init_engine_settings_path)}", level="INFO")
         except Exception as e:
             logger.log(f"初期エンジン設定ファイルの読み込みに失敗しました: {e}", level="ERROR")
 
@@ -165,7 +175,7 @@ def main():
             try:
                 with open(save_path, "w", encoding="utf-8") as f:
                     json.dump(engine_config, f, indent=4, ensure_ascii=False)
-                logger.log(f"エンジン設定を保存しました: {save_path}", level="INFO")
+                logger.log(f"エンジン設定を保存しました: {_to_relpath(save_path)}", level="INFO")
             except Exception as e:
                 logger.log(f"エンジン設定の保存に失敗しました: {e}", level="ERROR")
         else:
@@ -178,7 +188,7 @@ def main():
             try:
                 with open(preset_file_path, "w", encoding="utf-8") as f:
                     json.dump(presets, f, indent=4, ensure_ascii=False)
-                logger.log(f"プリセットを保存しました: {preset_file_path}", level="INFO")
+                logger.log(f"プリセットを保存しました: {_to_relpath(preset_file_path)}", level="INFO")
                 # メイン設定ファイル(settings.jsonc)にプリセットが重複して保存されないように、
                 # メモリ上の設定からは削除する。
                 settings_manager.set_setting("presets", {}, auto_save=False)

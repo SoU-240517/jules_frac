@@ -78,6 +78,15 @@ class ColorManager:
             logger.log(f"カラーパックディレクトリが見つかりません: {effective_packs_dir}", level="ERROR")
             return
 
+        def _to_relpath(path):
+            try:
+                prj = getattr(type(logger), '_project_root_path', None)
+                if prj and Path(path).is_absolute():
+                    return str(Path(path).relative_to(prj))
+            except Exception:
+                pass
+            return str(path)
+
         for file_path in effective_packs_dir.glob("*.json"):
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
@@ -87,7 +96,7 @@ class ColorManager:
                 maps_data = data.get("maps")
 
                 if not pack_name or not isinstance(maps_data, list):
-                    logger.log(f"ファイル形式が無効または不完全です: {file_path}", level="WARNING")
+                    logger.log(f"ファイル形式が無効または不完全です: {_to_relpath(file_path)}", level="WARNING")
                     continue
 
                 current_pack_maps = {}
@@ -121,9 +130,9 @@ class ColorManager:
                     logger.log(f"{file_path.name} から{len(current_pack_maps)} マップ読込完了", level="DEBUG")
 
             except json.JSONDecodeError as e:
-                logger.log(f"{file_path} からのJSON解析に失敗しました: {e}", level="ERROR")
+                logger.log(f"{_to_relpath(file_path)} からのJSON解析に失敗しました: {e}", level="ERROR")
             except Exception as e:
-                logger.log(f"ファイル '{file_path}' の処理中に予期せぬエラーが発生しました: {e}", level="ERROR")
+                logger.log(f"ファイル '{_to_relpath(file_path)}' の処理中に予期せぬエラーが発生しました: {e}", level="ERROR")
 
         if not self.color_packs:
             logger.log("有効なカラーパックは読み込まれませんでした。", level="INFO")

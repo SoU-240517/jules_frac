@@ -14,6 +14,17 @@ class SettingsManager:
     """
     _logger_instance = None # ロガーインスタンスのクラス変数
 
+    @staticmethod
+    def _to_relpath(path):
+        try:
+            from logger.custom_logger import CustomLogger
+            prj = getattr(CustomLogger, '_project_root_path', None)
+            if prj and Path(path).is_absolute():
+                return str(Path(path).relative_to(prj))
+        except Exception:
+            pass
+        return str(path)
+
     def _get_logger(self) -> object:
         """ロガーインスタンスを遅延初期化で取得します。"""
         # SettingsManager._logger_instance は CustomLogger が自身を初期化する際に設定されることを想定しています。
@@ -54,7 +65,8 @@ class SettingsManager:
         else:
             # 通常の初期化パス
             initial_filepath = Path(settings_filename)
-            logger.log(f"設定ファイルの初期パス: '{initial_filepath}'", level="DEBUG")
+            # ログ用にパスを相対パスへ変換
+            logger.log(f"設定ファイルの初期パス: '{SettingsManager._to_relpath(initial_filepath)}'", level="DEBUG")
 
             if not initial_filepath.is_absolute():
                 try:
@@ -62,13 +74,13 @@ class SettingsManager:
                     app_data_dir = home_dir / ".fractalapp"
                     app_data_dir.mkdir(parents=True, exist_ok=True)
                     self.filepath = app_data_dir / settings_filename
-                    logger.log(f"設定ファイルをユーザーデータディレクトリに解決しました: '{self.filepath}'", level="DEBUG")
+                    logger.log(f"設定ファイルをユーザーデータディレクトリに解決しました: '{SettingsManager._to_relpath(self.filepath)}'", level="DEBUG")
                 except Exception as e:
                     self._get_logger().log(f"ホームに設定ディレクトリを作成できませんでした。CWD を使用します。エラー: {e}", level="WARNING")
                     self.filepath = Path.cwd() / settings_filename
             else:
                 self.filepath = initial_filepath
-                logger.log(f"設定ファイルは絶対パスで指定されました: '{self.filepath}'", level="DEBUG")
+                logger.log(f"設定ファイルは絶対パスで指定されました: '{SettingsManager._to_relpath(self.filepath)}'", level="DEBUG")
 
             self.settings: Dict[str, Any] = {}
             self.load_settings() # 通常のインスタンスのみ設定をロード
@@ -87,18 +99,18 @@ class SettingsManager:
                 # JSONCコメントを削除 (行コメントのみ対応)
                 content_without_comments = re.sub(r"//.*", "", content)
                 self.settings = json.loads(content_without_comments)
-                logger.log(f"設定ファイル '{self.filepath}' の読み込み完了。", level="INFO")
+                logger.log(f"設定ファイル '{SettingsManager._to_relpath(self.filepath)}' の読み込み完了。", level="INFO")
             except json.JSONDecodeError as e:
-                logger.log(f"設定ファイル '{self.filepath}' のJSON形式が不正です: {e}。デフォルト設定を使用します。", level="ERROR")
+                logger.log(f"設定ファイル '{SettingsManager._to_relpath(self.filepath)}' のJSON形式が不正です: {e}。デフォルト設定を使用します。", level="ERROR")
                 self.settings = {}
             except IOError as e:
-                logger.log(f"設定ファイル '{self.filepath}' の読み込み中にI/Oエラーが発生しました: {e}。デフォルト設定を使用します。", level="ERROR")
+                logger.log(f"設定ファイル '{SettingsManager._to_relpath(self.filepath)}' の読み込み中にI/Oエラーが発生しました: {e}。デフォルト設定を使用します。", level="ERROR")
                 self.settings = {}
             except Exception as e: # その他の予期せぬエラー
-                logger.log(f"設定ファイル '{self.filepath}' の読み込み中に予期せぬエラーが発生しました: {e}。デフォルト設定を使用します。", level="ERROR")
+                logger.log(f"設定ファイル '{SettingsManager._to_relpath(self.filepath)}' の読み込み中に予期せぬエラーが発生しました: {e}。デフォルト設定を使用します。", level="ERROR")
                 self.settings = {}
         else:
-            logger.log(f"設定ファイル '{self.filepath}' が見つかりません。デフォルト設定を使用します。", level="INFO")
+            logger.log(f"設定ファイル '{SettingsManager._to_relpath(self.filepath)}' が見つかりません。デフォルト設定を使用します。", level="INFO")
             self.settings = {}
 
     def save_settings(self) -> None:
@@ -117,9 +129,9 @@ class SettingsManager:
             self.filepath.parent.mkdir(parents=True, exist_ok=True)
             with open(self.filepath, 'w', encoding='utf-8') as f:
                 json.dump(settings_to_save, f, indent=4, ensure_ascii=False)
-            logger.log(f"設定を '{self.filepath}' に保存しました。", level="INFO")
+            logger.log(f"設定を '{SettingsManager._to_relpath(self.filepath)}' に保存しました。", level="INFO")
         except (IOError, Exception) as e: # より一般的な例外もキャッチします
-            logger.log(f"設定ファイル '{self.filepath}' の保存に失敗しました: {e}", level="ERROR")
+            logger.log(f"設定ファイル '{SettingsManager._to_relpath(self.filepath)}' の保存に失敗しました: {e}", level="ERROR")
 
     def get_all_settings(self) -> Dict[str, Any]:
         """
@@ -219,7 +231,7 @@ class SettingsManager:
             filepath.parent.mkdir(parents=True, exist_ok=True)
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(presets_data, f, indent=4, ensure_ascii=False)
-            logger.log(f"プリセットを '{filepath}' にエクスポートしました。", "INFO")
+            logger.log(f"プリセットを '{SettingsManager._to_relpath(filepath)}' にエクスポートしました。", "INFO")
         except Exception as e:
             logger.log(f"プリセットのエクスポート中にエラーが発生しました: {e}", level="ERROR")
             raise # コントローラーでキャッチするために再スロー
@@ -234,7 +246,7 @@ class SettingsManager:
         """
         logger = self._get_logger()
         if not filepath.exists():
-            logger.log(f"インポートファイル '{filepath}' が見つかりません。", level="WARNING")
+            logger.log(f"インポートファイル '{SettingsManager._to_relpath(filepath)}' が見つかりません。", level="WARNING")
             return []
 
         try:
@@ -363,7 +375,7 @@ if __name__ == '__main__':
     manager.save_preset("ExportTest2", {"val": 2})
     export_file = Path("exported_presets.json")
     manager.export_presets_to_file(export_file)
-    _main_logger.log(f"プリセットを '{export_file}' にエクスポートしました。", level="INFO")
+    _main_logger.log(f"プリセットを '{SettingsManager._to_relpath(export_file)}' にエクスポートしました。", level="INFO")
 
     # 新しいマネージャーでインポートをシミュレート
     manager_import = SettingsManager(settings_filename=test_settings_file)
