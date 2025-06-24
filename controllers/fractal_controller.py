@@ -650,40 +650,24 @@ class FractalController(QObject):
 
     @pyqtSlot(object, float, float)
     def _on_renderer_finished(self, colored_image, compute_time_ms, coloring_time_ms):
-        """
-        FractalRenderer からレンダリング完了のシグナルを受信したときに呼び出されるスロット。
-        レンダリング結果を処理し、状態を更新し、関連するシグナルを発行します。
-
-        Args:
-            colored_image (object): レンダリングされた画像データ (通常は NumPy 配列)。
-            compute_time_ms (float): フラクタル計算にかかった時間 (ミリ秒)。
-            coloring_time_ms (float): カラーリング処理にかかった時間 (ミリ秒)。
-        """
         self.last_compute_time_ms = compute_time_ms
         self.last_coloring_time_ms = coloring_time_ms
         self.image_rendered.emit(colored_image)
-        self.update_status_display() # 最終ステータスメッセージを生成して発行
         self.current_renderer_task = None
-        self.is_rendering = False
+        self.is_rendering = False  # ← 先にFalseにする
         self.logger.log(f"self.is_rendering を設定した直後: {self.is_rendering}", level="DEBUG")
+        self.update_status_display()  # ← その後で呼ぶ
         self.rendering_state_changed.emit(False)
         self.logger.log("self.rendering_state_changed を発行した直後: emit(False)", level="DEBUG")
 
     @pyqtSlot(str)
     def _on_renderer_failed(self, error_message):
-        """
-        FractalRenderer からレンダリング失敗のシグナルを受信したときに呼び出されるスロット。
-        エラーメッセージを処理し、状態を更新し、関連するシグナルを発行します。
-
-        Args:
-            error_message (str): 発生したエラーの内容を示すメッセージ。
-        """
         self.logger.log(f"レンダータスク失敗: {error_message}", level="ERROR")
-        self.status_updated.emit(f"描画エラー: {error_message}")
         self.current_renderer_task = None
+        self.is_rendering = False  # ← 先にFalseにする
         self.logger.log("self.is_rendering を False に設定する前。", level="DEBUG")
-        self.is_rendering = False
         self.logger.log(f"self.is_rendering を設定した後: {self.is_rendering}", level="DEBUG")
+        self.update_status_display()  # ← その後で呼ぶ
         self.logger.log("self.rendering_state_changed を発行する直前: emit(False)", level="DEBUG")
         self.rendering_state_changed.emit(False)
         self.logger.log("self.rendering_state_changed を発行した後: emit(False)", level="DEBUG")
@@ -697,61 +681,30 @@ class FractalController(QObject):
 
     def update_status_display(self):
         """
-        現在のフラクタルエンジンとプラグインの状態に基づいてステータスバーに表示するメッセージを生成し、
-        `status_updated` シグナルを発行します。
+        ステータスバーに表示するメッセージを生成し、status_updatedシグナルを発行する。
+        「状態」表示は削除し、中心座標・ズーム倍率・画像サイズ・計算時間・彩色時間のみを表示する。
         """
         if not self.fractal_engine:
             self.status_updated.emit("フラクタルエンジン未準備.")
             return
 
-        active_fp = self.fractal_engine.get_active_fractal_plugin()
-        if not active_fp:
-            self.status_updated.emit("フラクタルプラグイン未設定.")
-            return
-
-        # Divergent part
-        active_cp_div = self.fractal_engine.get_active_coloring_plugin(target_type='divergent')
-        cpk_name_div, cm_name_div = self.fractal_engine.get_current_color_map_selection(target_type='divergent')
-        # cp_p_div = self.fractal_engine.get_coloring_plugin_parameters(target_type='divergent')
-
-        # Non-Divergent part
-        active_cp_non_div = self.fractal_engine.get_active_coloring_plugin(target_type='non_divergent')
-        cpk_name_non_div, cm_name_non_div = self.fractal_engine.get_current_color_map_selection(target_type='non_divergent')
-        # cp_p_non_div = self.fractal_engine.get_coloring_plugin_parameters(target_type='non_divergent')
-
         common_p = self.fractal_engine.get_common_parameters()
-        fp_p = self.fractal_engine.get_fractal_plugin_parameters()
-
         w = common_p.get('width', self.initial_width)
         zoom = self.initial_width / w if w > 0 else 0
-
-        status_parts = [f"F: {active_fp.name}"]
-
-        div_status = f"C(D): {active_cp_div.name if active_cp_div else 'N/A'} ({cpk_name_div or 'N/A'}/{cm_name_div or 'N/A'})"
-        # if cp_p_div: div_status += f" P:[{', '.join([f'{k}:{v:.2f}' if isinstance(v,float) else f'{k}:{v}' for k,v in cp_p_div.items()])}]"
-        status_parts.append(div_status)
-
-        non_div_status = f"C(ND): {active_cp_non_div.name if active_cp_non_div else 'N/A'} ({cpk_name_non_div or 'N/A'}/{cm_name_non_div or 'N/A'})"
-        # if cp_p_non_div: non_div_status += f" P:[{', '.join([f'{k}:{v:.2f}' if isinstance(v,float) else f'{k}:{v}' for k,v in cp_p_non_div.items()])}]"
-        status_parts.append(non_div_status)
-
-        status_parts.append(f"中心:({common_p.get('center_real',0):.3f},{common_p.get('center_imag',0):.3f})")
-        status_parts.append(f"幅:{w:.2e}({zoom:.1f}x) Iter:{common_p.get('max_iterations',0)}")
-
-        if fp_p:
-            status_parts.append(f"FP:[{', '.join([f'{k}:{v:.3f}' if isinstance(v,float) else f'{k}:{v}' for k,v in fp_p.items()])}]")
-
-        # Display parameters for the currently active_coloring_target_type
-        # active_target_cp_params = self.fractal_engine.get_coloring_plugin_parameters(target_type=self.active_coloring_target_type)
-        # if active_target_cp_params:
-        #     param_label = "D_CP" if self.active_coloring_target_type == 'divergent' else "ND_CP"
-        #     status_parts.append(f"{param_label}:[{', '.join([f'{k}:{v:.2f}' if isinstance(v,float) else f'{k}:{v}' for k,v in active_target_cp_params.items()])}]")
-
-
-        status_parts.append(f"{self.fractal_engine.image_width_px}x{self.fractal_engine.image_height_px}px")
+        center_real = common_p.get('center_real', 0)
+        center_imag = common_p.get('center_imag', 0)
+        img_w = getattr(self.fractal_engine, 'image_width_px', None)
+        img_h = getattr(self.fractal_engine, 'image_height_px', None)
+        size_str = f"{img_w}x{img_h}px" if img_w and img_h else "サイズ不明"
+        status_parts = [
+            f"中心座標: ({center_real:.4f}, {center_imag:.4f})",
+            f"ズーム: {zoom:.2f}x",
+            f"画像サイズ: {size_str}"
+        ]
         if self.last_compute_time_ms > 0:
-            status_parts.append(f"Calc:{self.last_compute_time_ms:.1f}ms")
-        status_parts.append(f"Color:{self.last_coloring_time_ms:.1f}ms")
+            status_parts.append(f"計算: {self.last_compute_time_ms:.1f}ms")
+        if self.last_coloring_time_ms > 0:
+            status_parts.append(f"彩色: {self.last_coloring_time_ms:.1f}ms")
         self.status_updated.emit(" | ".join(status_parts))
 
     # --- パンとズーム (このセクションのコードは変更なし) ---

@@ -151,16 +151,23 @@ class MainWindow(QMainWindow):
     def update_status_bar(self, message: str):
         """
         ステータスバーのメッセージを更新します。
-        アニメーションが実行中の場合は停止し、指定されたメッセージで上書きします。
-
-        Args:
-            message (str): ステータスバーに表示する新しいメッセージ。
+        エラーやエクスポート状態など特別なメッセージが来た場合はそのまま表示し、
+        通常時はFractalControllerからの整理された情報（中心座標・ズーム・画像サイズ・状態など）を表示します。
         """
+        # エラーやエクスポート状態など特別なメッセージはそのまま表示
+        if any(x in message for x in ["エラー", "失敗", "完了", "保存", "キャンセル"]):
+            if self.status_bar_animator and self.status_bar_animator.is_running:
+                self.status_bar_animator.stop_animation(final_message=message)
+                return
+            if self.status_bar:
+                self.status_bar.showMessage(message)
+            return
+        # 通常時は整理された情報を表示
         if self.status_bar_animator and self.status_bar_animator.is_running:
-            self.logger.log(f"update_status_bar がメッセージとともに呼び出されました '{message}'. アニメーションを停止します。", level="DEBUG")
             self.status_bar_animator.stop_animation(final_message=message)
-            return # アニメーターがメッセージを設定します
-        if self.status_bar: self.status_bar.showMessage(message)
+            return
+        if self.status_bar:
+            self.status_bar.showMessage(message)
 
     def _setup_central_widget(self):
         """
@@ -280,18 +287,18 @@ class MainWindow(QMainWindow):
     def _on_export_progress_updated(self, value: int):
         """
         高解像度エクスポートの進捗が更新されたときに呼び出されるスロット。
-        プログレスダイアログの値を更新します。
-
-        Args:
-            value (int): 新しい進捗値 (0-100)。
+        ステータスバーにも進捗率を表示する。
         """
-        if self.progress_dialog: self.progress_dialog.setValue(value)
+        if self.progress_dialog:
+            self.progress_dialog.setValue(value)
+        if self.status_bar:
+            self.status_bar.showMessage(f"エクスポート進捗: {value}%")
 
     @pyqtSlot(bool, str)
     def _on_export_process_finished(self, success: bool, message: str):
         """
         高解像度エクスポート処理が完了したときに呼び出されるスロット。
-        プログレスダイアログを閉じ、結果をユーザーに通知し、エクスポートアクションを再度有効化します。
+        ステータスバーに完了/失敗を表示する。
         """
         logger.log(f"エクスポート処理が完了しました。成功: {success}, メッセージ: {message}", level="INFO")
         if self.status_bar_animator and self.status_bar_animator.is_running:
@@ -302,11 +309,15 @@ class MainWindow(QMainWindow):
             self.progress_dialog.close()
             self.progress_dialog = None
 
-        if success: QMessageBox.information(self, "エクスポート完了", f"画像を保存しました:\n{message}")
-        else: QMessageBox.warning(self, "エクスポート失敗", f"エラーが発生しました:\n{message}")
+        if success:
+            QMessageBox.information(self, "エクスポート完了", f"画像を保存しました:\n{message}")
+            self.update_status_bar(f"エクスポート完了: {message}")
+        else:
+            QMessageBox.warning(self, "エクスポート失敗", f"エラーが発生しました:\n{message}")
+            self.update_status_bar(f"エクスポート失敗: {message}")
 
-        if hasattr(self, 'export_action'): self.export_action.setEnabled(True) # 再度有効化
-        self.update_status_bar(f"エクスポート完了: {message}" if success else f"エクスポート失敗: {message}")
+        if hasattr(self, 'export_action'):
+            self.export_action.setEnabled(True) # 再度有効化
 
     def showEvent(self, event):
         """
