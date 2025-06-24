@@ -105,13 +105,18 @@ class SettingsManager:
         """
         現在の設定をファイルに保存します。
         保存先のディレクトリが存在しない場合は作成します。
+        engine_settingsとpresetsは除外して保存します。
         """
         logger = self._get_logger()
         try:
+            # 保存時にengine_settingsとpresetsを除外
+            settings_to_save = self.settings.copy()
+            settings_to_save.pop("engine_settings", None)
+            settings_to_save.pop("presets", None)
             # 親ディレクトリが存在することを確認します
             self.filepath.parent.mkdir(parents=True, exist_ok=True)
             with open(self.filepath, 'w', encoding='utf-8') as f:
-                json.dump(self.settings, f, indent=4, ensure_ascii=False)
+                json.dump(settings_to_save, f, indent=4, ensure_ascii=False)
             logger.log(f"設定を '{self.filepath}' に保存しました。", level="INFO")
         except (IOError, Exception) as e: # より一般的な例外もキャッチします
             logger.log(f"設定ファイル '{self.filepath}' の保存に失敗しました: {e}", level="ERROR")

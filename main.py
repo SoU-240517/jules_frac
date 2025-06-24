@@ -109,13 +109,16 @@ def main():
 
     # --- 初期エンジン設定を専用ファイルからロード ---
     init_engine_settings_path = _project_root / INIT_ENGINE_SETTINGS_FILE_NAME
+    # 終了時にsettings.jsoncへ保存する際、元の設定に戻すために保持しておく
+    initial_engine_settings = settings_manager.get_setting("engine_settings", {})
     if init_engine_settings_path.exists():
         try:
             # JSONC形式の可能性を考慮し、一時的なSettingsManagerで読み込む
             temp_settings_manager = SettingsManager(settings_filename=str(init_engine_settings_path))
-            init_engine_settings = temp_settings_manager.get_all_settings()
+            loaded_engine_settings = temp_settings_manager.get_all_settings()
             # settings.jsoncから読み込んだエンジン設定を上書きする
-            settings_manager.set_setting("engine_settings", init_engine_settings, auto_save=False)
+            settings_manager.set_setting("engine_settings", loaded_engine_settings, auto_save=False)
+            initial_engine_settings = loaded_engine_settings # 保持する値を更新
             logger.log(f"初期エンジン設定をロードしました: {init_engine_settings_path}", level="INFO")
         except Exception as e:
             logger.log(f"初期エンジン設定ファイルの読み込みに失敗しました: {e}", level="ERROR")
@@ -146,18 +149,29 @@ def main():
 
     # --- 終了時処理の接続 ---
     def save_settings_on_exit():
-        # エンジン設定の保存 (settings.jsoncへ)
+        """アプリケーション終了時に各種設定を対応するファイルに保存する。
+
+        settings.jsonc にはアプリケーションの基本的な設定のみを保存し、
+        エンジン設定とプリセットは専用のファイルに保存する。"""
+        logger.log("終了処理を開始します。各種設定を保存します...", level="INFO")
+
+        # 1. 現在のエンジン設定を専用ファイル(init_engine_settings.json)に保存
         app_config = settings_manager.get_setting("app_settings", {})
         should_save_engine = app_config.get("save_engine_settings", True)
         if should_save_engine:
             logger.log("アプリケーション終了前にエンジン設定を保存します...", level="INFO")
             engine_config = fractal_controller.get_full_configuration()
-            settings_manager.set_setting("engine_settings", engine_config, auto_save=False)
-            logger.log("エンジン設定を保存キューに追加しました。", level="INFO")
+            save_path = _project_root / INIT_ENGINE_SETTINGS_FILE_NAME
+            try:
+                with open(save_path, "w", encoding="utf-8") as f:
+                    json.dump(engine_config, f, indent=4, ensure_ascii=False)
+                logger.log(f"エンジン設定を保存しました: {save_path}", level="INFO")
+            except Exception as e:
+                logger.log(f"エンジン設定の保存に失敗しました: {e}", level="ERROR")
         else:
             logger.log("エンジン設定の保存はスキップされました (save_engine_settings is false)。", level="INFO")
 
-        # プリセットの保存 (preset_record.jsonへ)
+        # 2. 現在のプリセットを専用ファイル(preset_record.json)に保存
         presets = settings_manager.get_setting("presets", {})
         if presets:
             preset_file_path = _project_root / PRESET_FILE_NAME
@@ -165,16 +179,26 @@ def main():
                 with open(preset_file_path, "w", encoding="utf-8") as f:
                     json.dump(presets, f, indent=4, ensure_ascii=False)
                 logger.log(f"プリセットを保存しました: {preset_file_path}", level="INFO")
-                # settings.jsoncからはpresetsを削除する
+                # メイン設定ファイル(settings.jsonc)にプリセットが重複して保存されないように、
+                # メモリ上の設定からは削除する。
                 settings_manager.set_setting("presets", {}, auto_save=False)
             except Exception as e:
                 logger.log(f"プリセットの保存に失敗しました: {e}", level="ERROR")
+
+        # 3. メイン設定ファイル(settings.jsonc)を保存
+        #    settings.jsonc には以下の内容を保存する。
+        #    - engine_settings: 動的な状態は init_engine_settings.json に保存済みのため、
+        #      settings.jsonc には起動時の初期設定を書き戻す。
+        #    - presets: preset_record.json に保存済みのため、空の辞書を書き込む。
+        #    - app_settings など、その他のアプリケーションの基本的な設定
+        settings_manager.set_setting("engine_settings", initial_engine_settings, auto_save=False)
+        # settings.jsonc には presets を保存しない
+        settings_manager.set_setting("presets", {}, auto_save=False)
         settings_manager.save_settings()
 
     app.aboutToQuit.connect(save_settings_on_exit)
     app.aboutToQuit.connect(lambda: clear_numba_cache_on_exit(settings_manager))
 
-    # --- アプリケーションの実行 ---
     main_window.show()
     sys.exit(app.exec())
 
