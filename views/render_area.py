@@ -163,6 +163,11 @@ class RenderArea(QLabel):
         if not self.initial_render_complete:
             return
 
+        # 実際にサイズが変化した場合のみ高品質レンダリングを要求
+        if event.oldSize() == event.size():
+            logger.log("ウィンドウリサイズイベント発生。サイズ不変でレンダリングを無視。", level="DEBUG")
+            return  # サイズが変わっていなければ何もしない
+
         # ウィンドウリサイズ後に高品質レンダリングを要求
         self.is_interactive_mode = True # 一時的にインタラクティブモードに
         self.high_quality_render_timer.start()

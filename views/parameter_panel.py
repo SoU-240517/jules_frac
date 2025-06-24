@@ -1036,8 +1036,14 @@ class ParameterPanel(QScrollArea):
             self.populate_presets_combo_box()
 
             params = self.fractal_controller.get_current_common_parameters()
-            if params: self._set_ui_values(params.get('max_iterations',100))
-
+            if params:
+                # --- ここでシグナルをブロック ---
+                self.iter_spinbox.blockSignals(True)
+                self.iter_slider.blockSignals(True)
+                self._set_ui_values(params.get('max_iterations',100))
+                self.iter_spinbox.blockSignals(False)
+                self.iter_slider.blockSignals(False)
+                # --- ここまで ---
             # Fractal plugin UI
             active_fp_name = self.fractal_controller.get_active_fractal_plugin_name_from_engine()
             if active_fp_name: self._update_fractal_plugin_specific_ui(active_fp_name)
@@ -1078,13 +1084,6 @@ class ParameterPanel(QScrollArea):
                     if first_pack and first_pack != "N/A":
                         combo_pack.setCurrentText(first_pack) # シグナル経由で更新
 
-    @pyqtSlot(dict) # 引数として dict を受け取ることを明示
-    def update_ui_from_controller_parameters(self, params: dict):
-        """
-        コントローラーから共通パラメータが外部的に更新された場合にUIを更新するスロット。
-        """
-        if self.fractal_controller:
-            self._set_ui_values(params['max_iterations'])
     def _set_ui_values(self, iterations: int): # 他の共通パラメータも引数に追加する可能性あり
         """UIの共通パラメータ値を設定します。現在は最大反復回数のみを設定します。
 
@@ -1092,8 +1091,19 @@ class ParameterPanel(QScrollArea):
             iterations (int): 設定する最大反復回数。
         """
         self.iter_spinbox.blockSignals(True)
+        self.iter_slider.blockSignals(True)
         self.iter_spinbox.setValue(iterations)
+        self.iter_slider.setValue(iterations)
         self.iter_spinbox.blockSignals(False)
+        self.iter_slider.blockSignals(False)
+
+    @pyqtSlot(dict) # 引数として dict を受け取ることを明示
+    def update_ui_from_controller_parameters(self, params: dict):
+        """
+        コントローラーから共通パラメータが外部的に更新された場合にUIを更新するスロット。
+        """
+        if self.fractal_controller:
+            self._set_ui_values(params['max_iterations'])
     def get_current_ui_parameters(self) -> dict:
         """
         現在のUIから共通パラメータの値を取得して辞書として返します。
