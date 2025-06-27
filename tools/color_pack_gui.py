@@ -12,12 +12,13 @@ from PyQt6.QtCore import QThread, QObject, pyqtSignal, Qt
 
 # --- 変換処理のコアロジック (変更なし) ---
 
-def hex_to_rgb(hex_color: str) -> list[int] | None:
-    """16進数カラーコードをRGBリストに変換します。"""
+def hex_to_rgba(hex_color: str) -> list[int] | None:
+    """16進数カラーコードをRGBAリストに変換します。"""
     hex_color = hex_color.lstrip('#')
     if len(hex_color) == 6:
         try:
-            return [int(hex_color[i:i+2], 16) for i in (0, 2, 4)]
+            rgb = [int(hex_color[i:i+2], 16) for i in (0, 2, 4)]
+            return rgb + [255]  # Alpha値を255で追加
         except ValueError:
             return None
     return None
@@ -61,7 +62,7 @@ class ConversionWorker(QObject):
                     self.log_message.emit(f"    -> 警告: '{file_path.name}' は期待される形式ではありません。スキップします。")
                     continue
 
-                valid_rgb_colors = [rgb for rgb in (hex_to_rgb(hc) for hc in hex_colors) if rgb is not None]
+                valid_rgb_colors = [rgb for rgb in (hex_to_rgba(hc) for hc in hex_colors) if rgb is not None]
                 if not valid_rgb_colors:
                     self.log_message.emit(f"    -> 警告: '{file_path.name}' から有効な色を読み込めませんでした。スキップします。")
                     continue
@@ -119,7 +120,7 @@ class ConversionWorker(QObject):
                             colors, num_colors_inner = map_data[key], len(map_data[key])
                             for j, color in enumerate(colors):
                                 if j % 5 == 0: f.write(' ' * 16)
-                                f.write(f'[{color[0]},{color[1]},{color[2]}]')
+                                f.write(f'[{color[0]},{color[1]},{color[2]},{color[3]}]')
                                 if j < num_colors_inner - 1: f.write(',')
                                 if (j + 1) % 5 == 0 and j < num_colors_inner - 1: f.write('\n')
                             f.write('\n' + ' ' * 12 + ']')
