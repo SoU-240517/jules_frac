@@ -293,7 +293,7 @@ class ImageColorExtractor(QWidget):
         self.image_label = QLabel("画像をロードしてください")
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.image_label.setMinimumSize(400, 300)
-        self.image_label.setFrameStyle(QFrame.StyledPanel)
+        self.image_label.setFrameStyle(QFrame.Shape.StyledPanel)
         layout.addWidget(self.image_label)
 
         # コントロールレイアウト (読み込みボタン、色数選択、抽出ボタン)
