@@ -6,12 +6,12 @@ from pathlib import Path
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QFileDialog, QLineEdit, QLabel, QListWidget,
-    QCheckBox, QSpinBox, QTextEdit, QMessageBox, QFrame
+    QCheckBox, QSpinBox, QTextEdit, QMessageBox, QFrame, QSplitter
 )
 from PyQt6.QtCore import QThread, QObject, pyqtSignal, Qt
+from PyQt6.QtGui import QPainter, QColor, QLinearGradient
 
 # --- 変換処理のコアロジック (変更なし) ---
-
 def hex_to_rgba(hex_color: str) -> list[int] | None:
     """16進数カラーコードをRGBAリストに変換します。"""
     hex_color = hex_color.lstrip('#')
@@ -22,6 +22,54 @@ def hex_to_rgba(hex_color: str) -> list[int] | None:
         except ValueError:
             return None
     return None
+
+# --- 色プレビューウィジェット ---
+class ColorPreviewWidget(QWidget):
+    """色のリストやグラデーションを視覚的に表示するウィジェット"""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setMinimumHeight(40)
+        self.setMaximumHeight(80)
+        self.colors_data = None # {"type": "colors" or "gradient", "data": ...}
+
+    def set_data(self, colors_data):
+        """プレビューデータを設定して再描画をトリガーします。"""
+        self.colors_data = colors_data
+        self.update()
+
+    def clear(self):
+        """プレビューをクリアします。"""
+        self.colors_data = None
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.rect()
+
+        if not self.colors_data or not self.colors_data.get("data"):
+            painter.fillRect(rect, self.palette().color(self.backgroundRole()).lighter(120))
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, "No Data")
+            return
+
+        data_type = self.colors_data.get("type")
+        data = self.colors_data.get("data")
+
+        if data_type == "colors":
+            num_colors = len(data)
+            if num_colors == 0: return
+            rect_width = rect.width() / num_colors
+            for i, color_rgba in enumerate(data):
+                color = QColor(*color_rgba)
+                painter.fillRect(int(i * rect_width), 0, int(rect_width + 1), rect.height(), color)
+
+        elif data_type == "gradient":
+            gradient = QLinearGradient(0, 0, rect.width(), 0)
+            for point in data:
+                pos = point.get("pos", 0.0)
+                color_rgba = point.get("color", [0,0,0,255])
+                gradient.setColorAt(pos, QColor(*color_rgba))
+            painter.fillRect(rect, gradient)
 
 class ConversionWorker(QObject):
     """変換処理をバックグラウンドで実行するためのワーカクラス"""
@@ -148,12 +196,11 @@ class ConversionWorker(QObject):
             self.finished.emit()
 
 # --- GUIのメインウィンドウ ---
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Color Pack Converter")
-        self.setGeometry(100, 100, 600, 700)
+        self.setGeometry(100, 100, 800, 700)
         self.thread = None
         self.worker = None
         self.init_ui()
@@ -161,16 +208,23 @@ class MainWindow(QMainWindow):
     def init_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
+        main_layout = QHBoxLayout(central_widget)
+
+        # --- スプリッターでUIを分割 ---
+        main_splitter = QSplitter(Qt.Orientation.Horizontal)
+        main_layout.addWidget(main_splitter)
+
+        # --- 左側: コントロールパネル ---
+        control_panel = QWidget()
+        control_layout = QVBoxLayout(control_panel)
+        main_splitter.addWidget(control_panel)
 
         # 1. 入力ファイルセクション
-        main_layout.addWidget(QLabel("1. Input JSON Files:"))
-
-        # <<< 変更点: ボタン用のレイアウトを追加 >>>
+        control_layout.addWidget(QLabel("1. Input JSON Files:"))
         input_buttons_layout = QVBoxLayout()
         select_files_button = QPushButton("Select Files...")
-        select_folder_button = QPushButton("Select Folder...") # 新しいボタン
-        clear_list_button = QPushButton("Clear List") # 新しいボタン
+        select_folder_button = QPushButton("Select Folder...")
+        clear_list_button = QPushButton("Clear List")
         input_buttons_layout.addWidget(select_files_button)
         input_buttons_layout.addWidget(select_folder_button)
         input_buttons_layout.addWidget(clear_list_button)
@@ -178,9 +232,9 @@ class MainWindow(QMainWindow):
 
         input_layout = QHBoxLayout()
         self.file_list_widget = QListWidget()
-        input_layout.addWidget(self.file_list_widget, 1) # リストボックスがスペースを優先的に使用
+        input_layout.addWidget(self.file_list_widget, 1)
         input_layout.addLayout(input_buttons_layout)
-        main_layout.addLayout(input_layout)
+        control_layout.addLayout(input_layout)
 
         # 2. 出力ファイルセクション
         output_layout = QHBoxLayout()
@@ -188,14 +242,14 @@ class MainWindow(QMainWindow):
         save_as_button = QPushButton("Save As...")
         output_layout.addWidget(self.output_path_edit)
         output_layout.addWidget(save_as_button)
-        main_layout.addWidget(QLabel("2. Output Color Pack File:"))
-        main_layout.addLayout(output_layout)
+        control_layout.addWidget(QLabel("2. Output Color Pack File:"))
+        control_layout.addLayout(output_layout)
 
         # 3. 設定セクション
-        main_layout.addWidget(QLabel("3. Settings:"))
+        control_layout.addWidget(QLabel("3. Settings:"))
         self.pack_name_edit = QLineEdit()
         self.pack_name_edit.setPlaceholderText("Enter a name for the color pack")
-        main_layout.addWidget(self.pack_name_edit)
+        control_layout.addWidget(self.pack_name_edit)
 
         gradient_layout = QHBoxLayout()
         self.gradient_checkbox = QCheckBox("Convert to Gradient")
@@ -207,47 +261,142 @@ class MainWindow(QMainWindow):
         gradient_layout.addWidget(self.gradient_points_label)
         gradient_layout.addWidget(self.gradient_points_spinbox)
         gradient_layout.addStretch()
-        main_layout.addLayout(gradient_layout)
+        control_layout.addLayout(gradient_layout)
 
         self.gradient_points_label.setEnabled(False)
         self.gradient_points_spinbox.setEnabled(False)
 
         # 4. 実行ボタン
+        action_layout = QHBoxLayout()
+        self.preview_button = QPushButton("Update Preview")
         self.convert_button = QPushButton("Convert")
         self.convert_button.setStyleSheet("font-size: 16px; padding: 10px;")
-        main_layout.addWidget(self.convert_button, alignment=Qt.AlignmentFlag.AlignRight)
+        action_layout.addStretch()
+        action_layout.addWidget(self.preview_button)
+        action_layout.addWidget(self.convert_button)
+        control_layout.addLayout(action_layout)
 
         # 5. ログ表示セクション
         line = QFrame()
         line.setFrameShape(QFrame.Shape.HLine)
         line.setFrameShadow(QFrame.Shadow.Sunken)
-        main_layout.addWidget(line)
-        main_layout.addWidget(QLabel("Log:"))
+        control_layout.addWidget(line)
+        control_layout.addWidget(QLabel("Log:"))
         self.log_area = QTextEdit()
         self.log_area.setReadOnly(True)
-        main_layout.addWidget(self.log_area)
+        control_layout.addWidget(self.log_area)
+
+        # --- 右側: プレビューパネル ---
+        preview_panel = QWidget()
+        preview_layout = QVBoxLayout(preview_panel)
+        main_splitter.addWidget(preview_panel)
+
+        preview_layout.addWidget(QLabel("<b>Preview (Before)</b>"))
+        self.before_preview = ColorPreviewWidget()
+        preview_layout.addWidget(self.before_preview)
+
+        preview_layout.addWidget(QLabel("<b>Preview (After)</b>"))
+        self.after_preview = ColorPreviewWidget()
+        preview_layout.addWidget(self.after_preview)
+        preview_layout.addStretch()
+
+        # --- スプリッターの初期サイズを設定 ---
+        main_splitter.setSizes([450, 350])
 
         # --- イベント（シグナルとスロット）の接続 ---
         select_files_button.clicked.connect(self.select_input_files)
-        select_folder_button.clicked.connect(self.select_input_folder) # 新しい接続
-        clear_list_button.clicked.connect(self.file_list_widget.clear) # 新しい接続
+        select_folder_button.clicked.connect(self.select_input_folder)
+        clear_list_button.clicked.connect(self.clear_input_list)
         save_as_button.clicked.connect(self.select_output_file)
         self.gradient_checkbox.stateChanged.connect(self.toggle_gradient_controls)
+        self.gradient_points_spinbox.valueChanged.connect(self.update_previews)
         self.convert_button.clicked.connect(self.start_conversion)
+        self.preview_button.clicked.connect(self.update_previews)
+        self.file_list_widget.currentItemChanged.connect(self.update_previews)
 
-    # <<< 変更点: 重複を避けてファイルを追加するヘルパーメソッド >>>
+    def update_previews(self):
+        """変換前後のプレビューを更新します。"""
+        current_item = self.file_list_widget.currentItem()
+        if not current_item:
+            self.before_preview.clear()
+            self.after_preview.clear()
+            return
+
+        file_path_str = current_item.text()
+        file_path = Path(file_path_str)
+        rgba_colors = []
+
+        # --- 変換前プレビューの更新 ---
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            hex_colors = data.get("colors", [])
+            if not isinstance(hex_colors, list):
+                raise ValueError("`colors` field is not a list.")
+
+            rgba_colors = [rgb for rgb in (hex_to_rgba(hc) for hc in hex_colors) if rgb is not None]
+            if not rgba_colors:
+                raise ValueError("No valid colors found in file.")
+
+            self.before_preview.set_data({"type": "colors", "data": rgba_colors})
+            self.add_log(f"プレビュー (変換前): {file_path.name}")
+
+        except Exception as e:
+            self.add_log(f"プレビュー(前)エラー: {e}")
+            self.before_preview.clear()
+            self.after_preview.clear()
+            return
+
+        # --- 変換後プレビューの更新 ---
+        use_gradient = self.gradient_checkbox.isChecked()
+        num_points = self.gradient_points_spinbox.value()
+        num_colors = len(rgba_colors)
+
+        after_data = None
+        if use_gradient and num_colors >= 2 and num_colors > num_points:
+            gradient_points = []
+            for i in range(num_points):
+                raw_idx = i * (num_colors - 1) / (num_points - 1)
+                index = min(int(round(raw_idx)), num_colors - 1)
+                # 変換処理と同じロジックで重複をチェック
+                if i > 0 and index == gradient_points[-1]['_index']:
+                    continue
+                pos = index / (num_colors - 1)
+                point = {"pos": round(pos, 5), "color": rgba_colors[index], "_index": index}
+                gradient_points.append(point)
+
+            # プレビューに渡す前に一時的な '_index' キーを削除
+            final_gradient_points = [{k: v for k, v in p.items() if k != '_index'} for p in gradient_points]
+
+            after_data = {"type": "gradient", "data": final_gradient_points}
+            self.add_log(f"プレビュー (変換後): グラデーション ({len(final_gradient_points)}ポイント)")
+        else:
+            after_data = {"type": "colors", "data": rgba_colors}
+            if use_gradient:
+                self.add_log(f"プレビュー (変換後): 通常形式 (色数が少ないため)")
+            else:
+                self.add_log(f"プレビュー (変換後): 通常形式")
+
+        self.after_preview.set_data(after_data)
+
+
     def add_files_to_list(self, files_to_add):
-        """ファイルリストに重複を避けてファイルを追加します。"""
         existing_files = {self.file_list_widget.item(i).text() for i in range(self.file_list_widget.count())}
         new_files = [str(f) for f in files_to_add if str(f) not in existing_files]
-
         if new_files:
             self.file_list_widget.addItems(new_files)
             self.add_log(f"{len(new_files)} 個のファイルを追加しました。")
+            if self.file_list_widget.count() > 0 and self.file_list_widget.currentRow() == -1:
+                self.file_list_widget.setCurrentRow(0)
         else:
             self.add_log("新しいファイルは追加されませんでした（重複または選択なし）。")
 
-    # <<< 変更点: クリアせず追記する方式に変更 >>>
+    def clear_input_list(self):
+        self.file_list_widget.clear()
+        self.before_preview.clear()
+        self.after_preview.clear()
+        self.add_log("入力リストをクリアしました。")
+
     def select_input_files(self):
         files, _ = QFileDialog.getOpenFileNames(
             self, "Select Color Definition Files", "", "JSON Files (*.json);;All Files (*)"
@@ -255,14 +404,11 @@ class MainWindow(QMainWindow):
         if files:
             self.add_files_to_list(files)
 
-    # <<< 変更点: 新しいメソッド >>>
     def select_input_folder(self):
-        """フォルダを選択し、その中の.jsonファイルをリストに追加します。"""
         folder = QFileDialog.getExistingDirectory(self, "Select Folder Containing Color Files")
         if folder:
             self.add_log(f"フォルダ '{folder}' を検索中...")
             folder_path = Path(folder)
-            # フォルダ直下の .json ファイルを検索
             json_files = list(folder_path.glob('*.json'))
             if json_files:
                 self.add_files_to_list(json_files)
@@ -278,12 +424,14 @@ class MainWindow(QMainWindow):
         is_checked = (state == Qt.CheckState.Checked.value)
         self.gradient_points_label.setEnabled(is_checked)
         self.gradient_points_spinbox.setEnabled(is_checked)
+        self.update_previews()
 
     def add_log(self, message):
         self.log_area.append(message)
 
     def on_conversion_finished(self):
         self.convert_button.setEnabled(True)
+        self.preview_button.setEnabled(True)
         self.add_log("--- 処理完了 ---")
         QMessageBox.information(self, "Finished", "Conversion process has finished.")
         if self.thread:
@@ -310,6 +458,7 @@ class MainWindow(QMainWindow):
         self.log_area.clear()
         self.add_log("--- 処理開始 ---")
         self.convert_button.setEnabled(False)
+        self.preview_button.setEnabled(False)
 
         self.thread = QThread()
         self.worker = ConversionWorker(
