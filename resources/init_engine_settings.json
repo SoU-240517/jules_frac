@@ -14,8 +14,8 @@
         "plugin_parameters": {
             "color_scale": 1.0
         },
-        "pack_name": "Cyclic",
-        "map_name": "twilight_shifted"
+        "pack_name": "デフォルト",
+        "map_name": "グレースケール"
     },
     "coloring_non_divergent": {
         "plugin_name": "複素ポテンシャル",
