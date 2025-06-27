@@ -3,15 +3,18 @@ import os
 import json
 import numpy as np
 from PIL import Image
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                             QPushButton, QFileDialog, QLabel, QSlider, QColorDialog, QSpinBox,
                             QListWidget, QMessageBox, QTabWidget, QGridLayout, QLineEdit,
                             QComboBox, QScrollArea, QFrame)
-from PyQt5.QtGui import QColor, QPainter, QPixmap, QImage, QPen
-from PyQt5.QtCore import Qt, QSize, pyqtSignal, QRect
+from PyQt6.QtGui import QColor, QPainter, QPixmap, QImage, QPen, QAction
+from PyQt6.QtCore import Qt, QSize, pyqtSignal, QRect
 from matplotlib.colors import LinearSegmentedColormap
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+try:
+    from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+except ImportError:
+    from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 SKLEARN_AVAILABLE = False
 try:
@@ -58,7 +61,7 @@ class ColorButton(QPushButton):
         self.is_selected = False  # 選択状態を初期化
         self.setColor(color)
         self.setMouseTracking(True)  # マウスイベントを有効化
-        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.setMinimumSize(10, 30)
         self.setMaximumSize(30, 30)
 
@@ -83,13 +86,13 @@ class ColorButton(QPushButton):
 
     def mouseDoubleClickEvent(self, event):
         """ダブルクリック時の処理"""
-        if event.button() == Qt.LeftButton:
+        if event.button() == Qt.MouseButton.LeftButton:
             self.choose_color()
         super().mouseDoubleClickEvent(event)
 
     def mousePressEvent(self, event):
         """右クリックで選択解除"""
-        if event.button() == Qt.RightButton:
+        if event.button() == Qt.MouseButton.RightButton:
             self.set_selected(False)
         super().mousePressEvent(event)
 
@@ -288,7 +291,7 @@ class ImageColorExtractor(QWidget):
 
         # 画像表示エリア
         self.image_label = QLabel("画像をロードしてください")
-        self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.image_label.setMinimumSize(400, 300)
         self.image_label.setFrameStyle(QFrame.StyledPanel)
         layout.addWidget(self.image_label)
@@ -332,10 +335,8 @@ class ImageColorExtractor(QWidget):
 
     def load_image(self):
         """画像を読み込む"""
-        options = QFileDialog.Options()
         file_name, _ = QFileDialog.getOpenFileName(
-            self, "画像を開く", "", "画像ファイル (*.png *.jpg *.jpeg *.bmp *.gif);;All Files (*)",
-            options=options)
+            self, "画像を開く", "", "画像ファイル (*.png *.jpg *.jpeg *.bmp *.gif);;All Files (*)")
 
         if file_name:
             self.image = Image.open(file_name)
@@ -344,7 +345,7 @@ class ImageColorExtractor(QWidget):
             # 画像を表示エリアのサイズに合わせてリサイズ
             scaled_pixmap = pixmap.scaled(
                 self.image_label.width(), self.image_label.height(),
-                Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
 
             self.image_label.setPixmap(scaled_pixmap)
 
@@ -391,7 +392,7 @@ class ImageColorExtractor(QWidget):
                  QMessageBox.warning(self, "警告", "有効なピクセルがありません。")
                  return
 
-        kmeans = KMeans(n_clusters=effective_n_clusters, random_state=0, n_init=10)
+        kmeans = KMeans(n_clusters=effective_n_clusters, random_state=0, n_init='auto')
         kmeans.fit(pixels)
 
         extracted_rgb_colors = kmeans.cluster_centers_.astype(int)
@@ -443,11 +444,11 @@ class AutoColorMapGenerator(QWidget):
         # 色数の選択
         num_colors_layout = QHBoxLayout()
         num_colors_layout.addWidget(QLabel("色数:"))
-        self.num_colors_slider = QSlider(Qt.Horizontal)
+        self.num_colors_slider = QSlider(Qt.Orientation.Horizontal)
         self.num_colors_slider.setMinimum(2)
         self.num_colors_slider.setMaximum(20)
         self.num_colors_slider.setValue(10)
-        self.num_colors_slider.setTickPosition(QSlider.TicksBelow)
+        self.num_colors_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.num_colors_slider.setTickInterval(1)
         self.num_colors_label = QLabel("10")
         self.num_colors_slider.valueChanged.connect(lambda x: self.num_colors_label.setText(str(x)))
@@ -668,10 +669,8 @@ class ColorMapLibrary(QWidget):
 
     def export_to_json(self):
         """カラーマップをJSONファイルにエクスポートする"""
-        options = QFileDialog.Options()
         file_name, _ = QFileDialog.getSaveFileName(
-            self, "JSONファイルに保存", "", "JSON Files (*.json);;All Files (*)",
-            options=options)
+            self, "JSONファイルに保存", "", "JSON Files (*.json);;All Files (*)")
 
         if file_name:
             # 拡張子が指定されていない場合は.jsonを追加
@@ -693,10 +692,8 @@ class ColorMapLibrary(QWidget):
 
     def import_from_json(self):
         """JSONファイルからカラーマップをインポートする"""
-        options = QFileDialog.Options()
         file_name, _ = QFileDialog.getOpenFileName(
-            self, "JSONファイルを開く", "", "JSON Files (*.json);;All Files (*)",
-            options=options)
+            self, "JSONファイルを開く", "", "JSON Files (*.json);;All Files (*)")
 
         if file_name:
             try:
@@ -790,7 +787,7 @@ def main():
     app = QApplication(sys.argv)
     window = ColorMapGenerator()
     window.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 if __name__ == "__main__":
     main()
