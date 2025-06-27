@@ -11,10 +11,10 @@ class ColorManager:
         logger.log("ColorManager初期化中...", level="DEBUG")
         # color_packs_dir はプロジェクトルートからの相対パスを想定しています
         self.color_packs_dir = Path(color_packs_dir)
-        self.color_packs = {}  # {カラーパック名: {カラーマップ名: RGBタプルのリスト, ...}}
+        self.color_packs = {}  # {カラーパック名: {カラーマップ名: RGB/RGBAタプルのリスト, ...}}
         self.load_color_packs()
 
-    def _generate_gradient_colors(self, gradient_points: list[dict], num_colors: int) -> list[tuple[int, int, int]]:
+    def _generate_gradient_colors(self, gradient_points: list[dict], num_colors: int) -> list[tuple]:
         """指定されたグラデーションポイントと色数に基づいてグラデーションカラーを生成します。"""
         if not gradient_points:
             logger.log("_generate_gradient_colors がグラデーションポイントなしで呼び出されました。", level="WARNING")
@@ -25,8 +25,7 @@ class ColorManager:
         # ポイントを位置 (pos) でソートする
         points = sorted(gradient_points, key=lambda p: p['pos'])
 
-        # 出力用のカラーリストです
-        output_colors = []
+        has_alpha = any(len(p.get('color', [])) == 4 for p in points)
 
         # 各ポイントの位置と色値を抽出します
         # np.interpはソートされたxpを期待するため、元の0-1スケールを使用する
@@ -35,6 +34,9 @@ class ColorManager:
         colors_r = np.array([p['color'][0] for p in points])
         colors_g = np.array([p['color'][1] for p in points])
         colors_b = np.array([p['color'][2] for p in points])
+        if has_alpha:
+            # Default alpha to 255 (opaque) if not provided for a specific point.
+            colors_a = np.array([p['color'][3] if len(p['color']) == 4 else 255 for p in points])
 
         # 補間する新しい位置 (0.0 から 1.0 の範囲で均等に配置します)
         target_positions = np.linspace(0.0, 1.0, num_colors)
@@ -42,13 +44,19 @@ class ColorManager:
         interp_r = np.interp(target_positions, positions, colors_r)
         interp_g = np.interp(target_positions, positions, colors_g)
         interp_b = np.interp(target_positions, positions, colors_b)
+        if has_alpha:
+            interp_a = np.interp(target_positions, positions, colors_a)
 
+        output_colors = []
         for i in range(num_colors):
-            output_colors.append( # np.clipで値を0-255の範囲に収めます
-                (int(round(np.clip(interp_r[i], 0, 255))), # np.clipで値を0-255の範囲に収める
-                 int(round(np.clip(interp_g[i], 0, 255))),
-                 int(round(np.clip(interp_b[i], 0, 255))))
-            )
+            r = int(round(np.clip(interp_r[i], 0, 255)))
+            g = int(round(np.clip(interp_g[i], 0, 255)))
+            b = int(round(np.clip(interp_b[i], 0, 255)))
+            if has_alpha:
+                a = int(round(np.clip(interp_a[i], 0, 255)))
+                output_colors.append((r, g, b, a))
+            else:
+                output_colors.append((r, g, b))
         return output_colors
 
     def load_color_packs(self) -> None:
@@ -107,7 +115,7 @@ class ColorManager:
                         continue
 
                     if "colors" in map_entry and isinstance(map_entry["colors"], list):
-                        colors_list = [tuple(c) for c in map_entry["colors"] if isinstance(c, list) and len(c) == 3 and all(isinstance(x, int) for x in c)]
+                        colors_list = [tuple(c) for c in map_entry["colors"] if isinstance(c, list) and len(c) in [3, 4] and all(isinstance(x, int) for x in c)]
                         if colors_list: # 検証後に空でないことを確認します
                            current_pack_maps[map_name] = colors_list
                         else:
@@ -145,8 +153,8 @@ class ColorManager:
         """指定されたカラーパック内のすべてのカラーマップ名のリストを返します。"""
         return list(self.color_packs.get(pack_name, {}).keys())
 
-    def get_color_map_data(self, pack_name: str, map_name: str) -> list[tuple[int, int, int]] | None:
-        """指定されたカラーパックとマップ名に対応するカラーデータのリスト (RGBタプルのリスト) を返します。"""
+    def get_color_map_data(self, pack_name: str, map_name: str) -> list[tuple] | None:
+        """指定されたカラーパックとマップ名に対応するカラーデータのリスト (RGB/RGBAタプルのリスト) を返します。"""
         return self.color_packs.get(pack_name, {}).get(map_name)
 
 if __name__ == '__main__':
