@@ -7,6 +7,7 @@ from .render_area import RenderArea
 from .parameter_panel import ParameterPanel
 from .high_res_dialog import HighResOutputDialog
 from .status_bar_animator import StatusBarAnimator
+from .colormap_editor import ColormapEditor
 from logger.custom_logger import CustomLogger
 
 logger = CustomLogger()
@@ -69,6 +70,11 @@ class MainWindow(QMainWindow):
         self.exit_action.setToolTip("アプリケーションを終了します")
         self.exit_action.triggered.connect(self.close)
 
+        self.open_colormap_editor_action = QAction("カラーマップエディタ...", self)
+        self.open_colormap_editor_action.setStatusTip("カラーマップエディタを開きます")
+        self.open_colormap_editor_action.setToolTip("カラーマップエディタを開きます")
+        self.open_colormap_editor_action.triggered.connect(self._open_colormap_editor)
+
 
     def _create_menu_bar(self): # 一貫性のために _create_menus から名前変更
         """
@@ -81,9 +87,14 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
         file_menu.addAction(self.exit_action)
 
+        # ツールメニュー
+        tool_menu = menu_bar.addMenu("&ツール")
+        tool_menu.addAction(self.open_colormap_editor_action)
+
         # hoveredシグナルで説明を明示的に表示
         self.export_action.hovered.connect(lambda: self.statusBar().showMessage(self.export_action.statusTip()))
         self.exit_action.hovered.connect(lambda: self.statusBar().showMessage(self.exit_action.statusTip()))
+        self.open_colormap_editor_action.hovered.connect(lambda: self.statusBar().showMessage(self.open_colormap_editor_action.statusTip()))
 
         # ヘルプメニュー (プレースホルダー)
         help_menu = menu_bar.addMenu("&ヘルプ")
@@ -151,6 +162,19 @@ class MainWindow(QMainWindow):
                  logger.log("シグナル接続前に StatusBar が初期化されていません。", level="WARNING")
         else:
             logger.log("シグナル接続に FractalController が利用できません。", level="WARNING")
+
+    @pyqtSlot()
+    def _open_colormap_editor(self):
+        """
+        カラーマップエディタのウィンドウを開きます。
+        """
+        # エディタが既に開いている場合は、新しいインスタンスを作成せずに前面に表示します。
+        if not hasattr(self, 'colormap_editor_window') or not self.colormap_editor_window.isVisible():
+            self.colormap_editor_window = ColormapEditor(self)
+            self.colormap_editor_window.show()
+        else:
+            self.colormap_editor_window.activateWindow()
+            self.colormap_editor_window.raise_()
 
     @pyqtSlot()
     def _on_rendering_task_started(self):
@@ -408,6 +432,19 @@ class MainWindow(QMainWindow):
     def mousePressEvent(self, event):
         self.show_default_status_message()
         super().mousePressEvent(event)
+
+    @pyqtSlot()
+    def _open_colormap_editor(self):
+        """
+        カラーマップエディタのウィンドウを開きます。
+        """
+        # エディタが既に開いている場合は、新しいインスタンスを作成せずに前面に表示します。
+        if not hasattr(self, 'colormap_editor_window') or not self.colormap_editor_window.isVisible():
+            self.colormap_editor_window = ColormapEditor(self)
+            self.colormap_editor_window.show()
+        else:
+            self.colormap_editor_window.activateWindow()
+            self.colormap_editor_window.raise_()
 
 if __name__ == '__main__':
     import sys
