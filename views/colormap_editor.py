@@ -121,9 +121,8 @@ class NodeItem(QGraphicsEllipseItem):
                 width = scene.width()
                 new_x = min(max(value.x(), 0), width)
                 self.pos_value = new_x / width if width > 0 else 0.0
-                parent = scene.parent()
-                if parent and hasattr(parent, 'on_nodes_changed'):
-                    parent.on_nodes_changed(final_change=False)
+                if scene.parent():
+                    scene.parent().on_nodes_changed(final_change=False)
                 return QPointF(new_x, self.pos().y())
         return super().itemChange(change, value)
 
@@ -164,11 +163,6 @@ class NodeEditorScene(QGraphicsScene):
         self.add_node(pos, color)
         self.parent().on_nodes_changed(final_change=True)
         super().mouseDoubleClickEvent(event)
-
-    def mouseMoveEvent(self, event):
-        super().mouseMoveEvent(event)
-        if event.buttons() & Qt.MouseButton.LeftButton and self.mouseGrabberItem():
-            self.parent().on_nodes_changed(final_change=False)
 
     def mouseReleaseEvent(self, event):
         super().mouseReleaseEvent(event)
