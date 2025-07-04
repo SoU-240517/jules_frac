@@ -220,10 +220,32 @@ class ColormapEditor(QMainWindow):
 
     def save_file_as(self):
         """名前を付けて保存"""
-        file_path, _ = QFileDialog.getSaveFileName(self, "名前を付けて保存", "", "JSON Files (*.json)")
-        if file_path:
-            self.current_file_path = file_path
-            self._save_to_file(file_path)
+        if not self.color_pack_data:
+            return
+
+        current_pack_name = self.color_pack_data.get("pack_name", "New Pack")
+        new_pack_name, ok = QInputDialog.getText(self, "カラーパック名の設定", "新しいカラーパック名:", text=current_pack_name)
+
+        if ok and new_pack_name:
+            # 新しいファイル名を提案
+            # 安全なファイル名に変換
+            safe_new_pack_name = re.sub(r'[\\/:"*?<>|]+', '_', new_pack_name)
+            # 現在のディレクトリを取得
+            if self.current_file_path:
+                dir_path = os.path.dirname(self.current_file_path)
+            else:
+                project_root = os.getcwd()
+                dir_path = os.path.join(project_root, 'plugins', 'colorpacks')
+            
+            suggested_filename = os.path.join(dir_path, f"{safe_new_pack_name}.json")
+
+            file_path, _ = QFileDialog.getSaveFileName(self, "名前を付けて保存", suggested_filename, "JSON Files (*.json)")
+            
+            if file_path:
+                self._save_state_for_undo()
+                self.color_pack_data["pack_name"] = new_pack_name
+                self.current_file_path = file_path
+                self._save_to_file(file_path)
 
     def _save_to_file(self, file_path):
         """ファイルに保存"""
