@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QInputDialog, QColorDialog
 )
 from PyQt6.QtGui import QAction, QKeySequence, QColor
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QTimer
 
 from .widgets import GradientPreviewWidget, NodeEditorView, NodeItem
 from .utils import ColormapUtils
@@ -27,6 +27,11 @@ class ColormapEditor(QMainWindow):
         self.color_pack_data = None
         self.current_file_path = None
         self._selected_node = None
+
+        # ノード移動中の遅延更新用タイマー
+        self._update_timer = QTimer()
+        self._update_timer.setSingleShot(True)
+        self._update_timer.timeout.connect(self._delayed_update_preview)
 
         # UI初期化
         self._init_ui()
@@ -372,19 +377,55 @@ class ColormapEditor(QMainWindow):
     # ノード編集
     def on_node_editor_changed(self, final_change=False):
         """ノードエディタ変更時の処理"""
+        print(f"ColormapEditor: on_node_editor_changed 呼び出し - final_change: {final_change}")
         row = self.colormap_list.currentRow()
         if row < 0 or not self.color_pack_data or not self.color_pack_data.get('maps'):
+            print(f"ColormapEditor: 条件チェック失敗 - row: {row}, color_pack_data: {self.color_pack_data is not None}")
             return
+
         if final_change:
+            # 最終変更の場合は即座に更新
+            print("ColormapEditor: 最終変更 - 即座に更新")
+            self._update_timer.stop()  # 遅延更新をキャンセル
             self._save_state_for_undo()
+            self._update_gradient_preview()
+        else:
+            # 移動中の場合は遅延更新を使用
+            print("ColormapEditor: 移動中 - 遅延更新開始")
+            self._update_timer.start(50)  # 50ms後に更新
+
+    def _delayed_update_preview(self):
+        """遅延更新処理"""
+        print("ColormapEditor: 遅延更新実行")
+        self._update_gradient_preview()
+
+    def _update_gradient_preview(self):
+        """グラディエントプレビューを更新"""
+        print("ColormapEditor: _update_gradient_preview 開始")
+        row = self.colormap_list.currentRow()
+        if row < 0 or not self.color_pack_data or not self.color_pack_data.get('maps'):
+            print(f"ColormapEditor: _update_gradient_preview 条件チェック失敗 - row: {row}, color_pack_data: {self.color_pack_data is not None}")
+            return
+
         cmap = self.color_pack_data['maps'][row]
         points = self.node_editor.get_nodes()
+
+        # デバッグ情報を出力
+        print(f"ColormapEditor: プレビュー更新 - 元のtype: {cmap.get('type')}, colors: {len(cmap.get('colors', []))}, points: {len(points)}")
+
+        # 常にgradient_points形式に変換
         cmap['type'] = 'gradient'
         cmap['gradient_points'] = points
         cmap['num_colors'] = 256
+
+        # colorsフィールドが存在する場合は削除（gradient_pointsに変換済み）
         if 'colors' in cmap:
             del cmap['colors']
+
+        print(f"ColormapEditor: 変換後 - type: {cmap.get('type')}, gradient_points: {len(cmap.get('gradient_points', []))}")
+
         self.gradient_preview.set_colormap(cmap)
+        print("ColormapEditor: _update_gradient_preview 完了")
 
     def on_direct_edit_color_changed(self, pos, color):
         """ダイレクト編集時の色変更処理"""

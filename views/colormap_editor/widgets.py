@@ -22,6 +22,11 @@ class GradientPreviewWidget(QWidget):
     def set_colormap(self, cmap_data):
         """カラーマップデータを設定してプレビューを更新"""
         self.cmap_data = cmap_data
+        # デバッグ情報を出力
+        if cmap_data:
+            print(f"GradientPreviewWidget: カラーマップデータを設定 - type: {cmap_data.get('type')}, points: {len(cmap_data.get('gradient_points', []))}")
+        # 強制的に再描画を実行
+        self.update()
         self.repaint()
 
     def set_direct_edit_mode(self, enabled):
@@ -127,9 +132,17 @@ class NodeItem(QGraphicsEllipseItem):
                 width = scene.width()
                 new_x = min(max(value.x(), 0), width)
                 self.pos_value = new_x / width if width > 0 else 0.0
+                print(f"NodeItem: 位置変更 - pos: {self.pos_value:.4f}")
+                # 親ウィジェットに変更を通知
                 if scene.parent():
                     scene.parent().on_nodes_changed(final_change=False)
                 return QPointF(new_x, self.pos().y())
+        elif change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
+            # 位置変更完了時の処理
+            print(f"NodeItem: 位置変更完了 - pos: {self.pos_value:.4f}")
+            scene = self.scene()
+            if scene and scene.parent():
+                scene.parent().on_nodes_changed(final_change=True)
         return super().itemChange(change, value)
 
 
@@ -165,7 +178,12 @@ class NodeEditorScene(QGraphicsScene):
             if action == remove_action:
                 self.removeItem(item)
                 self.nodes.remove(item)
-                self.parent().on_nodes_changed(final_change=True)
+                # 正しい親ウィジェット（ColormapEditor）を取得
+                parent_widget = self.parent()
+                while parent_widget and not hasattr(parent_widget, 'on_node_editor_changed'):
+                    parent_widget = parent_widget.parent()
+                if parent_widget:
+                    parent_widget.on_node_editor_changed(final_change=True)
 
     def mouseDoubleClickEvent(self, event):
         """マウスダブルクリックイベント処理"""
@@ -173,13 +191,24 @@ class NodeEditorScene(QGraphicsScene):
         pos = min(max(x / self.width(), 0.0), 1.0)
         color = [255, 255, 255, 255]
         self.add_node(pos, color)
-        self.parent().on_nodes_changed(final_change=True)
+        # 正しい親ウィジェット（ColormapEditor）を取得
+        parent_widget = self.parent()
+        while parent_widget and not hasattr(parent_widget, 'on_node_editor_changed'):
+            parent_widget = parent_widget.parent()
+        if parent_widget:
+            parent_widget.on_node_editor_changed(final_change=True)
         super().mouseDoubleClickEvent(event)
 
     def mouseReleaseEvent(self, event):
         """マウスリリースイベント処理"""
         super().mouseReleaseEvent(event)
-        self.parent().on_nodes_changed(final_change=True)
+        # マウスリリース時に最終更新を実行
+        # 正しい親ウィジェット（ColormapEditor）を取得
+        parent_widget = self.parent()
+        while parent_widget and not hasattr(parent_widget, 'on_node_editor_changed'):
+            parent_widget = parent_widget.parent()
+        if parent_widget:
+            parent_widget.on_node_editor_changed(final_change=True)
 
 
 class NodeEditorView(QGraphicsView):
@@ -210,5 +239,13 @@ class NodeEditorView(QGraphicsView):
 
     def on_nodes_changed(self, final_change=False):
         """ノード変更イベント処理"""
-        if hasattr(self.parent(), 'on_node_editor_changed'):
-            self.parent().on_node_editor_changed(final_change=final_change)
+        print(f"NodeEditorView: on_nodes_changed 呼び出し - final_change: {final_change}")
+        # 正しい親ウィジェット（ColormapEditor）を取得
+        parent_widget = self.parent()
+        while parent_widget and not hasattr(parent_widget, 'on_node_editor_changed'):
+            parent_widget = parent_widget.parent()
+
+        if parent_widget and hasattr(parent_widget, 'on_node_editor_changed'):
+            parent_widget.on_node_editor_changed(final_change=final_change)
+        else:
+            print("NodeEditorView: ColormapEditorが見つかりません")
