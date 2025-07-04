@@ -73,6 +73,12 @@ class GradientPreviewWidget(QWidget):
             if color.isValid():
                 self.color_changed_at.emit(pos, color)
         else:
+            # ノードドラッグ開始時に親へ通知
+            scene = self.scene()
+            if scene and scene.parent():
+                scene.parent().on_nodes_changed(final_change='start_drag')
+            # ドラッグ開始時にフラグをリセット
+            self._dragging = False
             super().mousePressEvent(event)
 
     def paintEvent(self, event):
@@ -118,6 +124,8 @@ class NodeItem(QGraphicsEllipseItem):
         self.setCursor(Qt.CursorShape.OpenHandCursor)
         self.pos_value = pos
         self.color_value = color
+        self._dragging = False  # ドラッグ中フラグ
+        self._last_pos = None   # 前回の座標
 
     def set_color(self, color):
         """色を設定"""
@@ -127,23 +135,29 @@ class NodeItem(QGraphicsEllipseItem):
     def itemChange(self, change, value):
         """アイテム変更イベント処理"""
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
-            scene = self.scene()
-            if scene:
-                width = scene.width()
-                new_x = min(max(value.x(), 0), width)
-                self.pos_value = new_x / width if width > 0 else 0.0
-                print(f"NodeItem: 位置変更 - pos: {self.pos_value:.4f}")
-                # 親ウィジェットに変更を通知
-                if scene.parent():
-                    scene.parent().on_nodes_changed(final_change=False)
-                return QPointF(new_x, self.pos().y())
+            print(f"NodeItem: ItemPositionChange - pos: {value.x():.4f}, _dragging={self._dragging}, _last_pos={self._last_pos}")
+            if not self._dragging and self._last_pos is not None and value != self._last_pos:
+                scene = self.scene()
+                if scene and scene.parent():
+                    print("NodeItem: start_drag 通知")
+                    scene.parent().on_nodes_changed(final_change='start_drag')
+                self._dragging = True
         elif change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
-            # 位置変更完了時の処理
-            print(f"NodeItem: 位置変更完了 - pos: {self.pos_value:.4f}")
-            scene = self.scene()
-            if scene and scene.parent():
-                scene.parent().on_nodes_changed(final_change=True)
+            print(f"NodeItem: ItemPositionHasChanged - pos: {self.pos().x():.4f}")
+            self._dragging = False
+            self._last_pos = self.pos()
         return super().itemChange(change, value)
+
+    def mousePressEvent(self, event):
+        print("NodeItem: mousePressEvent（マウス押下）")
+        self._last_pos = self.pos()  # ドラッグ開始前の座標を記録
+        self._dragging = False
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        print("NodeItem: mouseReleaseEvent（マウス離し）")
+        self._dragging = False
+        super().mouseReleaseEvent(event)
 
 
 class NodeEditorScene(QGraphicsScene):

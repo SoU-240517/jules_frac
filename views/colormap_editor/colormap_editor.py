@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtGui import QAction, QKeySequence, QColor
 from PyQt6.QtCore import Qt, QTimer
+import os
 
 from .widgets import GradientPreviewWidget, NodeEditorView, NodeItem
 from .utils import ColormapUtils
@@ -193,7 +194,12 @@ class ColormapEditor(QMainWindow):
     # ファイル操作
     def open_file(self):
         """ファイルを開く"""
-        file_path, _ = QFileDialog.getOpenFileName(self, "カラーパックを開く", "", "JSON Files (*.json)")
+        # 現在の作業ディレクトリ（main.pyから起動していればjules_frac）
+        project_root = os.getcwd()
+        colorpacks_dir = os.path.join(project_root, 'plugins', 'colorpacks')
+        if not os.path.exists(colorpacks_dir):
+            colorpacks_dir = project_root
+        file_path, _ = QFileDialog.getOpenFileName(self, "カラーパックを開く", colorpacks_dir, "JSON Files (*.json)")
         if file_path:
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
@@ -257,6 +263,7 @@ class ColormapEditor(QMainWindow):
         self._update_undo_redo_actions()
         if len(self.undo_stack) > 50:
             self.undo_stack.pop(0)
+        print("ColormapEditor: _save_state_for_undo 呼び出し（undo保存）")
 
     def undo(self):
         """元に戻す"""
@@ -383,6 +390,11 @@ class ColormapEditor(QMainWindow):
             print(f"ColormapEditor: 条件チェック失敗 - row: {row}, color_pack_data: {self.color_pack_data is not None}")
             return
 
+        if final_change == 'start_drag':
+            print("ColormapEditor: ドラッグ開始時 - 状態保存（UI同期→保存）")
+            self._update_gradient_preview()  # まずUIの状態でcolor_pack_dataを最新化
+            self._save_state_for_undo()     # その直後にundo保存
+            return
         if final_change:
             # 最終変更の場合は即座に更新
             print("ColormapEditor: 最終変更 - 即座に更新")
@@ -459,6 +471,7 @@ class ColormapEditor(QMainWindow):
             self._selected_node = None
             self.node_color_edit.setText("")
             self.node_pos_edit.setText("")
+        self._update_color_picker_button()
 
     def on_node_color_edit(self):
         """ノード色編集時の処理"""
@@ -472,6 +485,7 @@ class ColormapEditor(QMainWindow):
                 rgba = [int(text[i:i + 2], 16) for i in range(0, 8, 2)]
                 self._selected_node.set_color(rgba)
                 self.on_node_editor_changed(final_change=True)
+                self._update_color_picker_button()
             except ValueError:
                 pass
 
@@ -499,6 +513,7 @@ class ColormapEditor(QMainWindow):
             self._selected_node.set_color(rgba)
             self.node_color_edit.setText('#{:02X}{:02X}{:02X}{:02X}'.format(*rgba))
             self.on_node_editor_changed(final_change=True)
+            self._update_color_picker_button()
 
     # ユーティリティ機能
     def on_random_generate(self):
@@ -548,6 +563,18 @@ class ColormapEditor(QMainWindow):
                                            "Pillow, scikit-learn, numpyが必要です.\n`pip install pillow scikit-learn numpy`")
         except Exception as e:
             ColormapUtils.show_error_message(self, "抽出失敗", f"画像から色抽出に失敗しました:\n{e}")
+
+    def _update_color_picker_button(self):
+        """色選択ボタンの背景色を選択中ノードの色に合わせて更新"""
+        if self._selected_node:
+            rgba = self._selected_node.color_value
+            self.color_picker_button.setStyleSheet(
+                f"background-color: rgba({rgba[0]}, {rgba[1]}, {rgba[2]}, {rgba[3]/255}); border: 1px solid #ccc;"
+            )
+        else:
+            self.color_picker_button.setStyleSheet(
+                "background-color: #f0f0f0; border: 1px solid #ccc;"
+            )
 
 
 if __name__ == '__main__':
