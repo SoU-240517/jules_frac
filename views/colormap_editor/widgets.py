@@ -133,7 +133,20 @@ class NodeItem(QGraphicsEllipseItem):
         self.setBrush(QBrush(QColor(*color)))
 
     def itemChange(self, change, value):
-        """アイテム変更イベント処理"""
+        """アイテム変更イベント処理（X軸のみ移動可、Yは中央固定）"""
+        if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
+            scene = self.scene()
+            if scene:
+                width = scene.width()
+                height = scene.height()
+                new_x = min(max(value.x(), 0), width)
+                new_y = height / 2
+                if value.y() != new_y or value.x() != new_x:
+                    print(f"[NodeItem] 位置制限: x={value.x():.2f}-> {new_x:.2f}, y={value.y():.2f}-> {new_y:.2f}")
+                # ノードの論理値も更新
+                self.pos_value = new_x / width if width > 0 else 0.0
+                return QPointF(new_x, new_y)
+
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionChange:
             print(f"NodeItem: ItemPositionChange - pos: {value.x():.4f}, _dragging={self._dragging}, _last_pos={self._last_pos}")
             if not self._dragging and self._last_pos is not None and value != self._last_pos:
