@@ -1,6 +1,7 @@
 import sys
 import json
 import copy
+import re
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QListWidget, QPushButton, QLabel, QLineEdit, QFileDialog,
@@ -94,6 +95,7 @@ class ColormapEditor(QMainWindow):
         layout = QVBoxLayout(panel)
         panel.setFixedWidth(250)
 
+        self.file_name_label = QLabel("File: (None)")
         self.pack_name_label = QLabel("Pack: (None)")
         self.colormap_list = QListWidget()
 
@@ -111,6 +113,7 @@ class ColormapEditor(QMainWindow):
         btn_layout.addWidget(remove_button)
         btn_layout.addWidget(rename_button)
 
+        layout.addWidget(self.file_name_label)
         layout.addWidget(self.pack_name_label)
         layout.addWidget(self.colormap_list)
         layout.addLayout(btn_layout)
@@ -226,7 +229,43 @@ class ColormapEditor(QMainWindow):
         """ファイルに保存"""
         try:
             with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(self.color_pack_data, f, ensure_ascii=False, indent=2)
+                f.write('{\n')
+                f.write(f'    "pack_name": {json.dumps(self.color_pack_data["pack_name"], ensure_ascii=False)},\n')
+                f.write('    "maps": [\n')
+                num_maps = len(self.color_pack_data["maps"])
+                for map_index, map_data in enumerate(self.color_pack_data["maps"]):
+                    f.write('        {\n')
+                    keys = list(map_data.keys())
+                    for i, key in enumerate(keys):
+                        f.write(f'            "{key}": ')
+                        if key == "colors":
+                            f.write('[\n')
+                            colors, num_colors_inner = map_data[key], len(map_data[key])
+                            for j, color in enumerate(colors):
+                                if j % 5 == 0: f.write(' ' * 16)
+                                f.write(f'[{color[0]},{color[1]},{color[2]},{color[3]}]')
+                                if j < num_colors_inner - 1: f.write(',')
+                                if (j + 1) % 5 == 0 and j < num_colors_inner - 1: f.write('\n')
+                            f.write('\n' + ' ' * 12 + ']')
+                        elif key == "gradient_points":
+                            f.write('[\n')
+                            points, num_points_ = map_data[key], len(map_data[key])
+                            for j, point in enumerate(points):
+                                f.write(' ' * 16 + json.dumps(point, ensure_ascii=False))
+                                if j < num_points_ - 1: f.write(',')
+                                f.write('\n')
+                            f.write(' ' * 12 + ']')
+                        else:
+                            f.write(json.dumps(map_data[key], ensure_ascii=False))
+                        if i < len(keys) - 1: f.write(',')
+                        f.write('\n')
+                    f.write('        }')
+                    if map_index < num_maps - 1: f.write(',\n')
+                    else: f.write('\n')
+                f.write('    ]\n')
+                f.write('}\n')
+
+            self.file_name_label.setText(f"File: {os.path.basename(file_path)}")
             self.pack_name_label.setText(f"Pack: {self.color_pack_data.get('pack_name', 'N/A')}")
             ColormapUtils.show_success_message(self, "保存完了", f"ファイルを保存しました.\n{file_path}")
         except Exception as e:
@@ -235,6 +274,7 @@ class ColormapEditor(QMainWindow):
     def load_color_pack(self, data, file_path):
         """カラーパックを読み込み"""
         self.color_pack_data = data
+        self.file_name_label.setText(f"File: {os.path.basename(file_path)}")
         self.pack_name_label.setText(f"Pack: {data.get('pack_name', 'N/A')}")
         self.colormap_list.clear()
         for cmap in data.get('maps', []):
