@@ -39,9 +39,9 @@ class ColormapUtils:
         return points
 
     @staticmethod
-    def get_random_generate_params(parent):
+    def get_random_generate_params(parent, max_value=30):
         """ランダム生成のパラメータを取得"""
-        num, ok = QInputDialog.getInt(parent, "ランダム生成", "ノード数 (2〜30):", 5, 2, 30)
+        num, ok = QInputDialog.getInt(parent, "ランダム生成", f"生成数 (1〜{max_value}):", 1, 1, max_value)
         return num if ok else None
 
     @staticmethod

@@ -10,5 +10,8 @@
             "cache_enabled": true,
             "clear_cache_on_exit": false
         }
+    },
+    "colormap_editor_settings": {
+        "random_generate_max_count": 30
     }
 }

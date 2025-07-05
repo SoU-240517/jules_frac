@@ -2,6 +2,7 @@ import sys
 import json
 import copy
 import re
+import random
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QListWidget, QPushButton, QLabel, QLineEdit, QFileDialog,
@@ -10,6 +11,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtGui import QAction, QKeySequence, QColor
 from PyQt6.QtCore import Qt, QTimer
 import os
+
+from utils.settings_manager import SettingsManager
 
 from .widgets import GradientPreviewWidget, NodeEditorView, NodeItem
 from .utils import ColormapUtils
@@ -34,6 +37,10 @@ class ColormapEditor(QMainWindow):
         self._update_timer = QTimer()
         self._update_timer.setSingleShot(True)
         self._update_timer.timeout.connect(self._delayed_update_preview)
+
+        # 設定読み込み
+        self.settings_manager = SettingsManager()
+        self.random_generate_max_count = self.settings_manager.get_setting("colormap_editor_settings.random_generate_max_count", 30)
 
         # UI初期化
         self._init_ui()
@@ -580,24 +587,30 @@ class ColormapEditor(QMainWindow):
     # ユーティリティ機能
     def on_random_generate(self):
         """ランダム生成"""
-        num = ColormapUtils.get_random_generate_params(self)
-        if num is None:
+        num_to_generate = ColormapUtils.get_random_generate_params(self, max_value=self.random_generate_max_count)
+        if num_to_generate is None:
             return
 
         self._save_state_for_undo()
-        points = ColormapUtils.random_generate_colormap(num)
-        new_map = {
-            "map_name": f"RandomMap{self.colormap_list.count() + 1}",
-            "type": "gradient",
-            "gradient_points": points,
-            "num_colors": 256
-        }
         if self.color_pack_data is None:
             self.color_pack_data = {"pack_name": "New Pack", "maps": []}
             self.pack_name_label.setText(f"Pack: {self.color_pack_data['pack_name']}")
-        self.color_pack_data["maps"].append(new_map)
-        self.colormap_list.addItem(new_map["map_name"])
-        self.colormap_list.setCurrentRow(self.colormap_list.count() - 1)
+
+        for i in range(num_to_generate):
+            # ノード数は2から10の間でランダムに決める（例）
+            num_nodes = random.randint(2, 10)
+            points = ColormapUtils.random_generate_colormap(num_nodes)
+            new_map = {
+                "map_name": f"RandomMap{self.colormap_list.count() + 1}",
+                "type": "gradient",
+                "gradient_points": points,
+                "num_colors": 256
+            }
+            self.color_pack_data["maps"].append(new_map)
+            self.colormap_list.addItem(new_map["map_name"])
+        
+        if num_to_generate > 0:
+            self.colormap_list.setCurrentRow(self.colormap_list.count() - 1)
 
     def on_extract_from_image(self):
         """画像から色を抽出"""
