@@ -65,6 +65,10 @@ class ColormapEditor(QMainWindow):
 
     def _create_actions(self):
         """アクション作成"""
+        self.new_action = QAction("新規作成", self)
+        self.new_action.triggered.connect(self.new_file)
+        self.new_action.setEnabled(False)
+
         self.open_action = QAction("開く...", self)
         self.open_action.triggered.connect(self.open_file)
 
@@ -89,6 +93,8 @@ class ColormapEditor(QMainWindow):
         menu_bar = self.menuBar()
 
         file_menu = menu_bar.addMenu("ファイル")
+        file_menu.addAction(self.new_action)
+        file_menu.addSeparator()
         file_menu.addAction(self.open_action)
         file_menu.addAction(self.save_action)
         file_menu.addAction(self.save_as_action)
@@ -208,6 +214,19 @@ class ColormapEditor(QMainWindow):
         self.remove_button.clicked.connect(self.remove_colormap)
 
     # ファイル操作
+    def new_file(self):
+        """新規作成"""
+        self.color_pack_data = None
+        self.current_file_path = None
+        self.file_name_label.setText("File: (None)")
+        self.pack_name_label.setText("Pack: (None)")
+        self.colormap_list.clear()
+        self.undo_stack.clear()
+        self.redo_stack.clear()
+        self._update_undo_redo_actions()
+        self._on_colormap_selected(None, None)
+        self.new_action.setEnabled(False)
+
     def open_file(self):
         """ファイルを開く"""
         # 現在の作業ディレクトリ（main.pyから起動していればjules_frac）
@@ -221,6 +240,7 @@ class ColormapEditor(QMainWindow):
                 with open(file_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 self.load_color_pack(data, file_path)
+                self.new_action.setEnabled(True)
             except Exception as e:
                 ColormapUtils.show_error_message(self, "読み込み失敗", f"ファイル読み込みに失敗しました:\n{e}")
 
@@ -259,6 +279,7 @@ class ColormapEditor(QMainWindow):
                 self.color_pack_data["pack_name"] = new_pack_name
                 self.current_file_path = file_path
                 self._save_to_file(file_path)
+                self.new_action.setEnabled(True)
 
     def _save_to_file(self, file_path):
         """ファイルに保存"""
@@ -434,6 +455,7 @@ class ColormapEditor(QMainWindow):
         self.color_pack_data["maps"].append(new_map)
         self.colormap_list.addItem(new_map["map_name"])
         self.colormap_list.setCurrentRow(self.colormap_list.count() - 1)
+        self.new_action.setEnabled(True)
 
     def remove_colormap(self):
         """カラーマップを削除"""
@@ -644,6 +666,7 @@ class ColormapEditor(QMainWindow):
         
         if num_to_generate > 0:
             self.colormap_list.setCurrentRow(self.colormap_list.count() - 1)
+            self.new_action.setEnabled(True)
 
     def on_extract_from_image(self):
         """画像から色を抽出"""
