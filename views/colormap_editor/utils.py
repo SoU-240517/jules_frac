@@ -39,10 +39,35 @@ class ColormapUtils:
         return points
 
     @staticmethod
-    def get_random_generate_params(parent, max_value=30):
+    def get_random_generate_params(parent, max_value=30, max_nodes=20):
         """ランダム生成のパラメータを取得"""
         num, ok = QInputDialog.getInt(parent, "ランダム生成", f"生成数 (1〜{max_value}):", 1, 1, max_value)
-        return num if ok else None
+        if not ok:
+            return None, None, None, None
+
+        map_type, ok = QInputDialog.getItem(parent, "マップタイプ選択", "マップタイプを選択してください:", ["gradient", "indexed"], 0, False)
+        if not ok:
+            return None, None, None, None
+
+        min_nodes, max_nodes_val = 2, max_nodes
+        if map_type == "gradient":
+            text, ok = QInputDialog.getText(parent, "ノード数指定", f"ノード数の範囲 (例: 2-{max_nodes})", text=f"2-{max_nodes}")
+            if not ok:
+                return None, None, None, None
+            try:
+                parts = [p.strip() for p in text.split('-')]
+                if len(parts) == 2:
+                    min_nodes = int(parts[0]) if parts[0] else 2
+                    max_nodes_val = int(parts[1]) if parts[1] else max_nodes
+                elif len(parts) == 1:
+                    min_nodes = max_nodes_val = int(parts[0])
+                min_nodes = max(2, min_nodes)
+                max_nodes_val = min(max_nodes, max_nodes_val)
+            except ValueError:
+                ColormapUtils.show_error_message(parent, "入力エラー", "ノード数の形式が正しくありません。")
+                return None, None, None, None
+
+        return num, map_type, min_nodes, max_nodes_val
 
     @staticmethod
     def get_extract_image_params(parent):

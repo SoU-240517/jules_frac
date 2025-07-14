@@ -41,6 +41,7 @@ class ColormapEditor(QMainWindow):
         # 設定読み込み
         self.settings_manager = SettingsManager()
         self.random_generate_max_count = self.settings_manager.get_setting("colormap_editor_settings.random_generate_max_count", 30)
+        self.random_generate_max_nodes = self.settings_manager.get_setting("colormap_editor_settings.random_generate_max_nodes", 20)
 
         # UI初期化
         self._init_ui()
@@ -610,7 +611,11 @@ class ColormapEditor(QMainWindow):
     # ユーティリティ機能
     def on_random_generate(self):
         """ランダム生成"""
-        num_to_generate = ColormapUtils.get_random_generate_params(self, max_value=self.random_generate_max_count)
+        num_to_generate, map_type, min_nodes, max_nodes = ColormapUtils.get_random_generate_params(
+            self, 
+            max_value=self.random_generate_max_count, 
+            max_nodes=self.random_generate_max_nodes
+        )
         if num_to_generate is None:
             return
 
@@ -620,15 +625,20 @@ class ColormapEditor(QMainWindow):
             self.pack_name_label.setText(f"Pack: {self.color_pack_data['pack_name']}")
 
         for i in range(num_to_generate):
-            # ノード数は2から10の間でランダムに決める（例）
-            num_nodes = random.randint(2, 10)
-            points = ColormapUtils.random_generate_colormap(num_nodes)
             new_map = {
                 "map_name": f"RandomMap{self.colormap_list.count() + 1}",
-                "type": "gradient",
-                "gradient_points": points,
+                "type": map_type,
                 "num_colors": 256
             }
+            if map_type == "gradient":
+                num_nodes = random.randint(min_nodes, max_nodes)
+                points = ColormapUtils.random_generate_colormap(num_nodes)
+                new_map["gradient_points"] = points
+            else: # indexed
+                num_colors = random.randint(2, 256)
+                colors = [ [random.randint(0, 255) for _ in range(3)] + [255] for _ in range(num_colors)]
+                new_map["colors"] = colors
+
             self.color_pack_data["maps"].append(new_map)
             self.colormap_list.addItem(new_map["map_name"])
         
