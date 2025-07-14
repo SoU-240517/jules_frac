@@ -689,6 +689,7 @@ class ColormapEditor(QMainWindow):
             self.color_pack_data["maps"].append(new_map)
             self.colormap_list.addItem(new_map["map_name"])
             self.colormap_list.setCurrentRow(self.colormap_list.count() - 1)
+            self.new_action.setEnabled(True)
         except ImportError:
             ColormapUtils.show_error_message(self, "依存ライブラリ未インストール",
                                            "Pillow, scikit-learn, numpyが必要です.\n`pip install pillow scikit-learn numpy`")
