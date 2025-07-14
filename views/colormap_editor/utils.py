@@ -33,9 +33,20 @@ class ColormapUtils:
         img = img.resize((128, 128))
         pixels = np.array(img).reshape(-1, 4)
         pixels = pixels[pixels[:, 3] > 0]
-        kmeans = KMeans(n_clusters=num_colors, n_init='auto', random_state=0).fit(pixels[:, :3])
+        kmeans = KMeans(n_clusters=num_colors, n_init='auto', random_state=None).fit(pixels[:, :3])
         centers = kmeans.cluster_centers_.astype(int)
-        points = [{'pos': i / (num_colors - 1) if num_colors > 1 else 0.0, 'color': list(c) + [255]} for i, c in enumerate(centers)]
+        
+        # 色をランダムにシャッフル
+        random.shuffle(centers)
+
+        # ノードの位置をランダムに割り振り、ソートする
+        positions = sorted([random.random() for _ in range(num_colors)])
+
+        points = [{'pos': positions[i], 'color': list(c) + [255]} for i, c in enumerate(centers)]
+        
+        # 念のためposでソート
+        points.sort(key=lambda x: x['pos'])
+        
         return points
 
     @staticmethod
@@ -70,14 +81,21 @@ class ColormapUtils:
         return num, map_type, min_nodes, max_nodes_val
 
     @staticmethod
-    def get_extract_image_params(parent):
+    def get_extract_image_params(parent, max_maps=30):
         """画像抽出のパラメータを取得"""
         file_path, _ = QFileDialog.getOpenFileName(parent, "画像ファイルを選択", "", "Image Files (*.png *.jpg *.jpeg *.bmp)")
         if not file_path:
-            return None, None
+            return None, None, None
 
-        num, ok = QInputDialog.getInt(parent, "色数指定", "抽出する色数 (2〜30):", 5, 2, 30)
-        return file_path, num if ok else None
+        num_colors, ok = QInputDialog.getInt(parent, "色数指定", "抽出する色数 (2〜30):", 5, 2, 30)
+        if not ok:
+            return file_path, None, None
+
+        num_maps, ok = QInputDialog.getInt(parent, "生成マップ数", f"生成するマップ数 (1〜{max_maps}):", 1, 1, max_maps)
+        if not ok:
+            return file_path, num_colors, None
+
+        return file_path, num_colors, num_maps
 
     @staticmethod
     def show_error_message(parent, title, message):

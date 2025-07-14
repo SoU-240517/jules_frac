@@ -13,6 +13,7 @@
     },
     "colormap_editor_settings": {
         "random_generate_max_count": 30,
-        "random_generate_max_nodes": 20
+        "random_generate_max_nodes": 20,
+        "extract_image_max_maps": 30
     }
 }

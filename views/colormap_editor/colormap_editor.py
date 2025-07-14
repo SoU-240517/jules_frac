@@ -42,6 +42,7 @@ class ColormapEditor(QMainWindow):
         self.settings_manager = SettingsManager()
         self.random_generate_max_count = self.settings_manager.get_setting("colormap_editor_settings.random_generate_max_count", 30)
         self.random_generate_max_nodes = self.settings_manager.get_setting("colormap_editor_settings.random_generate_max_nodes", 20)
+        self.extract_image_max_maps = self.settings_manager.get_setting("colormap_editor_settings.extract_image_max_maps", 30)
 
         # UI初期化
         self._init_ui()
@@ -670,29 +671,33 @@ class ColormapEditor(QMainWindow):
 
     def on_extract_from_image(self):
         """画像から色を抽出"""
-        file_path, num = ColormapUtils.get_extract_image_params(self)
-        if file_path is None or num is None:
+        file_path, num_colors, num_maps = ColormapUtils.get_extract_image_params(self, self.extract_image_max_maps)
+        if file_path is None or num_colors is None or num_maps is None:
             return
 
         self._save_state_for_undo()
         try:
-            points = ColormapUtils.extract_colors_from_image(file_path, num)
-            new_map = {
-                "map_name": f"ImageMap{self.colormap_list.count() + 1}",
-                "type": "gradient",
-                "gradient_points": points,
-                "num_colors": 256
-            }
-            if self.color_pack_data is None:
-                self.color_pack_data = {"pack_name": "New Pack", "maps": []}
-                self.pack_name_label.setText(f"Pack: {self.color_pack_data['pack_name']}")
-            self.color_pack_data["maps"].append(new_map)
-            self.colormap_list.addItem(new_map["map_name"])
-            self.colormap_list.setCurrentRow(self.colormap_list.count() - 1)
-            self.new_action.setEnabled(True)
+            for i in range(num_maps):
+                points = ColormapUtils.extract_colors_from_image(file_path, num_colors)
+                new_map = {
+                    "map_name": f"ImageMap{self.colormap_list.count() + 1}",
+                    "type": "gradient",
+                    "gradient_points": points,
+                    "num_colors": 256
+                }
+                if self.color_pack_data is None:
+                    self.color_pack_data = {"pack_name": "New Pack", "maps": []}
+                    self.pack_name_label.setText(f"Pack: {self.color_pack_data['pack_name']}")
+                self.color_pack_data["maps"].append(new_map)
+                self.colormap_list.addItem(new_map["map_name"])
+            
+            if num_maps > 0:
+                self.colormap_list.setCurrentRow(self.colormap_list.count() - 1)
+                self.new_action.setEnabled(True)
+
         except ImportError:
             ColormapUtils.show_error_message(self, "依存ライブラリ未インストール",
-                                           "Pillow, scikit-learn, numpyが必要です.\n`pip install pillow scikit-learn numpy`")
+                                           "Pillow, scikit-learn, numpyが必要です。\n`pip install pillow scikit-learn numpy`")
         except Exception as e:
             ColormapUtils.show_error_message(self, "抽出失敗", f"画像から色抽出に失敗しました:\n{e}")
 
