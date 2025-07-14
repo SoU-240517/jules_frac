@@ -4,6 +4,7 @@
         {
             "map_name": "cividis",
             "type": "gradient",
+            "num_colors": 256,
             "gradient_points": [
                 {"pos": 0.0, "color": [0, 34, 77, 255]},
                 {"pos": 0.12549, "color": [26, 56, 111, 255]},
@@ -14,12 +15,12 @@
                 {"pos": 0.74902, "color": [186, 172, 108, 255]},
                 {"pos": 0.87451, "color": [220, 200, 88, 255]},
                 {"pos": 1.0, "color": [253, 231, 55, 255]}
-            ],
-            "num_colors": 256
+            ]
         },
         {
             "map_name": "inferno",
             "type": "gradient",
+            "num_colors": 256,
             "gradient_points": [
                 {"pos": 0.0, "color": [0, 0, 3, 255]},
                 {"pos": 0.12549, "color": [32, 12, 74, 255]},
@@ -30,12 +31,12 @@
                 {"pos": 0.74902, "color": [249, 140, 9, 255]},
                 {"pos": 0.87451, "color": [248, 201, 49, 255]},
                 {"pos": 1.0, "color": [252, 254, 164, 255]}
-            ],
-            "num_colors": 256
+            ]
         },
         {
             "map_name": "magma",
             "type": "gradient",
+            "num_colors": 256,
             "gradient_points": [
                 {"pos": 0.0, "color": [0, 0, 3, 255]},
                 {"pos": 0.12549, "color": [28, 16, 70, 255]},
@@ -46,12 +47,12 @@
                 {"pos": 0.74902, "color": [251, 134, 96, 255]},
                 {"pos": 0.87451, "color": [254, 194, 134, 255]},
                 {"pos": 1.0, "color": [251, 252, 191, 255]}
-            ],
-            "num_colors": 256
+            ]
         },
         {
             "map_name": "plasma",
             "type": "gradient",
+            "num_colors": 256,
             "gradient_points": [
                 {"pos": 0.0, "color": [12, 7, 134, 255]},
                 {"pos": 0.12549, "color": [76, 2, 161, 255]},
@@ -62,12 +63,12 @@
                 {"pos": 0.74902, "color": [247, 147, 65, 255]},
                 {"pos": 0.87451, "color": [253, 195, 40, 255]},
                 {"pos": 1.0, "color": [239, 248, 33, 255]}
-            ],
-            "num_colors": 256
+            ]
         },
         {
             "map_name": "viridis",
             "type": "gradient",
+            "num_colors": 256,
             "gradient_points": [
                 {"pos": 0.0, "color": [68, 1, 84, 255]},
                 {"pos": 0.12549, "color": [71, 44, 123, 255]},
@@ -78,8 +79,7 @@
                 {"pos": 0.74902, "color": [91, 200, 98, 255]},
                 {"pos": 0.87451, "color": [170, 219, 50, 255]},
                 {"pos": 1.0, "color": [253, 231, 36, 255]}
-            ],
-            "num_colors": 256
+            ]
         }
     ]
 }
