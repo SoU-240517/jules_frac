@@ -106,24 +106,24 @@ class ColormapEditor(QMainWindow):
         self.pack_name_label = QLabel("Pack: (None)")
         self.colormap_list = QListWidget()
 
-        add_button = QPushButton("Add")
-        add_button.clicked.connect(self.add_colormap)
+        self.add_button = QPushButton("Add")
+        self.copy_button = QPushButton("Copy")
+        self.rename_button = QPushButton("Rename")
+        self.remove_button = QPushButton("Remove")
 
-        remove_button = QPushButton("Remove")
-        remove_button.clicked.connect(self.remove_colormap)
+        btn_layout1 = QHBoxLayout()
+        btn_layout1.addWidget(self.add_button)
+        btn_layout1.addWidget(self.copy_button)
 
-        rename_button = QPushButton("Rename")
-        rename_button.clicked.connect(self.rename_colormap)
-
-        btn_layout = QHBoxLayout()
-        btn_layout.addWidget(add_button)
-        btn_layout.addWidget(remove_button)
-        btn_layout.addWidget(rename_button)
+        btn_layout2 = QHBoxLayout()
+        btn_layout2.addWidget(self.rename_button)
+        btn_layout2.addWidget(self.remove_button)
 
         layout.addWidget(self.file_name_label)
         layout.addWidget(self.pack_name_label)
         layout.addWidget(self.colormap_list)
-        layout.addLayout(btn_layout)
+        layout.addLayout(btn_layout1)
+        layout.addLayout(btn_layout2)
 
         return panel
 
@@ -200,6 +200,11 @@ class ColormapEditor(QMainWindow):
         self.colormap_list.currentItemChanged.connect(self._on_colormap_selected)
         self.gradient_preview.color_changed_at.connect(self.on_direct_edit_color_changed)
         self.node_editor.scene().selectionChanged.connect(self.on_node_selected)
+
+        self.add_button.clicked.connect(self.add_colormap)
+        self.copy_button.clicked.connect(self.copy_colormap)
+        self.rename_button.clicked.connect(self.rename_colormap)
+        self.remove_button.clicked.connect(self.remove_colormap)
 
     # ファイル操作
     def open_file(self):
@@ -449,6 +454,24 @@ class ColormapEditor(QMainWindow):
             self._save_state_for_undo()
             self.color_pack_data["maps"][row]["map_name"] = new_name
             self.colormap_list.item(row).setText(new_name)
+
+    def copy_colormap(self):
+        """カラーマップをコピー"""
+        row = self.colormap_list.currentRow()
+        if row < 0 or not self.color_pack_data or not self.color_pack_data.get("maps"):
+            return
+
+        original_map = self.color_pack_data["maps"][row]
+        new_map = copy.deepcopy(original_map)
+
+        current_name = original_map.get("map_name", "")
+        new_name, ok = QInputDialog.getText(self, "コピー", "新しいカラーマップ名:", text=f"{current_name} Copy")
+        if ok and new_name:
+            self._save_state_for_undo()
+            new_map["map_name"] = new_name
+            self.color_pack_data["maps"].insert(row + 1, new_map)
+            self.colormap_list.insertItem(row + 1, new_name)
+            self.colormap_list.setCurrentRow(row + 1)
 
     # ノード編集
     def on_node_editor_changed(self, final_change=False):
