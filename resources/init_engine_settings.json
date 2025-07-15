@@ -1,7 +1,7 @@
 {
     "common_parameters": {
-        "center_real": -0.5,
-        "center_imag": 0.0,
+        "center_real": -0.5000000000000004,
+        "center_imag": -2.1030458063009405e-05,
         "width": 3.0,
         "height": 2.2899590163934427,
         "max_iterations": 100,
