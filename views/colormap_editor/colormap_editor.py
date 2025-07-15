@@ -193,8 +193,11 @@ class ColormapEditor(QMainWindow):
         self.extract_image_button = QPushButton("Extract from Image")
         self.extract_image_button.clicked.connect(self.on_extract_from_image)
 
+        self.flip_button = QPushButton("Flip Horizontal")
+
         utilities_layout.addWidget(self.random_generate_button)
         utilities_layout.addWidget(self.extract_image_button)
+        utilities_layout.addWidget(self.flip_button)
 
         layout.addWidget(self.color_picker_button)
         layout.addLayout(node_info_layout)
@@ -213,6 +216,8 @@ class ColormapEditor(QMainWindow):
         self.copy_button.clicked.connect(self.copy_colormap)
         self.rename_button.clicked.connect(self.rename_colormap)
         self.remove_button.clicked.connect(self.remove_colormap)
+
+        self.flip_button.clicked.connect(self.on_flip_horizontal)
 
     # ファイル操作
     def new_file(self):
@@ -630,6 +635,25 @@ class ColormapEditor(QMainWindow):
             self.node_color_edit.setText('#{:02X}{:02X}{:02X}{:02X}'.format(*rgba))
             self.on_node_editor_changed(final_change=True)
             self._update_color_picker_button()
+
+    def on_flip_horizontal(self):
+        """カラーマップを水平反転"""
+        row = self.colormap_list.currentRow()
+        if row < 0 or not self.color_pack_data or not self.color_pack_data.get("maps"):
+            ColormapUtils.show_error_message(self, "エラー", "カラーマップが選択されていません")
+            return
+
+        self._save_state_for_undo()
+        cmap = self.color_pack_data["maps"][row]
+
+        if "gradient_points" in cmap:
+            for point in cmap["gradient_points"]:
+                point["pos"] = 1.0 - point["pos"]
+            cmap["gradient_points"] = sorted(cmap["gradient_points"], key=lambda x: x["pos"])
+        elif "colors" in cmap:
+            cmap["colors"].reverse()
+
+        self._on_colormap_selected(self.colormap_list.currentItem(), None)
 
     # ユーティリティ機能
     def on_random_generate(self):
