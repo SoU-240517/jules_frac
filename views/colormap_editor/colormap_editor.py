@@ -56,14 +56,23 @@ class ColormapEditor(QMainWindow):
 
         # --- 起動時に指定パック・マップを自動で開く ---
         if pack_name:
-            # plugins/colorpacks/ 以下のファイルを列挙し、pack_name を含むものを探す
+            # plugins/colorpacks/ 以下のファイルを列挙し、内部の pack_name と比較する
             colorpacks_dir = os.path.join(os.getcwd(), 'plugins', 'colorpacks')
             found_file = None
             if os.path.isdir(colorpacks_dir):
                 for fname in os.listdir(colorpacks_dir):
-                    if fname.lower().endswith('.json') and pack_name.lower() in fname.lower():
-                        found_file = os.path.join(colorpacks_dir, fname)
-                        break
+                    if fname.lower().endswith('.json'):
+                        file_path = os.path.join(colorpacks_dir, fname)
+                        try:
+                            with open(file_path, 'r', encoding='utf-8') as f:
+                                data = json.load(f)
+                            if data.get("pack_name") == pack_name:
+                                found_file = file_path
+                                break
+                        except (json.JSONDecodeError, KeyError):
+                            # 不正なJSONファイルやpack_nameがないファイルはスキップ
+                            logger.log(f"Skipping invalid color pack file: {fname}", level="DEBUG")
+                            continue
             logger.log(f"[ColormapEditor.__init__] 探索した colorpacks_dir={colorpacks_dir}, found_file={found_file}", level="INFO")
             if found_file and os.path.isfile(found_file):
                 try:
