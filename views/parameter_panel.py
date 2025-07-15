@@ -1270,6 +1270,36 @@ class ParameterPanel(QScrollArea):
         # プレビュー品質で再カラーリングを要求
         self.request_redraw(full_recompute=False, is_preview=True)
 
+    def get_active_coloring_target_type(self) -> str:
+        """現在アクティブなカラーリングタブの target_type ('divergent' または 'non_divergent') を返す。"""
+        idx = self.coloring_tabs.currentIndex() if hasattr(self, 'coloring_tabs') else 0
+        return 'divergent' if idx == 0 else 'non_divergent'
+
+    def get_current_color_pack_and_map(self, target_type: str = None) -> tuple[str|None, str|None]:
+        """
+        指定した target_type（省略時はアクティブタブ）で選択中のカラーパック名・カラーマップ名を返す。
+        Returns:
+            (pack_name, map_name): どちらかが未選択の場合は None
+        """
+        logger.log(f"[get_current_color_pack_and_map] self.fractal_controller={self.fractal_controller}", level="INFO")
+        if target_type is None:
+            target_type = self.get_active_coloring_target_type()
+        widgets = self.coloring_widgets.get(target_type, {})
+        pack_combo = widgets.get('pack_combo')
+        map_list = widgets.get('map_list')
+        pack_name = pack_combo.currentText() if pack_combo and pack_combo.currentIndex() >= 0 else None
+        map_item = map_list.currentItem() if map_list and map_list.currentRow() >= 0 else None
+        map_name = map_item.text() if map_item else None
+
+        logger.log(f"[get_current_color_pack_and_map] UI選択: pack_name={pack_name}, map_name={map_name}", level="INFO")
+        # ここで未選択ならコントローラーから取得
+        if (not pack_name or pack_name == 'N/A') and self.fractal_controller:
+            pack_name = self.fractal_controller.get_active_color_pack_name_from_engine(target_type)
+            logger.log(f"[get_current_color_pack_and_map] Controllerから取得: pack_name={pack_name}", level="INFO")
+        if not map_name and self.fractal_controller:
+            map_name = self.fractal_controller.get_active_color_map_name_from_engine(target_type)
+            logger.log(f"[get_current_color_pack_and_map] Controllerから取得: map_name={map_name}", level="INFO")
+        return pack_name, map_name
 
 if __name__ == '__main__':
     pass

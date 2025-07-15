@@ -13,6 +13,8 @@ from PyQt6.QtCore import Qt, QTimer
 import os
 
 from utils.settings_manager import SettingsManager
+from logger.custom_logger import CustomLogger
+logger = CustomLogger()
 
 from .widgets import GradientPreviewWidget, NodeEditorView, NodeItem
 from .utils import ColormapUtils
@@ -21,10 +23,12 @@ from .utils import ColormapUtils
 class ColormapEditor(QMainWindow):
     """カラーマップエディタメインウィンドウ"""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, pack_name=None, map_name=None):
         super().__init__(parent)
         self.setWindowTitle("Colormap Editor")
         self.setGeometry(100, 100, 1200, 700)
+
+        logger.log(f"[ColormapEditor.__init__] 受け取った pack_name={pack_name}, map_name={map_name}", level="INFO")
 
         # データ管理
         self.undo_stack = []
@@ -49,6 +53,50 @@ class ColormapEditor(QMainWindow):
         self._create_actions()
         self._create_menu_bar()
         self._setup_connections()
+
+        # --- 起動時に指定パック・マップを自動で開く ---
+        if pack_name:
+            # plugins/colorpacks/ 以下のファイルを列挙し、pack_name を含むものを探す
+            colorpacks_dir = os.path.join(os.getcwd(), 'plugins', 'colorpacks')
+            found_file = None
+            if os.path.isdir(colorpacks_dir):
+                for fname in os.listdir(colorpacks_dir):
+                    if fname.lower().endswith('.json') and pack_name.lower() in fname.lower():
+                        found_file = os.path.join(colorpacks_dir, fname)
+                        break
+            logger.log(f"[ColormapEditor.__init__] 探索した colorpacks_dir={colorpacks_dir}, found_file={found_file}", level="INFO")
+            if found_file and os.path.isfile(found_file):
+                try:
+                    with open(found_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    self.load_color_pack(data, found_file)
+                    self.new_action.setEnabled(True)
+                    logger.log(f"[ColormapEditor.__init__] カラーパックファイルを開いた: {found_file}", level="INFO")
+                    # マップ名も指定されていればリストで選択
+                    if map_name and self.colormap_list.count() > 0:
+                        map_name_lower = map_name.lower()
+                        selected_row = None
+                        all_map_names = [self.colormap_list.item(i).text() for i in range(self.colormap_list.count())]
+                        logger.log(f"[ColormapEditor.__init__] マップリスト: {all_map_names}", level="INFO")
+                        for i, item_text in enumerate(all_map_names):
+                            if item_text == map_name:
+                                selected_row = i
+                                logger.log(f"[ColormapEditor.__init__] 完全一致で選択: {item_text}", level="INFO")
+                                break
+                        if selected_row is None:
+                            for i, item_text in enumerate(all_map_names):
+                                if map_name_lower in item_text.lower():
+                                    selected_row = i
+                                    logger.log(f"[ColormapEditor.__init__] 部分一致で選択: {item_text}", level="INFO")
+                                    break
+                        if selected_row is not None:
+                            self.colormap_list.setCurrentRow(selected_row)
+                            logger.log(f"[ColormapEditor.__init__] マップ選択成功: {all_map_names[selected_row]}", level="INFO")
+                        else:
+                            logger.log(f"[ColormapEditor.__init__] マップ選択失敗: 指定名={map_name}", level="WARNING")
+                except Exception as e:
+                    logger.log(f"[ColormapEditor.__init__] カラーパック読み込み失敗: {e}", level="ERROR")
+        # --- ここまで ---
 
     def _init_ui(self):
         """UI初期化"""
@@ -275,11 +323,11 @@ class ColormapEditor(QMainWindow):
             else:
                 project_root = os.getcwd()
                 dir_path = os.path.join(project_root, 'plugins', 'colorpacks')
-            
+
             suggested_filename = os.path.join(dir_path, f"{safe_new_pack_name}.json")
 
             file_path, _ = QFileDialog.getSaveFileName(self, "名前を付けて保存", suggested_filename, "JSON Files (*.json)")
-            
+
             if file_path:
                 self._save_state_for_undo()
                 self.color_pack_data["pack_name"] = new_pack_name
@@ -659,8 +707,8 @@ class ColormapEditor(QMainWindow):
     def on_random_generate(self):
         """ランダム生成"""
         num_to_generate, map_type, min_nodes, max_nodes = ColormapUtils.get_random_generate_params(
-            self, 
-            max_value=self.random_generate_max_count, 
+            self,
+            max_value=self.random_generate_max_count,
             max_nodes=self.random_generate_max_nodes
         )
         if num_to_generate is None:
@@ -688,7 +736,7 @@ class ColormapEditor(QMainWindow):
 
             self.color_pack_data["maps"].append(new_map)
             self.colormap_list.addItem(new_map["map_name"])
-        
+
         if num_to_generate > 0:
             self.colormap_list.setCurrentRow(self.colormap_list.count() - 1)
             self.new_action.setEnabled(True)
@@ -714,7 +762,7 @@ class ColormapEditor(QMainWindow):
                     self.pack_name_label.setText(f"Pack: {self.color_pack_data['pack_name']}")
                 self.color_pack_data["maps"].append(new_map)
                 self.colormap_list.addItem(new_map["map_name"])
-            
+
             if num_maps > 0:
                 self.colormap_list.setCurrentRow(self.colormap_list.count() - 1)
                 self.new_action.setEnabled(True)

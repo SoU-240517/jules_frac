@@ -167,10 +167,21 @@ class MainWindow(QMainWindow):
     def _open_colormap_editor(self):
         """
         カラーマップエディタのウィンドウを開きます。
+        現在のアクティブなカラーパック・カラーマップをエディタに渡す。
         """
         # エディタが既に開いている場合は、新しいインスタンスを作成せずに前面に表示します。
         if not hasattr(self, 'colormap_editor_window') or not self.colormap_editor_window.isVisible():
-            self.colormap_editor_window = ColormapEditor(self)
+            # ParameterPanel から現在のアクティブな target_type, pack, map を取得
+            if hasattr(self, 'parameter_panel'):
+                logger.log(f"[ColormapEditor起動] parameter_panelあり: {self.parameter_panel}", level="INFO")
+                target_type = self.parameter_panel.get_active_coloring_target_type()
+                pack_name, map_name = self.parameter_panel.get_current_color_pack_and_map(target_type)
+                logger.log(f"[ColormapEditor起動] target_type={target_type}, pack_name={pack_name}, map_name={map_name}", level="INFO")
+            else:
+                logger.log(f"[ColormapEditor起動] parameter_panelなし。デフォルト値で起動", level="INFO")
+                target_type = 'divergent'
+                pack_name, map_name = None, None
+            self.colormap_editor_window = ColormapEditor(self, pack_name=pack_name, map_name=map_name)
             self.colormap_editor_window.show()
         else:
             self.colormap_editor_window.activateWindow()
@@ -432,19 +443,6 @@ class MainWindow(QMainWindow):
     def mousePressEvent(self, event):
         self.show_default_status_message()
         super().mousePressEvent(event)
-
-    @pyqtSlot()
-    def _open_colormap_editor(self):
-        """
-        カラーマップエディタのウィンドウを開きます。
-        """
-        # エディタが既に開いている場合は、新しいインスタンスを作成せずに前面に表示します。
-        if not hasattr(self, 'colormap_editor_window') or not self.colormap_editor_window.isVisible():
-            self.colormap_editor_window = ColormapEditor(self)
-            self.colormap_editor_window.show()
-        else:
-            self.colormap_editor_window.activateWindow()
-            self.colormap_editor_window.raise_()
 
 if __name__ == '__main__':
     import sys
