@@ -117,14 +117,11 @@ class SettingsManager:
         """
         現在の設定をファイルに保存します。
         保存先のディレクトリが存在しない場合は作成します。
-        engine_settingsとpresetsは除外して保存します。
         """
         logger = self._get_logger()
         try:
-            # 保存時にengine_settingsとpresetsを除外
+            # self.settings 全体を保存（engine_settings, presets も含む）
             settings_to_save = self.settings.copy()
-            settings_to_save.pop("engine_settings", None)
-            settings_to_save.pop("presets", None)
             # 親ディレクトリが存在することを確認します
             self.filepath.parent.mkdir(parents=True, exist_ok=True)
             with open(self.filepath, 'w', encoding='utf-8') as f:

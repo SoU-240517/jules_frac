@@ -21,9 +21,7 @@ if str(_project_root) not in sys.path:
 
 # --- 定数定義 ---
 SETTINGS_FILE_NAME = "settings.jsonc"
-INIT_ENGINE_SETTINGS_FILE_NAME = "resources/init_engine_settings.json"
-PRESET_FILE_NAME = "resources/preset/preset_record.json"
-DEFAULT_STYLESHEET_PATH = "resources/style.qss" # デフォルトのスタイルシートパス
+DEFAULT_STYLESHEET_PATH = "style.qss" # デフォルトのスタイルシートパス
 
 logger = CustomLogger()
 logger.set_project_root(_project_root) # プロジェクトルートを設定
@@ -105,33 +103,10 @@ def main():
     settings_manager = SettingsManager(settings_filename=str(settings_file_path))
     setup_logging(settings_manager, logger)
 
-    # --- プリセットを専用ファイルからロード ---
-    preset_file_path = _project_root / PRESET_FILE_NAME
-    if preset_file_path.exists():
-        try:
-            with open(preset_file_path, "r", encoding="utf-8") as f:
-                presets = json.load(f)
-            # settings.jsoncのpresetsを上書きする
-            settings_manager.set_setting("presets", presets, auto_save=False)
-            logger.log(f"プリセットをロードしました: {_to_relpath(preset_file_path)}", level="INFO")
-        except Exception as e:
-            logger.log(f"プリセットファイルの読み込みに失敗しました: {e}", level="ERROR")
-
-    # --- 初期エンジン設定を専用ファイルからロード ---
-    init_engine_settings_path = _project_root / INIT_ENGINE_SETTINGS_FILE_NAME
-    # 終了時にsettings.jsoncへ保存する際、元の設定に戻すために保持しておく
-    initial_engine_settings = settings_manager.get_setting("engine_settings", {})
-    if init_engine_settings_path.exists():
-        try:
-            # JSONC形式の可能性を考慮し、一時的なSettingsManagerで読み込む
-            temp_settings_manager = SettingsManager(settings_filename=str(init_engine_settings_path))
-            loaded_engine_settings = temp_settings_manager.get_all_settings()
-            # settings.jsoncから読み込んだエンジン設定を上書きする
-            settings_manager.set_setting("engine_settings", loaded_engine_settings, auto_save=False)
-            initial_engine_settings = loaded_engine_settings # 保持する値を更新
-            logger.log(f"初期エンジン設定をロードしました: {_to_relpath(init_engine_settings_path)}", level="INFO")
-        except Exception as e:
-            logger.log(f"初期エンジン設定ファイルの読み込みに失敗しました: {e}", level="ERROR")
+    # --- サブキーで管理された設定の取得 ---
+    # engine_settings, presets などは settings.jsonc のサブキーとして管理
+    engine_settings = settings_manager.get_setting("engine_settings", {})
+    presets = settings_manager.get_setting("presets", {})
 
     # --- Numbaキャッシュ設定の適用 ---
     numba_config = settings_manager.get_setting("app_settings.numba_settings", {"cache_enabled": True})
@@ -159,51 +134,15 @@ def main():
 
     # --- 終了時処理の接続 ---
     def save_settings_on_exit():
-        """アプリケーション終了時に各種設定を対応するファイルに保存する。
-
-        settings.jsonc にはアプリケーションの基本的な設定のみを保存し、
-        エンジン設定とプリセットは専用のファイルに保存する。"""
-        logger.log("終了処理を開始します。各種設定を保存します...", level="INFO")
-
-        # 1. 現在のエンジン設定を専用ファイル(init_engine_settings.json)に保存
-        app_config = settings_manager.get_setting("app_settings", {})
-        should_save_engine = app_config.get("save_engine_settings", True)
-        if should_save_engine:
-            logger.log("アプリケーション終了前にエンジン設定を保存します...", level="INFO")
-            engine_config = fractal_controller.get_full_configuration()
-            save_path = _project_root / INIT_ENGINE_SETTINGS_FILE_NAME
-            try:
-                with open(save_path, "w", encoding="utf-8") as f:
-                    json.dump(engine_config, f, indent=4, ensure_ascii=False)
-                logger.log(f"エンジン設定を保存しました: {_to_relpath(save_path)}", level="INFO")
-            except Exception as e:
-                logger.log(f"エンジン設定の保存に失敗しました: {e}", level="ERROR")
-        else:
-            logger.log("エンジン設定の保存はスキップされました (save_engine_settings is false)。", level="INFO")
-
-        # 2. 現在のプリセットを専用ファイル(preset_record.json)に保存
-        presets = settings_manager.get_setting("presets", {})
-        if presets:
-            preset_file_path = _project_root / PRESET_FILE_NAME
-            try:
-                with open(preset_file_path, "w", encoding="utf-8") as f:
-                    json.dump(presets, f, indent=4, ensure_ascii=False)
-                logger.log(f"プリセットを保存しました: {_to_relpath(preset_file_path)}", level="INFO")
-                # メイン設定ファイル(settings.jsonc)にプリセットが重複して保存されないように、
-                # メモリ上の設定からは削除する。
-                settings_manager.set_setting("presets", {}, auto_save=False)
-            except Exception as e:
-                logger.log(f"プリセットの保存に失敗しました: {e}", level="ERROR")
-
-        # 3. メイン設定ファイル(settings.jsonc)を保存
-        #    settings.jsonc には以下の内容を保存する。
-        #    - engine_settings: 動的な状態は init_engine_settings.json に保存済みのため、
-        #      settings.jsonc には起動時の初期設定を書き戻す。
-        #    - presets: preset_record.json に保存済みのため、空の辞書を書き込む。
-        #    - app_settings など、その他のアプリケーションの基本的な設定
-        settings_manager.set_setting("engine_settings", initial_engine_settings, auto_save=False)
-        # settings.jsonc には presets を保存しない
-        settings_manager.set_setting("presets", {}, auto_save=False)
+        """アプリケーション終了時に全ての設定を settings.jsonc に保存する。"""
+        logger.log("終了処理を開始します。全ての設定を保存します...", level="INFO")
+        # コントローラから最新のエンジン設定を取得し、settings.jsonc のサブキーに保存
+        engine_config = fractal_controller.get_full_configuration()
+        settings_manager.set_setting("engine_settings", engine_config, auto_save=False)
+        # プリセットも同様に保存（必要なら）
+        current_presets = settings_manager.get_setting("presets", {})
+        settings_manager.set_setting("presets", current_presets, auto_save=False)
+        # その他の app_settings なども自動的に SettingsManager が管理
         settings_manager.save_settings()
 
     app.aboutToQuit.connect(save_settings_on_exit)

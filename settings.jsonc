@@ -5,7 +5,7 @@
             "enabled": true
         },
         "save_engine_settings": true,
-        "stylesheet_path": "resources/style.qss",
+        "stylesheet_path": "style.qss",
         "numba_settings": {
             "cache_enabled": true,
             "clear_cache_on_exit": false
@@ -15,5 +15,331 @@
         "random_generate_max_count": 30,
         "random_generate_max_nodes": 20,
         "extract_image_max_maps": 30
+    },
+    "engine_settings": {
+        "common_parameters": {
+            "center_real": 0.0,
+            "center_imag": 0.0,
+            "width": 3.0,
+            "height": 2.2899590163934427,
+            "max_iterations": 100,
+            "escape_radius": 2.0
+        },
+        "fractal_plugin_name": "Julia",
+        "fractal_plugin_parameters": {
+            "c_real": 0.0,
+            "c_imag": 1.0
+        },
+        "coloring_divergent": {
+            "plugin_name": "スムーズカラー",
+            "plugin_parameters": {
+                "color_scale": 1.0
+            },
+            "pack_name": "デフォルト",
+            "map_name": "グレースケール"
+        },
+        "coloring_non_divergent": {
+            "plugin_name": "複素ポテンシャル",
+            "plugin_parameters": {
+                "color_scale": 1.0,
+                "potential_offset": 0.0,
+                "potential_scale": 1.0
+            },
+            "pack_name": "デフォルト",
+            "map_name": "グレースケール"
+        }
+    },
+    "presets": {
+        "初期設定": {
+            "common_parameters": {
+                "center_real": -0.5,
+                "center_imag": 0.0,
+                "width": 3.0,
+                "max_iterations": 100,
+                "escape_radius": 2.0
+            },
+            "fractal_plugin_name": "Mandelbrot",
+            "fractal_plugin_parameters": {},
+            "coloring_divergent": {
+                "plugin_name": "スムーズカラー",
+                "plugin_parameters": {
+                    "color_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            },
+            "coloring_non_divergent": {
+                "plugin_name": "複素ポテンシャル",
+                "plugin_parameters": {
+                    "color_scale": 1.0,
+                    "potential_offset": 0.0,
+                    "potential_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            }
+        },
+        "デンドライト": {
+            "common_parameters": {
+                "center_real": 0.0,
+                "center_imag": 0.0,
+                "width": 3.0,
+                "max_iterations": 100,
+                "escape_radius": 2.0
+            },
+            "fractal_plugin_name": "Julia",
+            "fractal_plugin_parameters": {
+                "c_real": -0.745,
+                "c_imag": 0.113
+            },
+            "coloring_divergent": {
+                "plugin_name": "スムーズカラー",
+                "plugin_parameters": {
+                    "color_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            },
+            "coloring_non_divergent": {
+                "plugin_name": "複素ポテンシャル",
+                "plugin_parameters": {
+                    "color_scale": 1.0,
+                    "potential_offset": 0.0,
+                    "potential_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            }
+        },
+        "サン・マルコ": {
+            "common_parameters": {
+                "center_real": 0.0,
+                "center_imag": 0.0,
+                "width": 3.0,
+                "height": 2.2899590163934427,
+                "max_iterations": 100,
+                "escape_radius": 2.0
+            },
+            "fractal_plugin_name": "Julia",
+            "fractal_plugin_parameters": {
+                "c_real": 0.285,
+                "c_imag": 0.01
+            },
+            "coloring_divergent": {
+                "plugin_name": "スムーズカラー",
+                "plugin_parameters": {
+                    "color_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            },
+            "coloring_non_divergent": {
+                "plugin_name": "複素ポテンシャル",
+                "plugin_parameters": {
+                    "color_scale": 1.0,
+                    "potential_offset": 0.0,
+                    "potential_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            }
+        },
+        "渦巻きとフィラメント": {
+            "common_parameters": {
+                "center_real": 0.0,
+                "center_imag": 0.0,
+                "width": 3.0,
+                "height": 2.2899590163934427,
+                "max_iterations": 100,
+                "escape_radius": 2.0
+            },
+            "fractal_plugin_name": "Julia",
+            "fractal_plugin_parameters": {
+                "c_real": -0.8,
+                "c_imag": 0.156
+            },
+            "coloring_divergent": {
+                "plugin_name": "スムーズカラー",
+                "plugin_parameters": {
+                    "color_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            },
+            "coloring_non_divergent": {
+                "plugin_name": "複素ポテンシャル",
+                "plugin_parameters": {
+                    "color_scale": 1.0,
+                    "potential_offset": 0.0,
+                    "potential_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            }
+        },
+        "ドラゴン状": {
+            "common_parameters": {
+                "center_real": 0.0,
+                "center_imag": 0.0,
+                "width": 3.0,
+                "height": 2.2899590163934427,
+                "max_iterations": 100,
+                "escape_radius": 2.0
+            },
+            "fractal_plugin_name": "Julia",
+            "fractal_plugin_parameters": {
+                "c_real": -0.835,
+                "c_imag": -0.2321
+            },
+            "coloring_divergent": {
+                "plugin_name": "スムーズカラー",
+                "plugin_parameters": {
+                    "color_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            },
+            "coloring_non_divergent": {
+                "plugin_name": "複素ポテンシャル",
+                "plugin_parameters": {
+                    "color_scale": 1.0,
+                    "potential_offset": 0.0,
+                    "potential_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            }
+        },
+        "双曲的カオス": {
+            "common_parameters": {
+                "center_real": 0.0,
+                "center_imag": 0.0,
+                "width": 3.0,
+                "height": 2.2899590163934427,
+                "max_iterations": 100,
+                "escape_radius": 2.0
+            },
+            "fractal_plugin_name": "Julia",
+            "fractal_plugin_parameters": {
+                "c_real": -0.123,
+                "c_imag": 0.745
+            },
+            "coloring_divergent": {
+                "plugin_name": "スムーズカラー",
+                "plugin_parameters": {
+                    "color_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            },
+            "coloring_non_divergent": {
+                "plugin_name": "複素ポテンシャル",
+                "plugin_parameters": {
+                    "color_scale": 1.0,
+                    "potential_offset": 0.0,
+                    "potential_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            }
+        },
+        "ファトゥの塵": {
+            "common_parameters": {
+                "center_real": 0.0,
+                "center_imag": 0.0,
+                "width": 3.0,
+                "height": 2.2899590163934427,
+                "max_iterations": 100,
+                "escape_radius": 2.0
+            },
+            "fractal_plugin_name": "Julia",
+            "fractal_plugin_parameters": {
+                "c_real": -0.75,
+                "c_imag": 0.0
+            },
+            "coloring_divergent": {
+                "plugin_name": "スムーズカラー",
+                "plugin_parameters": {
+                    "color_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            },
+            "coloring_non_divergent": {
+                "plugin_name": "複素ポテンシャル",
+                "plugin_parameters": {
+                    "color_scale": 1.0,
+                    "potential_offset": 0.0,
+                    "potential_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            }
+        },
+        "シンプルなデンドライト": {
+            "common_parameters": {
+                "center_real": 0.0,
+                "center_imag": 0.0,
+                "width": 3.0,
+                "max_iterations": 100,
+                "escape_radius": 2.0
+            },
+            "fractal_plugin_name": "Julia",
+            "fractal_plugin_parameters": {
+                "c_real": 0.0,
+                "c_imag": 1.0
+            },
+            "coloring_divergent": {
+                "plugin_name": "スムーズカラー",
+                "plugin_parameters": {
+                    "color_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            },
+            "coloring_non_divergent": {
+                "plugin_name": "複素ポテンシャル",
+                "plugin_parameters": {
+                    "color_scale": 1.0,
+                    "potential_offset": 0.0,
+                    "potential_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            }
+        },
+        "渦巻く銀河": {
+            "common_parameters": {
+                "center_real": 0.0,
+                "center_imag": 0.0,
+                "width": 3.0,
+                "height": 2.2899590163934427,
+                "max_iterations": 100,
+                "escape_radius": 2.0
+            },
+            "fractal_plugin_name": "Julia",
+            "fractal_plugin_parameters": {
+                "c_real": -0.7269,
+                "c_imag": 0.1889
+            },
+            "coloring_divergent": {
+                "plugin_name": "スムーズカラー",
+                "plugin_parameters": {
+                    "color_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            },
+            "coloring_non_divergent": {
+                "plugin_name": "複素ポテンシャル",
+                "plugin_parameters": {
+                    "color_scale": 1.0,
+                    "potential_offset": 0.0,
+                    "potential_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            }
+        }
     }
 }
