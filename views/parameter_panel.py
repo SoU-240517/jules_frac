@@ -322,15 +322,21 @@ class ParameterPanel(QScrollArea):
         self.fractal_combo.blockSignals(False)
 
     def populate_presets_combo_box(self):
-        """プリセットのドロップダウンを更新します。"""
-        if not hasattr(self, 'presets_combo_box'): return
+        """プリセットのドロップダウンを更新します（選択中のフラクタルタイプに合致するもののみ表示）。"""
+        if not hasattr(self, 'presets_combo_box'):
+            return
         self.presets_combo_box.blockSignals(True)
         current_text = self.presets_combo_box.currentText()
         self.presets_combo_box.clear()
-        preset_names = self.fractal_controller.get_preset_names()
-        if preset_names:
-            self.presets_combo_box.addItems(sorted(preset_names))
-            if current_text in preset_names:
+        # --- ここからフィルタリング処理 ---
+        all_presets = self.fractal_controller.settings_manager.get_presets()
+        active_fractal_type = self.fractal_controller.get_active_fractal_plugin_name_from_engine()
+        filtered_names = [name for name, config in all_presets.items()
+                          if config.get('fractal_plugin_name') == active_fractal_type]
+        # --- ここまで ---
+        if filtered_names:
+            self.presets_combo_box.addItems(sorted(filtered_names))
+            if current_text in filtered_names:
                 self.presets_combo_box.setCurrentText(current_text)
         self.presets_combo_box.blockSignals(False)
 
@@ -427,12 +433,16 @@ class ParameterPanel(QScrollArea):
         current_engine_plugin = self.fractal_controller.get_active_fractal_plugin_name_from_engine()
         if plugin_name == current_engine_plugin:
             logger.log(f"ParameterPanel._on_fractal_type_changed: Selected plugin '{plugin_name}' is already active. Returning.", level="DEBUG")
+            # --- ここでプリセットリストも更新 ---
+            self.populate_presets_combo_box()
             return
 
         logger.log(f"ParameterPanel._on_fractal_type_changed: Calling controller to set active fractal plugin: {plugin_name}", level="DEBUG")
         self.fractal_controller.set_active_fractal_plugin_and_redraw(plugin_name)
         # フラクタルタイプ変更後、意図しないフォーカス移動を防ぐためにコンボボックスにフォーカスを戻す
         self.setFocus()
+        # --- ここでプリセットリストも更新 ---
+        self.populate_presets_combo_box()
 
     def request_redraw(self, full_recompute: bool, is_preview: bool = False):
         """
