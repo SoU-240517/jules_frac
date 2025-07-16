@@ -20,6 +20,8 @@ class FractalEngine:
 
     プラグインシステムを介して様々なフラクタルアルゴリズムとカラーリング手法をサポートし、
     高解像度画像の出力機能も提供します。
+    各種パラメータやプラグインの管理、カラーマップの適用、
+    設定の保存・復元など、アプリの中核的な役割を担います。
     """
     def __init__(self, project_root_path: Path, image_width_px=800, image_height_px=600,
                  settings_manager: 'SettingsManager | None' = None, fractal_plugin_folder="plugins/fractals",  # project_root_pathからの相対パス
@@ -37,16 +39,16 @@ class FractalEngine:
             coloring_plugin_folder (str): `project_root_path` からのカラーリングプラグインフォルダへの相対パス。
             color_pack_folder (str): `project_root_path` からのカラーパックフォルダへの相対パス。
         """
-        self.settings_manager: 'SettingsManager | None' = settings_manager
-        self.max_iterations = 100
-        self.center_real = -0.5
-        self.center_imag = 0.0
-        self.width = 3.0
-        self.escape_radius = 2.0
+        self.settings_manager: 'SettingsManager | None' = settings_manager  # 設定管理インスタンス
+        self.max_iterations = 100  # 最大反復回数
+        self.center_real = -0.5  # 複素平面上の中心（実部）
+        self.center_imag = 0.0   # 複素平面上の中心（虚部）
+        self.width = 3.0         # 複素平面上の表示幅
+        self.escape_radius = 2.0 # 発散判定の半径
 
-        self.image_width_px = image_width_px if image_width_px > 0 else 800
-        self.image_height_px = image_height_px if image_height_px > 0 else 600
-        self.height = (self.width * self.image_height_px) / self.image_width_px if self.image_width_px > 0 else self.width
+        self.image_width_px = image_width_px if image_width_px > 0 else 800  # 画像幅
+        self.image_height_px = image_height_px if image_height_px > 0 else 600  # 画像高さ
+        self.height = (self.width * self.image_height_px) / self.image_width_px if self.image_width_px > 0 else self.width  # 画像高さ（複素平面上）
 
         self.plugin_manager = PluginManager(
             project_root_path=project_root_path,
@@ -57,22 +59,22 @@ class FractalEngine:
         # ColorManagerもプロジェクトルートからの相対パスで初期化するのが望ましいです
         self.color_manager = ColorManager(color_packs_dir=str(project_root_path / color_pack_folder))
 
-        self.current_fractal_plugin: FractalPlugin | None = None
-        self.current_fractal_plugin_parameters: dict = {}
+        self.current_fractal_plugin: FractalPlugin | None = None  # 現在のフラクタルプラグイン
+        self.current_fractal_plugin_parameters: dict = {}  # 現在のフラクタルプラグインのパラメータ
 
         self.active_coloring_target_type: str = 'divergent' # デフォルトのアクティブターゲット、ロードされた設定によって上書きされる場合があります
 
-        self.current_coloring_plugin_divergent: ColoringAlgorithmPlugin | None = None
-        self.current_coloring_plugin_parameters_divergent: dict = {}
-        self.current_color_pack_name_divergent: str | None = None
-        self.current_color_map_name_divergent: str | None = None
+        self.current_coloring_plugin_divergent: ColoringAlgorithmPlugin | None = None  # 発散部カラーリングプラグイン
+        self.current_coloring_plugin_parameters_divergent: dict = {}  # 発散部カラーリングパラメータ
+        self.current_color_pack_name_divergent: str | None = None  # 発散部カラーパック名
+        self.current_color_map_name_divergent: str | None = None  # 発散部カラーマップ名
 
-        self.current_coloring_plugin_non_divergent: ColoringAlgorithmPlugin | None = None
-        self.current_coloring_plugin_parameters_non_divergent: dict = {}
-        self.current_color_pack_name_non_divergent: str | None = None
-        self.current_color_map_name_non_divergent: str | None = None
+        self.current_coloring_plugin_non_divergent: ColoringAlgorithmPlugin | None = None  # 非発散部カラーリングプラグイン
+        self.current_coloring_plugin_parameters_non_divergent: dict = {}  # 非発散部カラーリングパラメータ
+        self.current_color_pack_name_non_divergent: str | None = None  # 非発散部カラーパック名
+        self.current_color_map_name_non_divergent: str | None = None  # 非発散部カラーマップ名
 
-        self.last_fractal_data_cache: dict | None = None
+        self.last_fractal_data_cache: dict | None = None  # 直近の計算結果キャッシュ
 
         # 設定のロードを試みる
         if self.settings_manager:

@@ -14,39 +14,53 @@ import re
 logger = CustomLogger()
 
 class FractalController(QObject):
-    image_rendered = pyqtSignal(object)
-    status_updated = pyqtSignal(str)
-    parameters_updated_externally = pyqtSignal(dict)
-    active_fractal_plugin_ui_needs_update = pyqtSignal(str)
-    active_coloring_plugin_ui_needs_update = pyqtSignal(str) # (プラグイン名) - 将来廃止されるか、より単純な更新に使用される可能性があります
-    active_coloring_target_and_plugin_changed_externally = pyqtSignal(str, str) # (ターゲットタイプ, プラグイン名) - 変更された場合の順序に注意
-    active_color_map_changed_externally = pyqtSignal(str, str, str) # パック名, マップ名, ターゲットタイプ
-    configuration_applied = pyqtSignal() # プリセット適用後にUIを更新するためのシグナル
-    rendering_task_started = pyqtSignal() # 新しいシグナル
-    rendering_state_changed = pyqtSignal(bool) # レンダリング開始時はTrue、終了時または失敗時はFalse
-
-    # 高解像度エクスポート処理用のシグナル
-    export_started = pyqtSignal()
-    export_progress_updated = pyqtSignal(int)
-    export_process_finished = pyqtSignal(bool, str) # bool: 成功フラグ, str: メッセージ (ファイルパスまたはエラー)
+    """
+    フラクタル描画アプリケーションのコントローラ。
+    フラクタルエンジンや設定管理、UIとの連携、プリセット管理、
+    レンダリング・エクスポート・パラメータ操作など、
+    アプリ全体の制御を担う中心的なクラスです。
+    """
+    # --- シグナル定義 ---
+    image_rendered = pyqtSignal(object)  # 画像がレンダリングされたときに通知
+    status_updated = pyqtSignal(str)  # ステータスバーの表示更新用
+    parameters_updated_externally = pyqtSignal(dict)  # パラメータが外部から変更されたとき通知
+    active_fractal_plugin_ui_needs_update = pyqtSignal(str)  # アクティブなフラクタルプラグインのUI更新要求
+    active_coloring_plugin_ui_needs_update = pyqtSignal(str)  # アクティブなカラーリングプラグインのUI更新要求
+    active_coloring_target_and_plugin_changed_externally = pyqtSignal(str, str)  # ターゲットタイプ・プラグイン名変更通知
+    active_color_map_changed_externally = pyqtSignal(str, str, str)  # カラーパック・マップ・ターゲットタイプ変更通知
+    configuration_applied = pyqtSignal()  # 設定適用後のUI更新通知
+    rendering_task_started = pyqtSignal()  # レンダリングタスク開始通知
+    rendering_state_changed = pyqtSignal(bool)  # レンダリング状態変化通知（開始:True/終了:False）
+    # --- 高解像度エクスポート用シグナル ---
+    export_started = pyqtSignal()  # エクスポート開始
+    export_progress_updated = pyqtSignal(int)  # エクスポート進捗
+    export_process_finished = pyqtSignal(bool, str)  # エクスポート完了（成功/失敗, メッセージ）
 
     def __init__(self, fractal_engine: FractalEngine, settings_manager: SettingsManager):
-        super().__init__()
-        self.fractal_engine = fractal_engine
-        self.settings_manager = settings_manager
-        self.main_window = None
-        self.last_compute_time_ms = 0.0
-        self.last_coloring_time_ms = 0.0
-        self.initial_width = self.fractal_engine.width if self.fractal_engine else 3.0
-        self.logger = CustomLogger() # ロガーインスタンスを追加
-        self.is_rendering = False
-        self.preview_downscale_factor = 0.5 # プレビュー解像度を50%に
+        """
+        FractalControllerの初期化。
+        フラクタルエンジン・設定管理インスタンスを受け取り、
+        各種状態やUI連携用の属性を初期化します。
 
-        self.current_exporter: ImageExporter | None = None
-        self.thread_pool = QThreadPool.globalInstance()
-        self.current_renderer_task = None
-        self.active_coloring_target_type: str = 'divergent' # デフォルトのターゲットタイプ
-        # オプション: 必要に応じて同時エクスポート数を制限します。例: self.thread_pool.setMaxThreadCount(1)
+        Args:
+            fractal_engine (FractalEngine): フラクタル計算・描画エンジン
+            settings_manager (SettingsManager): 設定管理インスタンス
+        """
+        super().__init__()
+        self.fractal_engine = fractal_engine  # フラクタル計算・描画エンジン
+        self.settings_manager = settings_manager  # 設定管理
+        self.main_window = None  # メインウィンドウ参照
+        self.last_compute_time_ms = 0.0  # 直近の計算時間（ミリ秒）
+        self.last_coloring_time_ms = 0.0  # 直近のカラーリング時間（ミリ秒）
+        self.initial_width = self.fractal_engine.width if self.fractal_engine else 3.0  # 初期表示幅
+        self.logger = CustomLogger()  # ロガー
+        self.is_rendering = False  # レンダリング中フラグ
+        self.preview_downscale_factor = 0.5  # プレビュー解像度の縮小率
+        self.current_exporter: ImageExporter | None = None  # 現在のエクスポート処理
+        self.thread_pool = QThreadPool.globalInstance()  # スレッドプール
+        self.current_renderer_task = None  # 現在のレンダリングタスク
+        self.active_coloring_target_type: str = 'divergent'  # デフォルトのカラーリングターゲット
+        # 必要に応じて同時エクスポート数を制限可能: self.thread_pool.setMaxThreadCount(1)
 
     def _apply_config_to_engine(self, config: dict):
         """指定された設定辞書をエンジンに適用します。UI更新や再描画は行いません。"""
