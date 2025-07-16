@@ -709,23 +709,17 @@ class FractalController(QObject):
     def update_status_display(self):
         """
         ステータスバーに表示するメッセージを生成し、status_updatedシグナルを発行する。
-        「状態」表示は削除し、中心座標・ズーム倍率・画像サイズ・計算時間・彩色時間のみを表示する。
+        中心座標・ズーム倍率の表示を削除し、画像サイズ・計算時間・彩色時間のみを表示する。
         """
         if not self.fractal_engine:
             self.status_updated.emit("フラクタルエンジン未準備.")
             return
 
         common_p = self.fractal_engine.get_common_parameters()
-        w = common_p.get('width', self.initial_width)
-        zoom = self.initial_width / w if w > 0 else 0
-        center_real = common_p.get('center_real', 0)
-        center_imag = common_p.get('center_imag', 0)
         img_w = getattr(self.fractal_engine, 'image_width_px', None)
         img_h = getattr(self.fractal_engine, 'image_height_px', None)
         size_str = f"{img_w}x{img_h}px" if img_w and img_h else "サイズ不明"
         status_parts = [
-            f"中心座標: ({center_real:.4f}, {center_imag:.4f})",
-            f"ズーム: {zoom:.2f}x",
             f"画像サイズ: {size_str}"
         ]
         if self.last_compute_time_ms > 0:
@@ -1039,7 +1033,7 @@ if __name__ == '__main__':
     # このテストスクリプト用に実際のFractalRendererをモックに置き換えます
     # これは、インポートされたクラスを直接変更したくない場合や、
     # 実際のクラスが複雑な依存関係（GUIなど）を持つ場合の一般的なテスト方法です。
-    original_fractal_renderer = FractalRenderer # 他の場所で必要であれば参照を保持します（この単純なスクリプトでは不要ですが）。
+    original_fractal_renderer = FractalRenderer # 他の場所で必要であれば参照を保持します（この単純なスクリプトでは不要であれば）。
     #globals()['FractalRenderer'] = MockFractalRenderer # モジュールに対してグローバルに置き換える一つの方法
     # より制御された方法: FractalController がインジェクションを許可していれば、それがより良いでしょう。
     # 現時点では、コントローラーがそれをインポートするという事実に依存し、パッチを試みることができます。

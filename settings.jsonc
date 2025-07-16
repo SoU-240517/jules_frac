@@ -22,7 +22,7 @@
             "center_imag": 0.06,
             "width": 2.830188679245283,
             "height": 2.160338694710795,
-            "max_iterations": 100,
+            "max_iterations": 134,
             "escape_radius": 2.0
         },
         "fractal_plugin_name": "Mandelbrot",

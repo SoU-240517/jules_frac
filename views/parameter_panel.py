@@ -173,18 +173,12 @@ class ParameterPanel(QScrollArea):
         self.iter_spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.iter_spinbox.installEventFilter(self)
 
-        self.iter_slider = QSlider(Qt.Orientation.Horizontal)
-        self.iter_slider.setRange(10, 100000)
+        # スライダーは削除
+        # self.iter_slider = QSlider(Qt.Orientation.Horizontal)
+        # self.iter_slider.setRange(10, 100000)
 
-        # スピンボックスとスライダーを横に並べるためのレイアウト
-        iter_widget_layout = QHBoxLayout()
-        iter_widget_layout.setContentsMargins(0, 0, 0, 0)
-        iter_widget_layout.addWidget(self.iter_spinbox, 1) # スピンボックスが幅の約1/4を占める
-        iter_widget_layout.addWidget(self.iter_slider, 3)  # スライダーが幅の約3/4を占める
-        iter_widget = QWidget()
-        iter_widget.setLayout(iter_widget_layout)
-
-        self.common_params_layout.addRow(QLabel("最大反復回数:"), iter_widget)
+        # スピンボックスのみを直接レイアウトに追加
+        self.common_params_layout.addRow(QLabel("最大反復回数:"), self.iter_spinbox)
         common_params_group.setLayout(self.common_params_layout)
         self.main_layout.addWidget(common_params_group)
 
@@ -212,15 +206,14 @@ class ParameterPanel(QScrollArea):
 
         # 再描画をトリガーするシグナル接続
         self.iter_spinbox.editingFinished.connect(self._on_value_changed_by_ui)
-        self.iter_slider.sliderReleased.connect(self._on_value_changed_by_ui) # スライダー解放時に再描画
+        # self.iter_slider.sliderReleased.connect(self._on_value_changed_by_ui) # スライダー解放時に再描画（削除）
 
-        # スピンボックスとスライダーの値を同期させる
-        self.iter_spinbox.valueChanged.connect(self.iter_slider.setValue)
-        self.iter_slider.valueChanged.connect(self.iter_spinbox.setValue)
+        # スピンボックスの値変更のみ同期
+        # self.iter_spinbox.valueChanged.connect(self.iter_slider.setValue)
+        # self.iter_slider.valueChanged.connect(self.iter_spinbox.setValue)
 
         # リアルタイムプレビュー用のシグナル接続
-        self.iter_slider.valueChanged.connect(self._on_common_parameter_changed_for_preview)
-        # スピンボックスの値変更もプレビューをトリガーする
+        # self.iter_slider.valueChanged.connect(self._on_common_parameter_changed_for_preview)
         self.iter_spinbox.valueChanged.connect(self._on_common_parameter_changed_for_preview)
 
         # --- 追加: 共通パラメータの値変更シグナル接続 ---
@@ -1161,13 +1154,13 @@ class ParameterPanel(QScrollArea):
     def _set_ui_values(self, iterations: int, center_real: float = None, center_imag: float = None, width: float = None):
         """UIの共通パラメータ値を設定します。"""
         self.iter_spinbox.blockSignals(True)
-        self.iter_slider.blockSignals(True)
+        # self.iter_slider.blockSignals(True) # スライダー削除
         self.center_real_spinbox.blockSignals(True)
         self.center_imag_spinbox.blockSignals(True)
         self.zoom_spinbox.blockSignals(True)
         # width_labelは表示のみ
         self.iter_spinbox.setValue(iterations)
-        self.iter_slider.setValue(iterations)
+        # self.iter_slider.setValue(iterations) # スライダー削除
         if center_real is not None:
             self.center_real_spinbox.setValue(center_real)
         if center_imag is not None:
@@ -1184,7 +1177,7 @@ class ParameterPanel(QScrollArea):
             self.zoom_spinbox.setValue(1.0)
             self.width_label.setText("-")
         self.iter_spinbox.blockSignals(False)
-        self.iter_slider.blockSignals(False)
+        # self.iter_slider.blockSignals(False) # スライダー削除
         self.center_real_spinbox.blockSignals(False)
         self.center_imag_spinbox.blockSignals(False)
         self.zoom_spinbox.blockSignals(False)
