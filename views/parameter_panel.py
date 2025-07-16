@@ -74,26 +74,26 @@ class ParameterPanel(QWidget):
     def _set_ui_for_no_controller(self):
         """コントローラーが利用できない場合のフォールバックUI設定。"""
         self._set_ui_values(100)
-        if hasattr(self, 'tool_box'): self.tool_box.setEnabled(False)
+        if hasattr(self, 'main_tabs'): self.main_tabs.setEnabled(False)
 
     def _init_ui(self):
         """
-        パラメータパネルのUIを初期化し、QToolBoxを使用して配置します。
+        パラメータパネルのUIを初期化し、QTabWidgetを使用して配置します。
         """
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(0, 0, 0, 0)
         self.setLayout(self.main_layout)
 
-        self.tool_box = QToolBox()
-        self.main_layout.addWidget(self.tool_box)
+        self.main_tabs = QTabWidget()
+        self.main_layout.addWidget(self.main_tabs)
 
         # --- 1. プリセットページ ---
         preset_page = self._create_preset_page()
-        self.tool_box.addItem(preset_page, "プリセット")
+        self.main_tabs.addTab(preset_page, "プリセット")
 
         # --- 2. 描画設定ページ ---
         render_settings_page = self._create_render_settings_page()
-        self.tool_box.addItem(render_settings_page, "描画設定")
+        self.main_tabs.addTab(render_settings_page, "描画設定")
 
         # --- 3. カラーリングページ ---
         self.coloring_tabs = QTabWidget()
@@ -101,7 +101,7 @@ class ParameterPanel(QWidget):
         self.coloring_tabs.addTab(divergent_tab, "発散部")
         non_divergent_tab = self._create_coloring_tab('non_divergent')
         self.coloring_tabs.addTab(non_divergent_tab, "非発散部")
-        self.tool_box.addItem(self.coloring_tabs, "カラーリング")
+        self.main_tabs.addTab(self.coloring_tabs, "カラーリング")
         
         self._connect_ui_signals()
 
