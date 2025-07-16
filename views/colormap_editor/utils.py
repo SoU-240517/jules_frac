@@ -60,7 +60,7 @@ class ColormapUtils:
 
     @staticmethod
     def get_random_generate_params(parent, max_value=30, max_nodes=20):
-        num, ok = QInputDialog.getInt(parent, "ランダム生成", f"生成数 (1〜{max_value}):", 1, 1, max_value)
+        num, ok = QInputDialog.getInt(parent, "ランダム生成", f"生成マップ数 (1〜{max_value}):", 1, 1, max_value)
         if not ok: return None, None, None, None
 
         map_type, ok = QInputDialog.getItem(parent, "マップタイプ選択", "マップタイプを選択してください:", ["gradient", "indexed"], 0, False)

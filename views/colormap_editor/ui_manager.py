@@ -69,14 +69,14 @@ class UIManager:
         layout = QVBoxLayout(panel)
         panel.setFixedWidth(250)
 
-        self.main_window.file_name_label = QLabel("File: (None)")
-        self.main_window.pack_name_label = QLabel("Pack: (None)")
+        self.main_window.file_name_label = QLabel("ファイル: (None)")
+        self.main_window.pack_name_label = QLabel("パック: (None)")
         self.main_window.colormap_list = QListWidget()
 
-        self.main_window.add_button = QPushButton("Add")
-        self.main_window.copy_button = QPushButton("Copy")
-        self.main_window.rename_button = QPushButton("Rename")
-        self.main_window.remove_button = QPushButton("Remove")
+        self.main_window.add_button = QPushButton("追加")
+        self.main_window.copy_button = QPushButton("コピー")
+        self.main_window.rename_button = QPushButton("改名")
+        self.main_window.remove_button = QPushButton("削除")
 
         btn_layout1 = QHBoxLayout()
         btn_layout1.addWidget(self.main_window.add_button)
@@ -107,9 +107,9 @@ class UIManager:
         self.main_window.direct_edit_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.main_window.direct_edit_label.setVisible(False)
 
-        layout.addWidget(QLabel("Gradient Preview"))
+        layout.addWidget(QLabel("カラーマッププレビュー"))
         layout.addWidget(self.main_window.gradient_preview)
-        layout.addWidget(QLabel("Node Editor"))
+        layout.addWidget(QLabel("ノードエディター"))
         layout.addWidget(self.main_window.node_editor)
         layout.addWidget(self.main_window.direct_edit_label)
 
@@ -126,19 +126,19 @@ class UIManager:
         self.main_window.color_picker_button.setStyleSheet("background-color: #f0f0f0; border: 1px solid #ccc;")
 
         node_info_layout = QVBoxLayout()
-        node_info_layout.addWidget(QLabel("Node Info"))
+        node_info_layout.addWidget(QLabel("ノード情報"))
         self.main_window.node_color_edit = QLineEdit()
-        self.main_window.node_color_edit.setPlaceholderText("Color: #RRGGBBAA")
+        self.main_window.node_color_edit.setPlaceholderText("色: #RRGGBBAA")
         node_info_layout.addWidget(self.main_window.node_color_edit)
         self.main_window.node_pos_edit = QLineEdit()
-        self.main_window.node_pos_edit.setPlaceholderText("Position: 0.0")
+        self.main_window.node_pos_edit.setPlaceholderText("位置: 0.0")
         node_info_layout.addWidget(self.main_window.node_pos_edit)
 
         utilities_layout = QVBoxLayout()
-        utilities_layout.addWidget(QLabel("Utilities"))
-        self.main_window.random_generate_button = QPushButton("Random Generate")
-        self.main_window.extract_image_button = QPushButton("Extract from Image")
-        self.main_window.flip_button = QPushButton("Flip Horizontal")
+        utilities_layout.addWidget(QLabel("ユーティリティ"))
+        self.main_window.random_generate_button = QPushButton("ランダム生成")
+        self.main_window.extract_image_button = QPushButton("画像から生成")
+        self.main_window.flip_button = QPushButton("左右反転")
         utilities_layout.addWidget(self.main_window.random_generate_button)
         utilities_layout.addWidget(self.main_window.extract_image_button)
         utilities_layout.addWidget(self.main_window.flip_button)
@@ -155,8 +155,8 @@ class UIManager:
         color_pack = state_manager.get_current_state()
         if color_pack:
             file_path = getattr(color_pack, 'file_path', None)
-            self.main_window.file_name_label.setText(f"File: {os.path.basename(file_path) if file_path else '(None)'}")
-            self.main_window.pack_name_label.setText(f"Pack: {color_pack.pack_name}")
+            self.main_window.file_name_label.setText(f"ファイル: {os.path.basename(file_path) if file_path else '(None)'}")
+            self.main_window.pack_name_label.setText(f"パック: {color_pack.pack_name}")
             
             current_map_name = self.main_window.get_selected_colormap_name()
             self.main_window.colormap_list.clear()
@@ -171,8 +171,8 @@ class UIManager:
             elif self.main_window.colormap_list.count() > 0:
                 self.main_window.colormap_list.setCurrentRow(0)
         else:
-            self.main_window.file_name_label.setText("File: (None)")
-            self.main_window.pack_name_label.setText("Pack: (None)")
+            self.main_window.file_name_label.setText("ファイル: (None)")
+            self.main_window.pack_name_label.setText("パック: (None)")
             self.main_window.colormap_list.clear()
 
         self.main_window.undo_action.setEnabled(state_manager.can_undo())
