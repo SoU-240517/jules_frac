@@ -18,18 +18,15 @@
     },
     "engine_settings": {
         "common_parameters": {
-            "center_real": 0.0,
-            "center_imag": 0.0,
-            "width": 3.0,
-            "height": 2.2899590163934427,
+            "center_real": 0.16646733447253576,
+            "center_imag": -0.4858092784022442,
+            "width": 0.40376395722461456,
+            "height": 0.3082009714470675,
             "max_iterations": 100,
             "escape_radius": 2.0
         },
-        "fractal_plugin_name": "Julia",
-        "fractal_plugin_parameters": {
-            "c_real": 0.0,
-            "c_imag": 1.0
-        },
+        "fractal_plugin_name": "Mandelbrot",
+        "fractal_plugin_parameters": {},
         "coloring_divergent": {
             "plugin_name": "スムーズカラー",
             "plugin_parameters": {
