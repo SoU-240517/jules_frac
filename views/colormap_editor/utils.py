@@ -1,6 +1,9 @@
 import random
 from PyQt6.QtWidgets import QInputDialog, QFileDialog, QMessageBox
 from models.colormap import ColorStop
+from pathlib import Path
+import sys
+from functools import wraps
 
 class ColormapUtils:
     """カラーマップユーティリティクラス"""
@@ -38,7 +41,7 @@ class ColormapUtils:
         pixels = np.array(img).reshape(-1, 4)
         # Alphaが0でないピクセルのみを対象
         pixels = pixels[pixels[:, 3] > 0]
-        
+
         # ピクセル数がクラスタ数より少ない場合は、クラスタ数をピクセル数に合わせる
         actual_num_colors = min(num_colors, len(pixels))
         if actual_num_colors < 2:
@@ -47,7 +50,7 @@ class ColormapUtils:
 
         kmeans = KMeans(n_clusters=actual_num_colors, n_init='auto', random_state=None).fit(pixels[:, :3])
         centers = kmeans.cluster_centers_.astype(int)
-        
+
         random.shuffle(centers)
         positions = sorted([random.random() for _ in range(actual_num_colors)])
 
@@ -102,3 +105,33 @@ class ColormapUtils:
     @staticmethod
     def show_success_message(parent, title, message):
         QMessageBox.information(parent, title, message)
+
+
+def log_exceptions(logger):
+    """例外をロギングし、再スローするデコレータ。"""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                logger.log(f"例外発生: {func.__name__}: {e}", level="ERROR")
+                raise
+        return wrapper
+    return decorator
+
+
+def get_project_root() -> Path:
+    """プロジェクトのルートディレクトリを返す。"""
+    return Path(__file__).resolve().parent.parent.parent
+
+
+def to_relpath(p) -> str:
+    """パスをプロジェクトルートからの相対パスに変換。"""
+    prj = get_project_root()
+    try:
+        if prj and Path(p).is_absolute():
+            return str(Path(p).relative_to(prj))
+    except Exception:
+        pass
+    return str(p)

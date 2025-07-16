@@ -5,7 +5,7 @@
             "enabled": true
         },
         "save_engine_settings": true,
-        "stylesheet_path": "style.qss",
+        "stylesheet_path": "views/style.qss",
         "numba_settings": {
             "cache_enabled": true,
             "clear_cache_on_exit": false
@@ -18,10 +18,10 @@
     },
     "engine_settings": {
         "common_parameters": {
-            "center_real": 0.16646733447253576,
-            "center_imag": -0.4858092784022442,
-            "width": 0.40376395722461456,
-            "height": 0.3082009714470675,
+            "center_real": -0.5,
+            "center_imag": 0.0,
+            "width": 3.0,
+            "height": 2.2899590163934427,
             "max_iterations": 100,
             "escape_radius": 2.0
         },
