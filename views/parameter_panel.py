@@ -67,7 +67,7 @@ class ParameterPanel(QWidget):
             )
         else:
             logger.log("警告: FractalController に 'active_color_map_changed_externally' シグナルが存在しません。", level="WARNING")
-            
+
         if hasattr(self.fractal_controller, 'configuration_applied'):
             self.fractal_controller.configuration_applied.connect(self.load_initial_parameters)
 
@@ -102,7 +102,7 @@ class ParameterPanel(QWidget):
         non_divergent_tab = self._create_coloring_tab('non_divergent')
         self.coloring_tabs.addTab(non_divergent_tab, "非発散部")
         self.main_tabs.addTab(self.coloring_tabs, "カラーリング")
-        
+
         self._connect_ui_signals()
 
     def _create_preset_page(self) -> QWidget:
@@ -110,11 +110,11 @@ class ParameterPanel(QWidget):
         page = QWidget()
         layout = QVBoxLayout(page)
         layout.setContentsMargins(9, 9, 9, 9)
-        
+
         self._init_preset_ui_elements()
         layout.addWidget(self.preset_group_box)
         layout.addStretch(1)
-        
+
         return page
 
     def _create_render_settings_page(self) -> QWidget:
@@ -136,22 +136,22 @@ class ParameterPanel(QWidget):
         self.common_params_layout = QFormLayout()
         self.common_params_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         self.common_params_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
-        
+
         self.center_real_spinbox = QDoubleSpinBox()
         self.center_real_spinbox.setDecimals(10); self.center_real_spinbox.setRange(-1e6, 1e6); self.center_real_spinbox.setSingleStep(0.01); self.center_real_spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.common_params_layout.addRow(QLabel("中心実部:"), self.center_real_spinbox)
-        
+
         self.center_imag_spinbox = QDoubleSpinBox()
         self.center_imag_spinbox.setDecimals(10); self.center_imag_spinbox.setRange(-1e6, 1e6); self.center_imag_spinbox.setSingleStep(0.01); self.center_imag_spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.common_params_layout.addRow(QLabel("中心虚部:"), self.center_imag_spinbox)
-        
+
         self.zoom_spinbox = QDoubleSpinBox()
         self.zoom_spinbox.setDecimals(4); self.zoom_spinbox.setRange(0.01, 1e6); self.zoom_spinbox.setSingleStep(0.01); self.zoom_spinbox.setValue(1.0); self.zoom_spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.common_params_layout.addRow(QLabel("ズーム倍率:"), self.zoom_spinbox)
-        
+
         self.width_label = QLabel("-")
         self.common_params_layout.addRow(QLabel("表示幅(拡大率):"), self.width_label)
-        
+
         self.iter_spinbox = QSpinBox()
         self.iter_spinbox.setRange(10, 100000); self.iter_spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
         self.common_params_layout.addRow(QLabel("最大反復回数:"), self.iter_spinbox)
@@ -165,7 +165,7 @@ class ParameterPanel(QWidget):
         self.plugin_specific_group.setLayout(self.plugin_specific_layout)
         layout.addWidget(self.plugin_specific_group)
         self.plugin_specific_group.setVisible(False)
-        
+
         layout.addStretch(1)
         return page
 
@@ -267,7 +267,7 @@ class ParameterPanel(QWidget):
         widgets['map_list'].currentItemChanged.connect(
             lambda current, previous, tt=target_type: self._on_color_map_changed(current, previous, tt)
         )
-        
+
         layout.addStretch(1)
         self.coloring_widgets[target_type] = widgets
         return tab_widget
@@ -639,6 +639,7 @@ class ParameterPanel(QWidget):
         if not self.fractal_controller or not current_item: return
         map_name = current_item.text()
         pack_name = self.coloring_widgets[target_type]['pack_combo'].currentText()
+        self.fractal_controller.logger.log(f"ParameterPanel._on_color_map_changed: pack={pack_name}, map={map_name}, target_type={target_type}", level="DEBUG")
         if not pack_name or pack_name == "N/A": return
         active_pack_ctrl = self.fractal_controller.get_active_color_pack_name_from_engine(target_type=target_type)
         active_map_ctrl = self.fractal_controller.get_active_color_map_name_from_engine(target_type=target_type)

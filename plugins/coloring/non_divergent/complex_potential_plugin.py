@@ -125,11 +125,18 @@ def _normalize_and_color_jit(
                         # 2つの色を取得して補間
                         c1 = color_map_array[idx1]
                         c2 = color_map_array[idx2]
+                        # RGBA対応: 4要素ならRGBのみ使う
+                        if c1.shape[0] == 4:
+                            c1_r, c1_g, c1_b = c1[0], c1[1], c1[2]
+                            c2_r, c2_g, c2_b = c2[0], c2[1], c2[2]
+                        else:
+                            c1_r, c1_g, c1_b = c1[0], c1[1], c1[2]
+                            c2_r, c2_g, c2_b = c2[0], c2[1], c2[2]
 
                         # 線形補間
-                        r_val = c1[0] * (1.0 - fraction) + c2[0] * fraction
-                        g_val = c1[1] * (1.0 - fraction) + c2[1] * fraction
-                        b_val = c1[2] * (1.0 - fraction) + c2[2] * fraction
+                        r_val = c1_r * (1.0 - fraction) + c2_r * fraction
+                        g_val = c1_g * (1.0 - fraction) + c2_g * fraction
+                        b_val = c1_b * (1.0 - fraction) + c2_b * fraction
 
                         # 結果を代入（色のスケールは既にnorm_potentialに適用済み）
                         img_array_rgb[r,c,0] = np.uint8(min(255.0, r_val))
@@ -284,7 +291,8 @@ class ComplexPotentialColoringPlugin(ColoringAlgorithmPlugin):
         if color_map_data and len(color_map_data) > 0:
             try:
                 color_map_np = np.array(color_map_data, dtype=np.uint8)
-                if color_map_np.shape[1] == 3:  # RGB形式であることを確認
+                # RGBA(4要素)にも対応: shape[1]が3または4ならOK
+                if color_map_np.ndim == 2 and (color_map_np.shape[1] == 3 or color_map_np.shape[1] == 4):
                     use_color_map = True
             except Exception as e:
                 logger.log(f"カラーマップの変換中にエラーが発生しました: {e}", level="WARNING")

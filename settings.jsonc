@@ -33,7 +33,7 @@
                 "color_scale": 1.0
             },
             "pack_name": "デフォルト",
-            "map_name": "グレースケール"
+            "map_name": "ショートレインボー"
         },
         "coloring_non_divergent": {
             "plugin_name": "複素ポテンシャル",
@@ -43,7 +43,7 @@
                 "potential_scale": 1.0
             },
             "pack_name": "デフォルト",
-            "map_name": "グレースケール"
+            "map_name": "ショートレインボー"
         }
     },
     "presets": {

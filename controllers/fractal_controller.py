@@ -566,11 +566,15 @@ class FractalController(QObject):
             target_type (str): カラーマップをアクティブにするターゲットタイプ ('divergent' または 'non_divergent')。
         """
         if not self.fractal_engine: return
+        self.logger.log(f"set_active_color_map_and_recolor: pack={pack_name}, map={map_name}, target_type={target_type}", level="DEBUG")
         self.active_coloring_target_type = target_type # アクティブなターゲットタイプを更新
         success = self.fractal_engine.set_active_color_map(pack_name, map_name, target_type=target_type)
         if success:
             self.active_color_map_changed_externally.emit(pack_name, map_name, target_type) # target_type と共に発行
+            self.logger.log(f"set_active_color_map_and_recolor: 成功。trigger_recolorを呼び出します。", level="DEBUG")
             self.trigger_recolor()
+        else:
+            self.logger.log(f"set_active_color_map_and_recolor: 失敗。pack={pack_name}, map={map_name}, target_type={target_type}", level="WARNING")
 
     # --- レンダリング処理 ---
     def trigger_render(self, image_width_px=None, image_height_px=None, full_recompute: bool = True, is_preview: bool = False):
@@ -704,6 +708,7 @@ class FractalController(QObject):
         現在のフラクタルデータを再利用して、カラーリングのみを再実行します。
         主にカラーマップやカラーリングアルゴリズムのパラメータが変更されたときに使用されます。
         """
+        self.logger.log(f"trigger_recolor: 再カラーリングを開始します (full_recompute=False)", level="DEBUG")
         self.trigger_render(full_recompute=False)
 
     def update_status_display(self):

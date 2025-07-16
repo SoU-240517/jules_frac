@@ -27,6 +27,7 @@ class FractalEngine:
                  settings_manager: 'SettingsManager | None' = None, fractal_plugin_folder="plugins/fractals",  # project_root_pathからの相対パス
                  coloring_plugin_folder="plugins/coloring", # 同上
                  color_pack_folder="plugins/colorpacks"):   # 同上
+        self.logger = CustomLogger()
         """
         FractalEngineを初期化します。
 
@@ -81,11 +82,11 @@ class FractalEngine:
             engine_saved_settings = self.settings_manager.get_setting("engine_settings")
             if engine_saved_settings and isinstance(engine_saved_settings, dict):
                 self.load_settings(engine_saved_settings)
-                logger.log("エンジン設定適用完了", level="INFO")
+                self.logger.log("エンジン設定適用完了", level="INFO")
             else:
-                logger.log("保存されたエンジン設定が見つからないか形式が不正です。デフォルト設定を試みます。", level="INFO")
+                self.logger.log("保存されたエンジン設定が見つからないか形式が不正です。デフォルト設定を試みます。", level="INFO")
         else:
-            logger.log("SettingsManager が未提供のため、デフォルト設定を試みます。", level="INFO")
+            self.logger.log("SettingsManager が未提供のため、デフォルト設定を試みます。", level="INFO")
 
         # デフォルトプラグインとカラーマップの初期化 (まだ設定されていない場合)
         self._initialize_default_plugins_and_map()
@@ -103,7 +104,7 @@ class FractalEngine:
                 default_fractal = "Mandelbrot"
                 if default_fractal in available_fractal_plugins: self.set_active_fractal_plugin(default_fractal)
                 else: self.set_active_fractal_plugin(available_fractal_plugins[0])
-            else: logger.log("フラクタルプラグインが見つかりません。フラクタル機能のデフォルト設定をスキップします。", level="WARNING")
+            else: self.logger.log("フラクタルプラグインが見つかりません。フラクタル機能のデフォルト設定をスキップします。", level="WARNING")
 
         # 発散部カラーリングプラグイン
         if self.current_coloring_plugin_divergent is None:
@@ -115,7 +116,7 @@ class FractalEngine:
                 else:
                     self.set_active_coloring_plugin(available_div_plugins[0], target_type='divergent')
             else:
-                logger.log("発散部カラーリングプラグインが見つかりません。発散部カラーリングのデフォルト設定をスキップします。", level="WARNING")
+                self.logger.log("発散部カラーリングプラグインが見つかりません。発散部カラーリングのデフォルト設定をスキップします。", level="WARNING")
 
         # 非発散部カラーリングプラグイン
         if self.current_coloring_plugin_non_divergent is None:
@@ -127,7 +128,7 @@ class FractalEngine:
                 else:
                     self.set_active_coloring_plugin(available_nondiv_plugins[0], target_type='non_divergent')
             else:
-                logger.log("非発散部カラーリングプラグインが見つかりません。非発散部カラーリングのデフォルト設定をスキップします。", level="WARNING")
+                self.logger.log("非発散部カラーリングプラグインが見つかりません。非発散部カラーリングのデフォルト設定をスキップします。", level="WARNING")
 
         # デフォルトカラーマップ
         available_color_packs = self.get_available_color_pack_names()
@@ -151,7 +152,7 @@ class FractalEngine:
         if not available_color_packs and \
            (self.current_color_pack_name_divergent is None or self.current_color_map_name_divergent is None or \
             self.current_color_pack_name_non_divergent is None or self.current_color_map_name_non_divergent is None):
-             logger.log("カラーパックが見つかりません。カラーマップのデフォルト設定の一部または全てをスキップしました。", level="WARNING")
+             self.logger.log("カラーパックが見つかりません。カラーマップのデフォルト設定の一部または全てをスキップしました。", level="WARNING")
 
     def update_image_size(self, image_width_px, image_height_px):
         """
@@ -277,7 +278,7 @@ class FractalEngine:
         """
         plugin = self.plugin_manager.get_coloring_plugin(plugin_name, target_type=target_type)
         if not plugin:
-            logger.log(f"プラグイン '{plugin_name}' (target: {target_type}) が見つかりません。", level="WARNING")
+            self.logger.log(f"プラグイン '{plugin_name}' (target: {target_type}) が見つかりません。", level="WARNING")
             return False
 
         if target_type == 'divergent':
@@ -285,17 +286,17 @@ class FractalEngine:
             self.current_coloring_plugin_parameters_divergent.clear()
             for p_def in plugin.get_parameters_definition():
                 self.current_coloring_plugin_parameters_divergent[p_def['name']] = p_def['default']
-            logger.log(f"'{plugin_name}' に設定", level="INFO")
+            self.logger.log(f"'{plugin_name}' に設定", level="INFO")
             return True
         elif target_type == 'non_divergent':
             self.current_coloring_plugin_non_divergent = plugin
             self.current_coloring_plugin_parameters_non_divergent.clear()
             for p_def in plugin.get_parameters_definition():
                 self.current_coloring_plugin_parameters_non_divergent[p_def['name']] = p_def['default']
-            logger.log(f"'{plugin_name}' に設定", level="INFO")
+            self.logger.log(f"'{plugin_name}' に設定", level="INFO")
             return True
         else:
-            logger.log(f"set_active_coloring_plugin のための無効なターゲットタイプ '{target_type}'", level="WARNING")
+            self.logger.log(f"set_active_coloring_plugin のための無効なターゲットタイプ '{target_type}'", level="WARNING")
             return False
 
     def get_active_coloring_plugin(self, target_type: str) -> ColoringAlgorithmPlugin | None:
@@ -310,7 +311,7 @@ class FractalEngine:
             return self.current_coloring_plugin_divergent
         elif target_type == 'non_divergent':
             return self.current_coloring_plugin_non_divergent
-        logger.log(f"無効なターゲットタイプ '{target_type}' が指定されました。", level="WARNING")
+        self.logger.log(f"無効なターゲットタイプ '{target_type}' が指定されました。", level="WARNING")
         return None
 
     def get_available_coloring_plugin_names(self, target_type: str) -> list[str]:
@@ -340,33 +341,37 @@ class FractalEngine:
         if plugin and params_dict is not None and name in params_dict:
             params_dict[name] = value
         else:
-            logger.log(f"パラメータ '{name}' をターゲットタイプ '{target_type}' に設定できませんでした。", level="WARNING")
+            self.logger.log(f"パラメータ '{name}' をターゲットタイプ '{target_type}' に設定できませんでした。", level="WARNING")
 
     def get_coloring_plugin_parameters(self, target_type: str) -> dict:
         if target_type == 'divergent':
             return self.current_coloring_plugin_parameters_divergent.copy()
         elif target_type == 'non_divergent':
             return self.current_coloring_plugin_parameters_non_divergent.copy()
-        logger.log(f"無効なターゲットタイプ '{target_type}' が指定されました。", level="WARNING")
+        self.logger.log(f"無効なターゲットタイプ '{target_type}' が指定されました。", level="WARNING")
         return {}
 
     def set_active_color_map(self, pack_name: str, map_name: str, target_type: str) -> bool: # target_type を追加
         """
         指定されたターゲットタイプのアクティブなカラーマップを設定します。
         """
+        self.logger.log(f"set_active_color_map: pack={pack_name}, map={map_name}, target_type={target_type}", level="DEBUG")
         map_data = self.color_manager.get_color_map_data(pack_name, map_name)
         if map_data:
             if target_type == 'divergent':
                 self.current_color_pack_name_divergent = pack_name
                 self.current_color_map_name_divergent = map_name
+                self.logger.log(f"set_active_color_map: divergent用に設定完了", level="DEBUG")
                 return True
             elif target_type == 'non_divergent':
                 self.current_color_pack_name_non_divergent = pack_name
                 self.current_color_map_name_non_divergent = map_name
+                self.logger.log(f"set_active_color_map: non_divergent用に設定完了", level="DEBUG")
                 return True
             else:
-                logger.log(f"カラーマップ設定のための無効なターゲットタイプ '{target_type}'", level="WARNING")
+                self.logger.log(f"カラーマップ設定のための無効なターゲットタイプ '{target_type}'", level="WARNING")
                 return False
+        self.logger.log(f"set_active_color_map: カラーマップデータが見つかりません pack={pack_name}, map={map_name}", level="WARNING")
         return False
 
     def get_available_color_pack_names(self) -> list[str]: return self.color_manager.get_available_color_pack_names()
@@ -390,7 +395,7 @@ class FractalEngine:
             return self.current_color_pack_name_divergent, self.current_color_map_name_divergent
         elif target_type == 'non_divergent':
             return self.current_color_pack_name_non_divergent, self.current_color_map_name_non_divergent
-        logger.log(f"カラーマップ選択取得のための無効なターゲットタイプ '{target_type}'", level="WARNING")
+        self.logger.log(f"カラーマップ選択取得のための無効なターゲットタイプ '{target_type}'", level="WARNING")
         return None, None
 
     def compute_current_fractal(self) -> dict | None:
@@ -411,7 +416,7 @@ class FractalEngine:
             )
             return self.last_fractal_data_cache
         except Exception as e:
-            logger.log(f"計算中のエラー: {e}", level="ERROR")
+            self.logger.log(f"計算中のエラー: {e}", level="ERROR")
             self.last_fractal_data_cache = None
             return None
 
@@ -435,8 +440,10 @@ class FractalEngine:
         plugin_params = self.get_coloring_plugin_parameters(target_type)
         pack_name, map_name = self.get_current_color_map_selection(target_type)
 
+        self.logger.log(f"apply_coloring: target_type={target_type}, pack={pack_name}, map={map_name}", level="DEBUG")
+
         if not active_plugin or not data_to_color:
-            logger.log(f"apply_coloring ({target_type}) 中止: プラグイン ({active_plugin is not None}) またはデータ ({data_to_color is not None}) がありません。", level="WARNING")
+            self.logger.log(f"apply_coloring ({target_type}) 中止: プラグイン ({active_plugin is not None}) またはデータ ({data_to_color is not None}) がありません。", level="WARNING")
             return None
 
         # 共通パラメータを構築
@@ -448,20 +455,22 @@ class FractalEngine:
             common_params['height'] = height_px
             common_params['width'] = width_px
         else:
-            logger.log("apply_coloring: iterations_array が見つからないか、無効な形状です。デフォルトの画像サイズを使用します。", level="WARNING")
+            self.logger.log("apply_coloring: iterations_array が見つからないか、無効な形状です。デフォルトの画像サイズを使用します。", level="WARNING")
             common_params['height'] = self.image_height_px
             common_params['width'] = self.image_width_px
 
         try:
+            color_map_data = self.color_manager.get_color_map_data(pack_name, map_name) if pack_name and map_name else []
+            self.logger.log(f"apply_coloring: color_map_dataの長さ={len(color_map_data)} (先頭3色={color_map_data[:3] if color_map_data else 'なし'})", level="DEBUG")
             return active_plugin.apply_coloring(
                 fractal_data=data_to_color,
                 common_fractal_params=common_params,
                 algorithm_params=plugin_params,
-                color_map_data=self.color_manager.get_color_map_data(pack_name, map_name) if pack_name and map_name else []
+                color_map_data=color_map_data
             )
         except Exception as e:
-            logger.log(f"カラーリングプラグイン '{active_plugin.name}' の実行中にエラーが発生しました: {e}", level="ERROR")
-            logger.log("トレースバック (直近の呼び出し):", level="ERROR")
+            self.logger.log(f"カラーリングプラグイン '{active_plugin.name}' の実行中にエラーが発生しました: {e}", level="ERROR")
+            self.logger.log("トレースバック (直近の呼び出し):", level="ERROR")
             traceback.print_exc()
             h = common_params.get('height', self.image_height_px)
             w = common_params.get('width', self.image_width_px)
@@ -490,7 +499,7 @@ class FractalEngine:
         final_common_params.update(common_params_override)
         active_fractal_plugin = self.plugin_manager.get_fractal_plugin(fractal_plugin_name_override) if fractal_plugin_name_override else self.current_fractal_plugin
         if not active_fractal_plugin:
-            logger.log("出力失敗、フラクタルプラグインが解決できませんでした。", level="ERROR")
+            self.logger.log("出力失敗、フラクタルプラグインが解決できませんでした。", level="ERROR")
             raise ValueError("フラクタルプラグインが解決できません")
         final_fractal_plugin_params = {p_def['name']: p_def['default'] for p_def in active_fractal_plugin.get_parameters_definition()}
         if self.current_fractal_plugin and active_fractal_plugin.name == self.current_fractal_plugin.name:
@@ -507,7 +516,7 @@ class FractalEngine:
         if final_coloring_plugin_name_to_use:
             active_coloring_plugin = self.plugin_manager.get_coloring_plugin(final_coloring_plugin_name_to_use, target_type=active_target_type_for_output)
         if not active_coloring_plugin:
-            logger.log(f"出力失敗、カラーリングプラグイン '{final_coloring_plugin_name_to_use}' (target: {active_target_type_for_output}) が解決できませんでした。", level="ERROR")
+            self.logger.log(f"出力失敗、カラーリングプラグイン '{final_coloring_plugin_name_to_use}' (target: {active_target_type_for_output}) が解決できませんでした。", level="ERROR")
             raise ValueError("カラーリングプラグインが解決できません")
         final_coloring_algo_params = {p_def['name']: p_def['default'] for p_def in active_coloring_plugin.get_parameters_definition()}
         current_engine_cp_params = self.get_coloring_plugin_parameters(active_target_type_for_output)
@@ -533,7 +542,7 @@ class FractalEngine:
         try:
             return plugin.compute_fractal(common_params, params, width, height)
         except Exception as e:
-            logger.log(f"スーパーサンプリングされたフラクタル計算に失敗: {e}", level="ERROR")
+            self.logger.log(f"スーパーサンプリングされたフラクタル計算に失敗: {e}", level="ERROR")
             return None
 
     def _apply_coloring_for_output(self, plugin: ColoringAlgorithmPlugin, params: dict, common_params: dict, fractal_data: dict, color_map_data: list) -> np.ndarray | None:
@@ -543,19 +552,19 @@ class FractalEngine:
             common_params_for_coloring['image_height_px'] = common_params['height']
             return plugin.apply_coloring(fractal_data, common_params_for_coloring, params, color_map_data)
         except Exception as e:
-            logger.log(f"スーパーサンプリングされたカラーリングに失敗: {e}", level="ERROR")
+            self.logger.log(f"スーパーサンプリングされたカラーリングに失敗: {e}", level="ERROR")
             return None
 
     def _downsample_image(self, image: np.ndarray, output_width: int, output_height: int, aa_factor: int) -> np.ndarray:
         if aa_factor > 1:
             try:
                 if image.shape[2] != 4:
-                    logger.log(f"カラーリングから4チャンネルを期待しましたが、{image.shape[2]} を取得しました", level="ERROR")
+                    self.logger.log(f"カラーリングから4チャンネルを期待しましたが、{image.shape[2]} を取得しました", level="ERROR")
                     return image
                 reshaped = image.reshape(output_height, aa_factor, output_width, aa_factor, 4)
                 return reshaped.mean(axis=(1, 3)).astype(np.uint8)
             except ValueError as e:
-                logger.log(f"ダウンサンプリングリシェイプ中のエラー: {e}。入力: {image.shape}, ターゲット: {output_height}x{output_width}, AA: {aa_factor}", level="ERROR")
+                self.logger.log(f"ダウンサンプリングリシェイプ中のエラー: {e}。入力: {image.shape}, ターゲット: {output_height}x{output_width}, AA: {aa_factor}", level="ERROR")
                 return image
         else:
             return image
@@ -570,15 +579,15 @@ class FractalEngine:
                                   color_map_name_override: str | None = None,
                                   antialiasing_level: str = "なし"
                                   ) -> np.ndarray | None:
-        logger.log(f"高解像度出力開始 - ターゲット: {output_width}x{output_height}, AA: {antialiasing_level}", level="INFO")
+        self.logger.log(f"高解像度出力開始 - ターゲット: {output_width}x{output_height}, AA: {antialiasing_level}", level="INFO")
         try:
             (final_common_params, active_fractal_plugin, final_fractal_plugin_params, active_coloring_plugin, final_coloring_algo_params, final_color_map_data, aa_factor, ss_width, ss_height) = self._prepare_output_parameters(
                 output_width, output_height, common_params_override, fractal_plugin_name_override, fractal_plugin_params_override, coloring_algo_name_override, coloring_algo_params_override, color_pack_name_override, color_map_name_override, antialiasing_level)
-            logger.log(f"  - スーパーサンプリング解像度: {ss_width}x{ss_height} (AA係数: {aa_factor})", level="DEBUG")
-            logger.log(f"  - フラクタルプラグイン: {active_fractal_plugin.name}, パラメータ: {final_fractal_plugin_params}", level="DEBUG")
-            logger.log(f"  - カラーリングプラグイン: {active_coloring_plugin.name}, パラメータ: {final_coloring_algo_params}", level="DEBUG")
-            logger.log(f"  - カラーマップ: {color_pack_name_override}/{color_map_name_override}", level="DEBUG")
-            logger.log(f"  - 計算用共通パラメータ: 中心=({final_common_params['center_real']:.4f},{final_common_params['center_imag']:.4f}), 幅={final_common_params['width']:.3e}, 高さ(複素)={final_common_params['height']:.3e]}, 反復={final_common_params['max_iterations']}", level="DEBUG")
+            self.logger.log(f"  - スーパーサンプリング解像度: {ss_width}x{ss_height} (AA係数: {aa_factor})", level="DEBUG")
+            self.logger.log(f"  - フラクタルプラグイン: {active_fractal_plugin.name}, パラメータ: {final_fractal_plugin_params}", level="DEBUG")
+            self.logger.log(f"  - カラーリングプラグイン: {active_coloring_plugin.name}, パラメータ: {final_coloring_algo_params}", level="DEBUG")
+            self.logger.log(f"  - カラーマップ: {color_pack_name_override}/{color_map_name_override}", level="DEBUG")
+            self.logger.log(f"  - 計算用共通パラメータ: 中心=({final_common_params['center_real']:.4f},{final_common_params['center_imag']:.4f}), 幅={final_common_params['width']:.3e}, 高さ(複素)={final_common_params['height']:.3e]}, 反復={final_common_params['max_iterations']}", level="DEBUG")
             fractal_data_ss = self._compute_fractal_for_output(active_fractal_plugin, final_fractal_plugin_params, final_common_params, ss_width, ss_height)
             if fractal_data_ss is None:
                 return None
@@ -586,10 +595,10 @@ class FractalEngine:
             if colored_image_ss_rgba is None:
                 return None
             downsampled_image_rgba = self._downsample_image(colored_image_ss_rgba, output_width, output_height, aa_factor)
-            logger.log(f"高解像度画像が正常に生成されました ({output_width}x{output_height})。", level="INFO")
+            self.logger.log(f"高解像度画像が正常に生成されました ({output_width}x{output_height})。", level="INFO")
             return downsampled_image_rgba
         except Exception as e:
-            logger.log(f"generate_image_for_output中にエラー: {e}", level="ERROR")
+            self.logger.log(f"generate_image_for_output中にエラー: {e}", level="ERROR")
             return None
 
     # --- 設定の保存/読み込み ---
@@ -616,13 +625,13 @@ class FractalEngine:
             "image_width_px": self.image_width_px,
             "image_height_px": self.image_height_px,
         }
-        logger.log("エンジン設定をシリアライズしました。", level="DEBUG")
+        self.logger.log("エンジン設定をシリアライズしました。", level="DEBUG")
         return settings
 
     def load_settings(self, settings: dict):
         """辞書からエンジンの設定を復元します。"""
         if not isinstance(settings, dict):
-            logger.log("load_settings: settings が辞書ではありません。ロードをスキップします。", level="WARNING")
+            self.logger.log("load_settings: settings が辞書ではありません。ロードをスキップします。", level="WARNING")
             return
         try:
             cp = settings.get("common_parameters")
@@ -660,7 +669,7 @@ class FractalEngine:
                    cpd_map in self.get_available_color_map_names_in_pack(cpd_pack):
                     self.set_active_color_map(cpd_pack, cpd_map, target_type='divergent')
                 else:
-                    logger.log(f"発散部: 保存されたカラーマップ {cpd_pack}/{cpd_map} が見つかりません。", level="WARNING")
+                    self.logger.log(f"発散部: 保存されたカラーマップ {cpd_pack}/{cpd_map} が見つかりません。", level="WARNING")
 
             # 非発散部のカラーリング設定を復元
             cpnd_name = settings.get("coloring_plugin_non_divergent_name")
@@ -678,7 +687,7 @@ class FractalEngine:
                    cpnd_map in self.get_available_color_map_names_in_pack(cpnd_pack):
                     self.set_active_color_map(cpnd_pack, cpnd_map, target_type='non_divergent')
                 else:
-                    logger.log(f"非発散部: 保存されたカラーマップ {cpnd_pack}/{cpnd_map} が見つかりません。", level="WARNING")
+                    self.logger.log(f"非発散部: 保存されたカラーマップ {cpnd_pack}/{cpnd_map} が見つかりません。", level="WARNING")
 
             # 特定のタイプがロードされた後にアクティブなターゲットタイプを復元
             self.active_coloring_target_type = settings.get("active_coloring_target_type", self.active_coloring_target_type)
@@ -692,29 +701,29 @@ class FractalEngine:
             self.update_aspect_ratio() # 'height'（複素平面）が更新されることを確認
 
             self.last_fractal_data_cache = None # キャッシュを無効化
-            logger.log("エンジン設定読込完了", level="INFO")
+            self.logger.log("エンジン設定読込完了", level="INFO")
         except Exception as e:
-            logger.log(f"エンジン設定読込中にエラー発生: {e}", level="ERROR")
+            self.logger.log(f"エンジン設定読込中にエラー発生: {e}", level="ERROR")
             traceback.print_exc()
 
 if __name__ == '__main__':
     # テストには、CWDからの相対的なデフォルトの場所にプラグインとカラーパックが必要です
     # 例: CWD = プロジェクトルートの場合、"src/app/plugins/fractals" のようなパスが有効です。
-    logger.log("FractalEngine (generate_image_for_output を含む) スタンドアロンテスト", level="INFO")
+    self.logger.log("FractalEngine (generate_image_for_output を含む) スタンドアロンテスト", level="INFO")
     # スタンドアロンテストの場合、CWDがプロジェクトルートであると仮定します
     test_project_root = Path.cwd()
-    logger.log(f"  テスト用のプロジェクトルート: {test_project_root}", level="INFO")
+    self.logger.log(f"  テスト用のプロジェクトルート: {test_project_root}", level="INFO")
     engine = FractalEngine(project_root_path=test_project_root, image_width_px=80, image_height_px=60) # 画面表示用の小さなデフォルト値
 
     if not engine.get_active_fractal_plugin() or not engine.get_active_coloring_plugin('divergent'): # 発散部を確認
-        logger.log("デフォルトプラグインが読み込まれていません。パスまたはプラグインの可用性を確認してください。テストを完全に続行できません。", level="WARNING")
+        self.logger.log("デフォルトプラグインが読み込まれていません。パスまたはプラグインの可用性を確認してください。テストを完全に続行できません。", level="WARNING")
     else:
-        logger.log(f"アクティブなフラクタルプラグイン: {engine.get_active_fractal_plugin().name}", level="INFO")
+        self.logger.log(f"アクティブなフラクタルプラグイン: {engine.get_active_fractal_plugin().name}", level="INFO")
         active_coloring_div = engine.get_active_coloring_plugin('divergent')
         if active_coloring_div:
-            logger.log(f"アクティブな発散部カラーリングプラグイン: {active_coloring_div.name}", level="INFO")
+            self.logger.log(f"アクティブな発散部カラーリングプラグイン: {active_coloring_div.name}", level="INFO")
         cp_div, cm_div = engine.get_current_color_map_selection('divergent')
-        logger.log(f"アクティブな発散部カラーマップ: {cp_div} - {cm_div}", level="INFO")
+        self.logger.log(f"アクティブな発散部カラーマップ: {cp_div} - {cm_div}", level="INFO")
 
         output_params = {
             'max_iterations': 200, # 出力用の反復回数を上書き
@@ -722,7 +731,7 @@ if __name__ == '__main__':
         }
 
         # 高解像度出力のテスト
-        logger.log("\n160x120 画像を 2x2 SSAA で生成中...", level="INFO")
+        self.logger.log("\n160x120 画像を 2x2 SSAA で生成中...", level="INFO")
         output_image = engine.generate_image_for_output(
             output_width=160, output_height=120,
             common_params_override=output_params,
@@ -730,13 +739,13 @@ if __name__ == '__main__':
             antialiasing_level="2x2 SSAA"
         )
         if output_image is not None:
-            logger.log(f"  出力画像が生成されました。形状: {output_image.shape}, Dtype: {output_image.dtype}", level="INFO")
+            self.logger.log(f"  出力画像が生成されました。形状: {output_image.shape}, Dtype: {output_image.dtype}", level="INFO")
             assert output_image.shape == (120, 160, 4)
             # import matplotlib.pyplot as plt # 必要に応じて視覚的な確認用
             # plt.imshow(output_image); plt.show()
         else:
-            logger.log("  高解像度画像の生成に失敗しました。", level="ERROR")
+            self.logger.log("  高解像度画像の生成に失敗しました。", level="ERROR")
 
     # TODO: save_settings と load_settings のテストを実装したらここに追加
 
-    logger.log("\nFractalEngine テストが完了しました。", level="INFO")
+    self.logger.log("\nFractalEngine テストが完了しました。", level="INFO")
