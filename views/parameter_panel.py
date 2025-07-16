@@ -61,7 +61,7 @@ class ParameterPanel(QScrollArea):
 
             # コントローラーからのシグナルを接続
             self.fractal_controller.parameters_updated_externally.connect(self.update_ui_from_controller_parameters)
-            self.fractal_controller.active_fractal_plugin_ui_needs_update.connect(self._update_fractal_plugin_specific_ui)
+            self.fractal_controller.active_fractal_plugin_ui_needs_update.connect(self._on_active_fractal_plugin_changed)
             # active_coloring_plugin_ui_needs_update は、より多くの情報を提供する必要があるか、置き換えられる可能性があります
             # 現時点では、現在選択されている target_type のアクティブなプラグインのUIを更新すると仮定します。
             # ターゲットタイプを変更する場合は、以下のより具体的なシグナルが推奨されます。
@@ -1300,6 +1300,15 @@ class ParameterPanel(QScrollArea):
             map_name = self.fractal_controller.get_active_color_map_name_from_engine(target_type)
             logger.log(f"[get_current_color_pack_and_map] Controllerから取得: map_name={map_name}", level="INFO")
         return pack_name, map_name
+
+    @pyqtSlot(str)
+    def _on_active_fractal_plugin_changed(self, plugin_name: str):
+        """
+        コントローラーからフラクタルプラグインが変更された通知を受けたとき、
+        fractal_comboの内容と選択状態を最新にし、固有UIも更新する。
+        """
+        self._populate_fractal_combo()
+        self._update_fractal_plugin_specific_ui(plugin_name)
 
 if __name__ == '__main__':
     pass

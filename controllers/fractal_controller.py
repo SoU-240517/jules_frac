@@ -71,14 +71,25 @@ class FractalController(QObject):
         try:
             # 1. フラクタルプラグイン
             fp_name = config.get('fractal_plugin_name')
+            logger.log(f"プリセット適用: fractal_plugin_name={fp_name}", level="DEBUG")
             if fp_name:
-                self.fractal_engine.set_active_fractal_plugin(fp_name)
+                current_fp_name = self.get_active_fractal_plugin_name_from_engine()
+                logger.log(f"現在のアクティブなフラクタルプラグイン: {current_fp_name}", level="DEBUG")
+                if current_fp_name != fp_name:
+                    logger.log(f"フラクタルプラグインを切り替えます: {current_fp_name} → {fp_name}", level="INFO")
+                    self.fractal_engine.set_active_fractal_plugin(fp_name)
+                    # UI更新シグナルもemit
+                    self.active_fractal_plugin_ui_needs_update.emit(fp_name)
+                else:
+                    logger.log("フラクタルプラグインは既に一致しているため切り替えません。", level="DEBUG")
                 fp_params = config.get('fractal_plugin_parameters', {})
+                logger.log(f"プリセット適用: fractal_plugin_parameters={fp_params}", level="DEBUG")
                 for name, value in fp_params.items():
                     self.fractal_engine.set_fractal_plugin_parameter(name, value)
 
             # 2. 共通パラメータ (プラグインのデフォルトを上書きするためにプラグイン設定後に適用)
             common_params = config.get('common_parameters')
+            logger.log(f"プリセット適用: common_parameters={common_params}", level="DEBUG")
             if common_params:
                 common_params.pop('height', None)
                 self.fractal_engine.set_common_parameters(**common_params)
@@ -86,6 +97,7 @@ class FractalController(QObject):
             # 3. カラーリング設定 (Divergent / Non-Divergent)
             for target_type in ['divergent', 'non_divergent']:
                 coloring_config = config.get(f'coloring_{target_type}', {})
+                logger.log(f"プリセット適用: coloring_{target_type}={coloring_config}", level="DEBUG")
                 if not coloring_config:
                     continue
                 cp_name = coloring_config.get('plugin_name')
@@ -101,6 +113,7 @@ class FractalController(QObject):
 
             self.fractal_engine.last_fractal_data_cache = None # 設定適用後はキャッシュをクリア
             logger.log("エンジン設定の適用が完了しました。", "DEBUG")
+            logger.log(f"適用後のアクティブなフラクタルプラグイン: {self.get_active_fractal_plugin_name_from_engine()}", level="DEBUG")
 
         except Exception as e:
             logger.log(f"エンジン設定の適用中にエラーが発生しました: {e}", level="ERROR", exc_info=True)
