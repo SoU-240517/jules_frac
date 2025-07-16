@@ -10,7 +10,7 @@ from coloring.color_manager import ColorManager
 from logger.custom_logger import CustomLogger
 
 if TYPE_CHECKING:
-    from utils.settings_manager import SettingsManager
+    from settings_manager import SettingsManager
 
 logger = CustomLogger()
 

@@ -241,6 +241,12 @@ class ComplexPotentialColoringPlugin(ColoringAlgorithmPlugin):
         )
 
         if not has_valid:
+            # デバッグ用: iterations配列のユニーク値とlast_zn_values配列の一部を出力
+#            try:
+#                logger.log(f"[DEBUG] iterationsのユニーク値: {np.unique(iterations)}", level="DEBUG")
+#                logger.log(f"[DEBUG] last_zn_valuesの一部: {last_zn_values.flatten()[:10]}", level="DEBUG")
+#            except Exception as e:
+#                logger.log(f"[DEBUG] デバッグ出力中に例外: {e}", level="DEBUG")
             logger.log("apply_coloring: 有効なポテンシャル値が見つかりませんでした。集合外のデフォルト色で出力します。", level="WARNING")
             for r_idx in range(height):
                 for c_idx in range(width):

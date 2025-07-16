@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import QApplication, QMainWindow, QInputDialog, QColorDialo
 from PyQt6.QtGui import QColor
 from PyQt6.QtCore import QTimer
 
-from utils.settings_manager import SettingsManager
+from settings_manager import SettingsManager
 from logger.custom_logger import CustomLogger
 from models.colormap import ColorPack, Colormap, ColorStop
 from .widgets import NodeItem
@@ -106,7 +106,7 @@ class ColormapEditor(QMainWindow):
             if self.colormap_list.item(i).text() == map_name:
                 self.colormap_list.setCurrentRow(i)
                 return
-        
+
         # 完全一致がない場合は部分一致で探す
         for i in range(self.colormap_list.count()):
             if map_name.lower() in self.colormap_list.item(i).text().lower():
@@ -131,7 +131,7 @@ class ColormapEditor(QMainWindow):
         color_pack = self.state_manager.get_current_state()
         if not color_pack:
             return
-        
+
         file_path = getattr(color_pack, 'file_path', None)
         if file_path:
             self.file_handler.save_to_file(file_path, color_pack)
@@ -168,7 +168,7 @@ class ColormapEditor(QMainWindow):
         if 0 <= row < len(color_pack.maps):
             return color_pack.maps[row]
         return None
-    
+
     def get_selected_colormap_name(self) -> str | None:
         item = self.colormap_list.currentItem()
         return item.text() if item else None
@@ -177,7 +177,7 @@ class ColormapEditor(QMainWindow):
         selected_map = self.get_selected_colormap()
         if selected_map:
             self.gradient_preview.set_colormap(selected_map)
-            
+
             # ノード数に応じてエディタ表示を切り替え
             num_nodes = len(selected_map.gradient_points) if selected_map.map_type == 'gradient' else len(selected_map.colors)
             use_direct_edit = num_nodes > 30
@@ -259,7 +259,7 @@ class ColormapEditor(QMainWindow):
             self._update_colormap_from_nodes()
             self.state_manager.save_state_for_undo()
             return
-        
+
         if final_change:
             self._update_timer.stop()
             self.state_manager.save_state_for_undo()
@@ -276,22 +276,22 @@ class ColormapEditor(QMainWindow):
             return
 
         nodes = self.node_editor.get_nodes()
-        
+
         # 常にgradient形式として更新
         selected_map.map_type = 'gradient'
         selected_map.gradient_points = [ColorStop(pos=n['pos'], color=n['color']) for n in nodes]
         selected_map.colors.clear() # indexedデータはクリア
-        
+
         self.gradient_preview.set_colormap(selected_map)
 
     def on_direct_edit_color_changed(self, pos, color):
         selected_map = self.get_selected_colormap()
         if not selected_map:
             return
-        
+
         self.state_manager.save_state_for_undo()
         rgba = [color.red(), color.green(), color.blue(), color.alpha()]
-        
+
         # indexedからgradientへの変換
         if selected_map.map_type == 'indexed':
             n = len(selected_map.colors)
@@ -303,7 +303,7 @@ class ColormapEditor(QMainWindow):
 
         selected_map.gradient_points.append(ColorStop(pos=pos, color=rgba))
         selected_map.gradient_points.sort(key=lambda p: p.pos)
-        
+
         self.gradient_preview.set_colormap(selected_map)
 
     def on_node_selected(self):
@@ -365,7 +365,7 @@ class ColormapEditor(QMainWindow):
             selected_map.gradient_points.sort(key=lambda p: p.pos)
         elif selected_map.map_type == "indexed":
             selected_map.colors.reverse()
-        
+
         self.on_colormap_selected(self.colormap_list.currentItem(), None)
 
     # --- ユーティリティ ---
@@ -408,7 +408,7 @@ class ColormapEditor(QMainWindow):
         if color_pack is None:
             color_pack = ColorPack(pack_name="New Pack")
             self.state_manager.set_current_state(color_pack)
-            
+
         try:
             for _ in range(num_maps):
                 points = ColormapUtils.extract_colors_from_image(file_path, num_colors)

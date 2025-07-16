@@ -50,7 +50,7 @@ class CustomLogger:
             # これにより、SettingsManagerがロガーを必要としたときに、
             # 既に初期化中のCustomLoggerインスタンスを利用できるようになる。
             # 循環インポートを避けるため、ここでインポートする
-            from utils.settings_manager import SettingsManager
+            from settings_manager import SettingsManager
             SettingsManager._logger_instance = instance # 自身をSettingsManagerに登録
 
             # クラス属性として基本的なデフォルト値を設定。
@@ -77,7 +77,7 @@ class CustomLogger:
         """
         # SettingsManager は既に __new__ でインポートされ、CustomLogger が登録されているため、
         # ここで再度インポートしても循環は発生しない。
-        from utils.settings_manager import SettingsManager
+        from settings_manager import SettingsManager
         try:
             # SettingsManager のインスタンス化時にロギングが発生する可能性があるため、
             # _initializing フラグが CustomLogger.log() でチェックされることが重要です。
@@ -279,7 +279,7 @@ if __name__ == '__main__':
 
     # 2. SettingsManagerが特定のファイル設定を読み込むように準備
     print("\nステージ2: 設定ファイルを使用したロガー設定テストの準備", flush=True)
-    from utils.settings_manager import SettingsManager
+    from settings_manager import SettingsManager
     # テスト用の設定ファイルを作成
     settings_content = {
         "logging": {

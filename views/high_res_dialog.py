@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSlot, QSize
 from PyQt6.QtWidgets import QMessageBox # accept時のエラー表示用
 
-from utils.settings_manager import SettingsManager # SettingsManager をインポート
+from settings_manager import SettingsManager # SettingsManager をインポート
 from logger.custom_logger import CustomLogger
 
 logger = CustomLogger()

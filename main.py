@@ -10,7 +10,7 @@ from PyQt6.QtCore import Qt
 from views.main_window import MainWindow
 from models.fractal_engine import FractalEngine
 from controllers.fractal_controller import FractalController
-from utils.settings_manager import SettingsManager
+from settings_manager import SettingsManager
 from logger.custom_logger import CustomLogger
 
 # プロジェクトのルートディレクトリ（'src'の親）をsys.pathに追加
