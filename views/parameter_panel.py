@@ -24,8 +24,8 @@ class ParameterPanel(QScrollArea):
     選択・調整できるようにします。
     変更は `FractalController` と連携して処理されます。
     """
-    parameters_changed_in_ui_signal = pyqtSignal(int)
-    """共通パラメータ (中心実部, 中心虚部, 幅, 最大反復回数) がUIで変更されたときに発行されるシグナル。"""
+    parameters_changed_in_ui_signal = pyqtSignal(dict)
+    """共通パラメータ (中心実部, 中心虚部, 幅, 最大反復回数) がUIで変更されたときに発行されるシグナル(dict型)。"""
 
     def __init__(self, fractal_controller: 'FractalController', parent=None):
         """
@@ -62,7 +62,7 @@ class ParameterPanel(QScrollArea):
             # コントローラーからのシグナルを接続
             self.fractal_controller.parameters_updated_externally.connect(self.update_ui_from_controller_parameters)
             self.fractal_controller.active_fractal_plugin_ui_needs_update.connect(self._on_active_fractal_plugin_changed)
-            # active_coloring_plugin_ui_needs_update は、より多くの情報を提供する必要があるか、置き換えられる可能性があります
+            # active_coloring_plugin_ui_needs_update は、より多くの情報を提供する必要がありますか、置き換えられる可能性があります
             # 現時点では、現在選択されている target_type のアクティブなプラグインのUIを更新すると仮定します。
             # ターゲットタイプを変更する場合は、以下のより具体的なシグナルが推奨されます。
             self.fractal_controller.active_coloring_plugin_ui_needs_update.connect(
@@ -126,6 +126,48 @@ class ParameterPanel(QScrollArea):
         self.common_params_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         self.common_params_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
+        # --- 追加: 実部座標 ---
+        self.center_real_spinbox = QDoubleSpinBox()
+        self.center_real_spinbox.setDecimals(10)
+        self.center_real_spinbox.setRange(-1e6, 1e6)
+        self.center_real_spinbox.setSingleStep(0.01)
+        self.center_real_spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+        self.center_real_spinbox.installEventFilter(self)
+        self.common_params_layout.addRow(QLabel("中心実部:"), self.center_real_spinbox)
+
+        # --- 追加: 虚部座標 ---
+        self.center_imag_spinbox = QDoubleSpinBox()
+        self.center_imag_spinbox.setDecimals(10)
+        self.center_imag_spinbox.setRange(-1e6, 1e6)
+        self.center_imag_spinbox.setSingleStep(0.01)
+        self.center_imag_spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+        self.center_imag_spinbox.installEventFilter(self)
+        self.common_params_layout.addRow(QLabel("中心虚部:"), self.center_imag_spinbox)
+
+        # --- 追加: 拡大率（幅） ---
+        # self.width_spinbox = QDoubleSpinBox()
+        # self.width_spinbox.setDecimals(10)
+        # self.width_spinbox.setRange(1e-10, 1e6)
+        # self.width_spinbox.setSingleStep(0.01)
+        # self.width_spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+        # self.width_spinbox.installEventFilter(self)
+        # self.common_params_layout.addRow(QLabel("表示幅(拡大率):"), self.width_spinbox)
+
+        # --- 追加: 倍率編集用スピンボックス ---
+        self.zoom_spinbox = QDoubleSpinBox()
+        self.zoom_spinbox.setDecimals(4)
+        self.zoom_spinbox.setRange(0.01, 1e6)
+        self.zoom_spinbox.setSingleStep(0.01)
+        self.zoom_spinbox.setValue(1.0)
+        self.zoom_spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+        self.zoom_spinbox.installEventFilter(self)
+        self.common_params_layout.addRow(QLabel("ズーム倍率:"), self.zoom_spinbox)
+
+        # --- 追加: 表示幅ラベル（編集不可） ---
+        self.width_label = QLabel()
+        self.width_label.setText("-")
+        self.common_params_layout.addRow(QLabel("表示幅(拡大率):"), self.width_label)
+
         self.iter_spinbox = QSpinBox()
         self.iter_spinbox.setRange(10, 100000)
         self.iter_spinbox.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
@@ -180,6 +222,17 @@ class ParameterPanel(QScrollArea):
         self.iter_slider.valueChanged.connect(self._on_common_parameter_changed_for_preview)
         # スピンボックスの値変更もプレビューをトリガーする
         self.iter_spinbox.valueChanged.connect(self._on_common_parameter_changed_for_preview)
+
+        # --- 追加: 共通パラメータの値変更シグナル接続 ---
+        self.center_real_spinbox.editingFinished.connect(self._on_value_changed_by_ui)
+        self.center_imag_spinbox.editingFinished.connect(self._on_value_changed_by_ui)
+        # self.width_spinbox.editingFinished.connect(self._on_value_changed_by_ui)
+        self.center_real_spinbox.valueChanged.connect(self._on_common_parameter_changed_for_preview)
+        self.center_imag_spinbox.valueChanged.connect(self._on_common_parameter_changed_for_preview)
+        # self.width_spinbox.valueChanged.connect(self._on_common_parameter_changed_for_preview)
+        # --- 追加: 倍率spinboxの値変更シグナル ---
+        self.zoom_spinbox.editingFinished.connect(self._on_zoom_spinbox_changed)
+        self.zoom_spinbox.valueChanged.connect(self._on_zoom_spinbox_changed)
 
     def _init_preset_ui(self):
         """プリセット管理用のUIを初期化します。"""
@@ -977,7 +1030,7 @@ class ParameterPanel(QScrollArea):
 
     def _on_value_changed_by_ui(self):
         """
-        共通パラメータ関連のUI要素 (中心座標、幅、反復回数) の編集が完了したときに呼び出されます。
+        共通パラメータ関連のUI要素 (中心座標、幅、最大反復回数) の編集が完了したときに呼び出されます。
         `parameters_changed_in_ui_signal` を発行し、値が変更されていれば再描画を試みます。
         """
         if hasattr(self, 'fractal_combo') and (self.fractal_combo.hasFocus() or self.fractal_combo.view().isVisible()):
@@ -989,6 +1042,19 @@ class ParameterPanel(QScrollArea):
             logger.log("ParameterPanel._on_value_changed_by_ui: Sender widget is None. Skipping.", level="WARNING")
             return
 
+        # --- 追加: 共通パラメータの値を取得しコントローラに反映 ---
+        params = self.get_current_ui_parameters()
+        if self.fractal_controller:
+            self.fractal_controller.handle_programmatic_parameter_change(
+                cr=params["center_real"],
+                ci=params["center_imag"],
+                w=params["width"],
+                iters=params["max_iterations"]
+            )
+        # --- 追加: MainWindow連携用シグナル発行 ---
+        self.parameters_changed_in_ui_signal.emit(params)
+        # --- 追加: ズーム倍率ラベルの更新 ---
+        self._update_zoom_label(params["width"])
         trigger_render_flag = True # デフォルトで再描画する
         param_changed_for_signal = False # parameters_changed_in_ui_signal を発行するかどうか
         widget_object_name = sender_widget.objectName() if hasattr(sender_widget, 'objectName') else str(type(sender_widget))
@@ -1022,10 +1088,9 @@ class ParameterPanel(QScrollArea):
             param_changed_for_signal = True # 不明な場合は通知しておく
 
         if param_changed_for_signal:
-            # 現在は iter_spinbox の値のみをシグナルで送っている。
-            # 将来的に他の共通パラメータも扱うようになったら、ここを修正する必要がある。
-            iters = self.iter_spinbox.value()
-            self.parameters_changed_in_ui_signal.emit(iters)
+            # 以前: self.parameters_changed_in_ui_signal.emit(iters)
+            # 修正: dict型でemit
+            self.parameters_changed_in_ui_signal.emit(self.get_current_ui_parameters())
 
         if trigger_render_flag:
             if self.fractal_controller:
@@ -1047,13 +1112,12 @@ class ParameterPanel(QScrollArea):
 
             params = self.fractal_controller.get_current_common_parameters()
             if params:
-                # --- ここでシグナルをブロック ---
-                self.iter_spinbox.blockSignals(True)
-                self.iter_slider.blockSignals(True)
-                self._set_ui_values(params.get('max_iterations',100))
-                self.iter_spinbox.blockSignals(False)
-                self.iter_slider.blockSignals(False)
-                # --- ここまで ---
+                self._set_ui_values(
+                    iterations=params.get('max_iterations', 100),
+                    center_real=params.get('center_real', -0.5),
+                    center_imag=params.get('center_imag', 0.0),
+                    width=params.get('width', 3.0)
+                )
             # Fractal plugin UI
             active_fp_name = self.fractal_controller.get_active_fractal_plugin_name_from_engine()
             if active_fp_name: self._update_fractal_plugin_specific_ui(active_fp_name)
@@ -1094,18 +1158,36 @@ class ParameterPanel(QScrollArea):
                     if first_pack and first_pack != "N/A":
                         combo_pack.setCurrentText(first_pack) # シグナル経由で更新
 
-    def _set_ui_values(self, iterations: int): # 他の共通パラメータも引数に追加する可能性あり
-        """UIの共通パラメータ値を設定します。現在は最大反復回数のみを設定します。
-
-        Args:
-            iterations (int): 設定する最大反復回数。
-        """
+    def _set_ui_values(self, iterations: int, center_real: float = None, center_imag: float = None, width: float = None):
+        """UIの共通パラメータ値を設定します。"""
         self.iter_spinbox.blockSignals(True)
         self.iter_slider.blockSignals(True)
+        self.center_real_spinbox.blockSignals(True)
+        self.center_imag_spinbox.blockSignals(True)
+        self.zoom_spinbox.blockSignals(True)
+        # width_labelは表示のみ
         self.iter_spinbox.setValue(iterations)
         self.iter_slider.setValue(iterations)
+        if center_real is not None:
+            self.center_real_spinbox.setValue(center_real)
+        if center_imag is not None:
+            self.center_imag_spinbox.setValue(center_imag)
+        # width→倍率に変換してspinboxに反映
+        initial_width = 3.0
+        if self.fractal_controller and hasattr(self.fractal_controller, 'initial_width'):
+            initial_width = getattr(self.fractal_controller, 'initial_width', 3.0)
+        if width is not None and width > 0:
+            zoom = initial_width / width
+            self.zoom_spinbox.setValue(zoom)
+            self.width_label.setText(f"{width:.10g}")
+        else:
+            self.zoom_spinbox.setValue(1.0)
+            self.width_label.setText("-")
         self.iter_spinbox.blockSignals(False)
         self.iter_slider.blockSignals(False)
+        self.center_real_spinbox.blockSignals(False)
+        self.center_imag_spinbox.blockSignals(False)
+        self.zoom_spinbox.blockSignals(False)
 
     @pyqtSlot(dict) # 引数として dict を受け取ることを明示
     def update_ui_from_controller_parameters(self, params: dict):
@@ -1113,15 +1195,30 @@ class ParameterPanel(QScrollArea):
         コントローラーから共通パラメータが外部的に更新された場合にUIを更新するスロット。
         """
         if self.fractal_controller:
-            self._set_ui_values(params['max_iterations'])
+            self._set_ui_values(
+                iterations=params.get('max_iterations', 100),
+                center_real=params.get('center_real', -0.5),
+                center_imag=params.get('center_imag', 0.0),
+                width=params.get('width', 3.0)
+            )
     def get_current_ui_parameters(self) -> dict:
         """
         現在のUIから共通パラメータの値を取得して辞書として返します。
-
         Returns:
-            dict: 'max_iterations' をキーとする辞書。
+            dict: 'max_iterations' などをキーとする辞書。
         """
-        return {"max_iterations":self.iter_spinbox.value()}
+        # 倍率→widthに変換
+        initial_width = 3.0
+        if self.fractal_controller and hasattr(self.fractal_controller, 'initial_width'):
+            initial_width = getattr(self.fractal_controller, 'initial_width', 3.0)
+        zoom = self.zoom_spinbox.value()
+        width = initial_width / zoom if zoom > 0 else initial_width
+        return {
+            "max_iterations": self.iter_spinbox.value(),
+            "center_real": self.center_real_spinbox.value(),
+            "center_imag": self.center_imag_spinbox.value(),
+            "width": width,
+        }
 
     @pyqtSlot(bool)
     def _on_rendering_state_changed(self, is_rendering: bool):
@@ -1244,10 +1341,17 @@ class ParameterPanel(QScrollArea):
     def _on_common_parameter_changed_for_preview(self, value):
         """共通パラメータがプレビュー用に変更されたときに呼び出されるスロット。"""
         if not self.fractal_controller: return
-        # パラメータをコントローラーに設定
-        self.fractal_controller.update_common_fractal_parameters(max_iterations=self.iter_spinbox.value())
-        # プレビュー品質でフル再計算を要求
+        params = self.get_current_ui_parameters()
+        self.width_label.setText(f"{params['width']:.10g}")
+        self.fractal_controller.handle_programmatic_parameter_change(
+            cr=params["center_real"],
+            ci=params["center_imag"],
+            w=params["width"],
+            iters=params["max_iterations"]
+        )
         self.request_redraw(full_recompute=True, is_preview=True)
+        # --- 追加: ズーム倍率ラベルの更新 ---
+        self._update_zoom_label(params["width"])
 
     def _on_fractal_plugin_parameter_changed_for_preview(self, value, param_name: str):
         """フラクタルプラグインパラメータがプレビュー用に変更されたときに呼び出されるスロット。"""
@@ -1319,6 +1423,40 @@ class ParameterPanel(QScrollArea):
         """
         self._populate_fractal_combo()
         self._update_fractal_plugin_specific_ui(plugin_name)
+
+    def _update_zoom_label(self, width=None):
+        """ズーム倍率ラベルを更新する。初期幅はコントローラのinitial_widthまたは3.0を使用。"""
+        initial_width = 3.0
+        if self.fractal_controller and hasattr(self.fractal_controller, 'initial_width'):
+            initial_width = getattr(self.fractal_controller, 'initial_width', 3.0)
+        w = width if width is not None else None
+        if w is None:
+            # width引数がなければself.width_labelの表示値をfloat変換
+            try:
+                w = float(self.width_label.text())
+            except Exception:
+                w = initial_width
+        if w > 0:
+            zoom = initial_width / w
+            self.zoom_spinbox.setValue(zoom)
+            self.width_label.setText(f"{w:.10g}")
+        else:
+            self.zoom_spinbox.setValue(1.0)
+            self.width_label.setText("-")
+
+    def _on_zoom_spinbox_changed(self):
+        """倍率spinboxの編集完了時に呼ばれる。widthを再計算し、コントローラに反映。"""
+        params = self.get_current_ui_parameters()
+        # widthラベルも更新
+        self.width_label.setText(f"{params['width']:.10g}")
+        if self.fractal_controller:
+            self.fractal_controller.handle_programmatic_parameter_change(
+                cr=params["center_real"],
+                ci=params["center_imag"],
+                w=params["width"],
+                iters=params["max_iterations"]
+            )
+        self.parameters_changed_in_ui_signal.emit(params)
 
 if __name__ == '__main__':
     pass

@@ -760,6 +760,8 @@ class FractalController(QObject):
             )
             # パン操作ではフラクタル計算はスキップ(full_recompute=False)
             self.trigger_render(full_recompute=False, is_preview=is_preview)
+            # --- 追加: パラメータ変更をUIに通知 ---
+            self.parameters_updated_externally.emit(self.get_current_common_parameters())
 
     def zoom_fractal_to_point(self, fix_r, fix_i, mfx, mfy, new_w, is_preview: bool = False):
         """
@@ -791,6 +793,8 @@ class FractalController(QObject):
             )
             # ズームではフラクタルデータの再計算が必須
             self.trigger_render(full_recompute=True, is_preview=is_preview)
+            # --- 追加: パラメータ変更をUIに通知 ---
+            self.parameters_updated_externally.emit(self.get_current_common_parameters())
 
     # --- 高解像度エクスポート ---
     def start_high_res_export(self, export_settings: dict):

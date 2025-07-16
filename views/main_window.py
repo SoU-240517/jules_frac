@@ -230,16 +230,21 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(splitter)
         initial_width = self.width()
         splitter.setSizes([int(initial_width * 0.7), int(initial_width * 0.3)])
-    def on_ui_parameters_changed(self, max_iterations):
+    def on_ui_parameters_changed(self, params):
         """
         ParameterPanel で共通パラメータが変更されたときに呼び出されるスロット。
         FractalController にパラメータの更新を通知します。
 
         Args:
-            max_iterations (int): 最大反復回数。
+            params (dict): 共通パラメータ（max_iterations, center_real, center_imag, width など）
         """
         if self.fractal_controller:
-            self.fractal_controller.update_common_fractal_parameters(max_iterations=max_iterations)
+            self.fractal_controller.handle_programmatic_parameter_change(
+                cr=params.get("center_real", -0.5),
+                ci=params.get("center_imag", 0.0),
+                w=params.get("width", 3.0),
+                iters=params.get("max_iterations", 100)
+            )
         else:
             logger.log("パラメータ更新に FractalController が利用できません。", level="WARNING")
 

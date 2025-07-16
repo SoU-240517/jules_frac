@@ -18,10 +18,10 @@
     },
     "engine_settings": {
         "common_parameters": {
-            "center_real": -0.5,
-            "center_imag": 0.0,
-            "width": 3.0,
-            "height": 2.2899590163934427,
+            "center_real": -0.44,
+            "center_imag": 0.06,
+            "width": 2.830188679245283,
+            "height": 2.160338694710795,
             "max_iterations": 100,
             "escape_radius": 2.0
         },
