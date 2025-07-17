@@ -86,8 +86,15 @@ def _apply_final_z_abs_coloring_jit(
                             interp_factor = float_idx - idx1
 
                             # 2つの色を取得
-                            c1_r, c1_g, c1_b = color_map_array[idx1]
-                            c2_r, c2_g, c2_b = color_map_array[idx2]
+                            c1 = color_map_array[idx1]
+                            c2 = color_map_array[idx2]
+                            # RGBA対応: 4要素ならRGBのみ使う
+                            if c1.shape[0] == 4:
+                                c1_r, c1_g, c1_b = c1[0], c1[1], c1[2]
+                                c2_r, c2_g, c2_b = c2[0], c2[1], c2[2]
+                            else:
+                                c1_r, c1_g, c1_b = c1[0], c1[1], c1[2]
+                                c2_r, c2_g, c2_b = c2[0], c2[1], c2[2]
 
                             # 線形補間
                             r = c1_r * (1.0 - interp_factor) + c2_r * interp_factor
@@ -234,7 +241,8 @@ class FinalZMagnitudeColoringPlugin(ColoringAlgorithmPlugin):
         if color_map_data and len(color_map_data) > 0:
             try:
                 color_map_np = np.array(color_map_data, dtype=np.uint8)
-                if color_map_np.shape[1] == 3:  # RGB形式であることを確認
+                # RGBA(4要素)にも対応: shape[1]が3または4ならOK
+                if color_map_np.ndim == 2 and (color_map_np.shape[1] == 3 or color_map_np.shape[1] == 4):
                     use_color_map = True
             except Exception as e:
                 logger.log(f"カラーマップの変換中にエラーが発生しました: {e}", level="WARNING")

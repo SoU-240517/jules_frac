@@ -35,7 +35,7 @@ def _apply_smooth_coloring_jit(
     max_iters: int,
     escape_radius_sq: float, # 現在の平滑化計算式では直接使用されていませんが、将来の拡張や他の平滑化手法との一貫性のために引数として保持しています。
     color_scale_factor: float,
-    color_map: np.ndarray # カラーマップデータ。形状は (N, 3) で、各行がRGB値 (uint8) を表します。
+    color_map: np.ndarray # カラーマップデータ。形状は (N, 3) または (N, 4) で、各行がRGB値またはRGBA値 (uint8) を表します。
 ) -> np.ndarray:
     """
     反復回数と最終的な|Z|^2値に基づいてスムーズカラーリングを適用するJITコンパイル済み関数。
@@ -47,7 +47,7 @@ def _apply_smooth_coloring_jit(
         max_iters (int): 最大反復回数。
         escape_radius_sq (float): 発散とみなす半径の2乗 (この関数では直接使用されませんが、インターフェースの一貫性のために存在)。
         color_scale_factor (float): 色の変化の速さを調整するスケールファクター。
-        color_map (np.ndarray): 色補間に使用するカラーマップ (形状: (N,3), dtype: uint8)。
+        color_map (np.ndarray): 色補間に使用するカラーマップ (形状: (N,3) または (N,4), dtype: uint8)。
 
     Returns:
         np.ndarray: RGBA形式のカラーリング済み画像データ。
@@ -60,6 +60,13 @@ def _apply_smooth_coloring_jit(
     # 補間には少なくとも2色を確保してください。そうでない場合は黒にフォールバックします。
     # これは理想的には、color_map_data の呼び出し側Pythonコードのロジックによって保証されるべきです。
     if num_colors_in_map < 2: # カラーマップの色数が2未満の場合
+        output_image_rgba[:, :, 0:3] = 0 # RGBを黒に設定
+        return output_image_rgba
+
+    # RGBA対応: カラーマップの要素数を確認
+    color_channels = color_map.shape[1]
+    # 3要素（RGB）または4要素（RGBA）のみ対応
+    if color_channels not in [3, 4]:
         output_image_rgba[:, :, 0:3] = 0 # RGBを黒に設定
         return output_image_rgba
 
@@ -105,6 +112,7 @@ def _apply_smooth_coloring_jit(
                 c1_idx = int(idx0_floor) % num_colors_in_map # 負のインデックスも正しく扱えるように剰余演算を使用
                 c2_idx = (int(idx0_floor) + 1) % num_colors_in_map
 
+                # RGBA対応: 4要素ならRGBのみ使う、3要素ならそのまま使う
                 r_val = color_map[c1_idx, 0] * (1.0 - fraction) + color_map[c2_idx, 0] * fraction
                 g_val = color_map[c1_idx, 1] * (1.0 - fraction) + color_map[c2_idx, 1] * fraction
                 b_val = color_map[c1_idx, 2] * (1.0 - fraction) + color_map[c2_idx, 2] * fraction
@@ -199,6 +207,10 @@ class SmoothColoringPlugin(ColoringAlgorithmPlugin):
             color_map_np = np.array([(i,i,i) for i in range(256)], dtype=np.uint8)
         else:
             color_map_np = np.array(color_map_data, dtype=np.uint8)
+            # RGBA対応: 4要素ならそのまま、3要素ならそのまま使用
+            if color_map_np.shape[1] not in [3, 4]:
+                logger.log(f"SmoothColoringPlugin 警告: カラーマップの形状が不正です {color_map_np.shape}。デフォルトのグレースケールマップを使用します。", level="WARNING")
+                color_map_np = np.array([(i,i,i) for i in range(256)], dtype=np.uint8)
 
         colored_image = _apply_smooth_coloring_jit(
             iterations, last_z_mod_sq, max_iters, escape_radius_sq,

@@ -86,9 +86,19 @@ def _apply_iteration_based_coloring_jit(
                     c1_idx = int(idx0_floor) % color_map.shape[0]
                     c2_idx = (int(idx0_floor) + 1) % color_map.shape[0]
 
-                    r_val = color_map[c1_idx, 0] * (1.0 - fraction) + color_map[c2_idx, 0] * fraction
-                    g_val = color_map[c1_idx, 1] * (1.0 - fraction) + color_map[c2_idx, 1] * fraction
-                    b_val = color_map[c1_idx, 2] * (1.0 - fraction) + color_map[c2_idx, 2] * fraction
+                    c1 = color_map[c1_idx]
+                    c2 = color_map[c2_idx]
+                    # RGBA対応: 4要素ならRGBのみ使う
+                    if c1.shape[0] == 4:
+                        c1_r, c1_g, c1_b = c1[0], c1[1], c1[2]
+                        c2_r, c2_g, c2_b = c2[0], c2[1], c2[2]
+                    else:
+                        c1_r, c1_g, c1_b = c1[0], c1[1], c1[2]
+                        c2_r, c2_g, c2_b = c2[0], c2[1], c2[2]
+
+                    r_val = c1_r * (1.0 - fraction) + c2_r * fraction
+                    g_val = c1_g * (1.0 - fraction) + c2_g * fraction
+                    b_val = c1_b * (1.0 - fraction) + c2_b * fraction
 
                     colored_image_rgba[r_idx, c_idx, 0] = np.uint8(max(0.0, min(255.0, r_val)))
                     colored_image_rgba[r_idx, c_idx, 1] = np.uint8(max(0.0, min(255.0, g_val)))
@@ -154,7 +164,12 @@ class IterationBasedColoringPlugin(ColoringAlgorithmPlugin):
             color_map_np = np.array([[0,0,0],[255,255,255]], dtype=np.uint8) # JITが扱う最小限のマップ
         else:
             color_map_np = np.array(color_map_data, dtype=np.uint8)
-
+            # RGBA(4要素)にも対応: shape[1]が3または4ならOK
+            if color_map_np.ndim == 2 and (color_map_np.shape[1] == 3 or color_map_np.shape[1] == 4):
+                pass # OK
+            else:
+                # それ以外は強制的にRGB2色にする
+                color_map_np = np.array([[0,0,0],[255,255,255]], dtype=np.uint8)
         colored_image = _apply_iteration_based_coloring_jit(iterations, max_iters, color_map_np, color_scale_from_plugin)
         return colored_image
 
