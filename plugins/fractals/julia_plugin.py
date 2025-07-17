@@ -5,38 +5,29 @@ from logger.custom_logger import CustomLogger # logger がプロジェクトル�
 
 logger = CustomLogger()
 @jit(nopython=True) # Numba JITコンパイラを適用します。
-def _calculate_julia_point_jit(z_real_start, z_imag_start, c_real_const, c_imag_const, max_iters, escape_radius_sq):
+def _calculate_julia_point_jit(z_real_start, z_imag_start, c_real_const, c_imag_const, max_iters, escape_radius_sq, power):
     """
     ジュリア集合の単一の点に対する計算をJITコンパイルで実行します。
-
-    Args:
-        z_real_start (float): 開始複素数zの実数部。
-        z_imag_start (float): 開始複素数zの虚数部。
-        c_real_const (float): 定数複素数cの実数部。
-        c_imag_const (float): 定数複素数cの虚数部。
-        max_iters (int): 最大反復回数。
-        escape_radius_sq (float): 発散とみなすための半径の2乗。
-
-    Returns:
-        tuple[int, float, float]: (反復回数, 最後のzの実数部, 最後のzの虚数部)。
+    power: z^power + c の power
     """
     z_real = z_real_start
     z_imag = z_imag_start
     for i in range(max_iters):
-        z_real_sq = z_real * z_real
-        z_imag_sq = z_imag * z_imag
-        mod_sq = z_real_sq + z_imag_sq
-        if mod_sq > escape_radius_sq:
-            return i, z_real, z_imag # 反復回数、最後のz_real、最後のz_imagを返す
-
-        new_z_imag = 2.0 * z_real * z_imag + c_imag_const
-        z_real = z_real_sq - z_imag_sq + c_real_const
-        z_imag = new_z_imag
-    return max_iters, z_real, z_imag # 収束したか、最大反復回数に到達した
+        z_mod = (z_real ** 2 + z_imag ** 2) ** 0.5
+        if z_mod * z_mod > escape_radius_sq:
+            return i, z_real, z_imag
+        # z^power の計算
+        r = z_mod ** power
+        theta = np.arctan2(z_imag, z_real) * power
+        z_real_new = r * np.cos(theta) + c_real_const
+        z_imag_new = r * np.sin(theta) + c_imag_const
+        z_real = z_real_new
+        z_imag = z_imag_new
+    return max_iters, z_real, z_imag
 
 @jit(nopython=True) # Numba JITコンパイラを適用します。
 def _compute_julia_grid_jit(width_px, height_px, min_x, max_x, min_y, max_y,
-                            c_real_const, c_imag_const, max_iters, escape_radius_sq):
+                            c_real_const, c_imag_const, max_iters, escape_radius_sq, power):
     """
     指定されたグリッドのジュリア集合をJITコンパイルで計算します。
 
@@ -69,7 +60,7 @@ def _compute_julia_grid_jit(width_px, height_px, min_x, max_x, min_y, max_y,
             iter_val, last_zr, last_zi = _calculate_julia_point_jit(
                 z_real_start, z_imag_start,
                 c_real_const, c_imag_const,
-                max_iters, escape_radius_sq
+                max_iters, escape_radius_sq, power
             )
             iter_result[y_idx, x_idx] = iter_val
             last_z_real_result[y_idx, x_idx] = last_zr
@@ -108,6 +99,16 @@ class JuliaPlugin(FractalPlugin):
                 'decimals': 10, # 表示する小数点以下の桁数を指定
                 'tooltip': 'Julia定数Cの虚部',
                 'hide_spin_buttons': True
+            },
+            {
+                'name': 'power',
+                'label': '次数',
+                'type': 'int',
+                'default': 2,
+                'range': (2, 10),
+                'step': 1,
+                'tooltip': 'z^power + c の power（次数）',
+                'hide_spin_buttons': False
             }
         ]
 
@@ -143,13 +144,14 @@ class JuliaPlugin(FractalPlugin):
 
         c_real_const = plugin_params.get('c_real', self.get_parameters_definition()[0]['default'])
         c_imag_const = plugin_params.get('c_imag', self.get_parameters_definition()[1]['default'])
+        power = plugin_params.get('power', self.get_parameters_definition()[2]['default'])
 
         min_x = center_real - width / 2.0
         max_x = center_real + width / 2.0
         min_y = center_imag - height / 2.0
         max_y = center_imag + height / 2.0
 
-        logger.log(f"計算開始 - C=({c_real_const:.4f} + {c_imag_const:.4f}i), "
+        logger.log(f"計算開始 - C=({c_real_const:.4f} + {c_imag_const:.4f}i), power={power}, "
               f"画像: {image_width_px}x{image_height_px}px, "
               f"複素領域: 実数部 ({min_x:.4f} から {max_x:.4f}), 虚数部 ({min_y:.4f} から {max_y:.4f}), "
               f"最大反復回数: {max_iterations}", level="DEBUG")
@@ -158,7 +160,7 @@ class JuliaPlugin(FractalPlugin):
             image_width_px, image_height_px,
             min_x, max_x, min_y, max_y,
             c_real_const, c_imag_const,
-            max_iterations, escape_radius_sq
+            max_iterations, escape_radius_sq, power
         )
         last_zn_values_complex = last_z_real_array + 1j * last_z_imag_array
         last_z_modulus_sq = np.abs(last_zn_values_complex)**2 # |Z|^2 を計算
