@@ -26,7 +26,9 @@
             "escape_radius": 2.0
         },
         "fractal_plugin_name": "Mandelbrot",
-        "fractal_plugin_parameters": {},
+        "fractal_plugin_parameters": {
+            "power": 2
+        },
         "coloring_divergent": {
             "plugin_name": "スムーズカラー",
             "plugin_parameters": {
@@ -56,7 +58,9 @@
                 "escape_radius": 2.0
             },
             "fractal_plugin_name": "Mandelbrot",
-            "fractal_plugin_parameters": {},
+            "fractal_plugin_parameters": {
+                "power": 2
+            },
             "coloring_divergent": {
                 "plugin_name": "スムーズカラー",
                 "plugin_parameters": {
@@ -317,6 +321,37 @@
             "fractal_plugin_parameters": {
                 "c_real": -0.7269,
                 "c_imag": 0.1889
+            },
+            "coloring_divergent": {
+                "plugin_name": "スムーズカラー",
+                "plugin_parameters": {
+                    "color_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            },
+            "coloring_non_divergent": {
+                "plugin_name": "複素ポテンシャル",
+                "plugin_parameters": {
+                    "color_scale": 1.0,
+                    "potential_offset": 0.0,
+                    "potential_scale": 1.0
+                },
+                "pack_name": "デフォルト",
+                "map_name": "グレースケール"
+            }
+        },
+        "マルチブロ-3次": {
+            "common_parameters": {
+                "center_real": -0.5,
+                "center_imag": 0.0,
+                "width": 3.0,
+                "max_iterations": 100,
+                "escape_radius": 2.0
+            },
+            "fractal_plugin_name": "Mandelbrot",
+            "fractal_plugin_parameters": {
+                "power": 3
             },
             "coloring_divergent": {
                 "plugin_name": "スムーズカラー",

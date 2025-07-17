@@ -6,36 +6,30 @@ from logger.custom_logger import CustomLogger # logger がプロジェクトル�
 logger = CustomLogger()
 
 @jit(nopython=True)
-def _calculate_mandelbrot_point_jit(c_real, c_imag, max_iters, escape_radius_sq):
+def _calculate_mandelbrot_point_jit(c_real, c_imag, max_iters, escape_radius_sq, power):
     """
-    マンデルブロ集合の単一の点に対する計算をJITコンパイルで実行します。
-
-    Args:
-        c_real (float): 複素数cの実数部。
-        c_imag (float): 複素数cの虚数部。
-        max_iters (int): 最大反復回数。
-        escape_radius_sq (float): 発散とみなすための半径の2乗。
-
-    Returns:
-        tuple[int, float, float]: (反復回数, 最後のzの実数部, 最後のzの虚数部)。
+    マンデルブロ集合（マルチブロ）の単一の点に対する計算をJITコンパイルで実行します。
+    power: zの次数
     """
     z_real = 0.0
     z_imag = 0.0
     for i in range(max_iters):
-        z_real_sq = z_real * z_real
-        z_imag_sq = z_imag * z_imag
-        mod_sq = z_real_sq + z_imag_sq
+        # 複素数z = z_real + i*z_imag のpower乗を計算
+        r = (z_real**2 + z_imag**2) ** (power / 2)
+        theta = np.arctan2(z_imag, z_real) * power
+        z_real_pow = r * np.cos(theta)
+        z_imag_pow = r * np.sin(theta)
+        z_real_new = z_real_pow + c_real
+        z_imag_new = z_imag_pow + c_imag
+        mod_sq = z_real_new * z_real_new + z_imag_new * z_imag_new
         if mod_sq > escape_radius_sq:
-            return i, z_real, z_imag # 反復回数、最後のz_real、最後のz_imagを返す
-
-        new_z_imag = 2.0 * z_real * z_imag + c_imag
-        z_real = z_real_sq - z_imag_sq + c_real
-        z_imag = new_z_imag
-    # 収束したか、最大反復回数に到達した
+            return i, z_real_new, z_imag_new
+        z_real = z_real_new
+        z_imag = z_imag_new
     return max_iters, z_real, z_imag
 
 @jit(nopython=True, parallel=True)
-def _compute_mandelbrot_grid_jit(width_px, height_px, min_x, max_x, min_y, max_y, max_iters, escape_radius_sq):
+def _compute_mandelbrot_grid_jit(width_px, height_px, min_x, max_x, min_y, max_y, max_iters, escape_radius_sq, power):
     """
     指定されたグリッドのマンデルブロ集合をJITコンパイルで並列計算します。
 
@@ -63,7 +57,7 @@ def _compute_mandelbrot_grid_jit(width_px, height_px, min_x, max_x, min_y, max_y
         c_imag = min_y + y_idx * pixel_height_complex
         for x_idx in range(width_px):
             c_real = min_x + x_idx * pixel_width_complex
-            iter_val, last_zr, last_zi = _calculate_mandelbrot_point_jit(c_real, c_imag, max_iters, escape_radius_sq)
+            iter_val, last_zr, last_zi = _calculate_mandelbrot_point_jit(c_real, c_imag, max_iters, escape_radius_sq, power)
             iter_result[y_idx, x_idx] = iter_val
             last_z_real_result[y_idx, x_idx] = last_zr
             last_z_imag_result[y_idx, x_idx] = last_zi
@@ -79,7 +73,16 @@ class MandelbrotPlugin(FractalPlugin):
 
     def get_parameters_definition(self) -> list:
         """このフラクタルに固有のパラメータ定義を返します。"""
-        return []
+        return [
+            {
+                'name': 'power',
+                'type': 'int',
+                'default': 2,
+                'min': 2,
+                'max': 10,
+                'label': '次数d'
+            }
+        ]
 
     def get_default_view_parameters(self) -> dict:
         """デフォルトのビューパラメータを返します。"""
@@ -109,6 +112,7 @@ class MandelbrotPlugin(FractalPlugin):
         max_iterations = common_params['max_iterations']
         escape_radius = common_params.get('escape_radius', 2.0)
         escape_radius_sq = escape_radius * escape_radius
+        power = plugin_params.get('power', 2)
 
         min_x = center_real - width / 2.0
         max_x = center_real + width / 2.0
@@ -117,12 +121,12 @@ class MandelbrotPlugin(FractalPlugin):
 
         logger.log(f"計算開始 - 画像: {image_width_px}x{image_height_px}px, "
               f"複素領域: 実数部 ({min_x:.4f} から {max_x:.4f}), 虚数部 ({min_y:.4f} から {max_y:.4f}), "
-              f"最大反復回数: {max_iterations}", level="INFO")
+              f"最大反復回数: {max_iterations}, 次数: {power}", level="INFO")
 
         iter_array, last_z_real_array, last_z_imag_array = _compute_mandelbrot_grid_jit(
             image_width_px, image_height_px,
             min_x, max_x, min_y, max_y,
-            max_iterations, escape_radius_sq
+            max_iterations, escape_radius_sq, power
         )
 
         last_zn_values_complex = last_z_real_array + 1j * last_z_imag_array
